@@ -64,6 +64,10 @@ interface SchoolState {
     addTeacherToClass: (classId: string, teacher: Omit<Teacher, 'id'>) => void;
     removeTeacherFromClass: (classId: string, teacherId: string) => void;
 
+    importStudents: (classId: string, students: Omit<Student, 'id'>[]) => void;
+    addStudentToClass: (classId: string, student: Omit<Student, 'id'>) => void;
+    removeStudentFromClass: (classId: string, studentId: string) => void;
+
     schoolName: string;
     schoolAddress: string;
     schoolPhone: string;
