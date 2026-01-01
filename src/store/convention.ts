@@ -771,7 +771,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             `;
 
             const recipients = [convention.prof_email];
-            if (convention.est_mineur) recipients.push(convention.rep_legal_email);
+            if (convention.est_mineur && convention.rep_legal_email) recipients.push(convention.rep_legal_email);
             if (convention.cpe_email) recipients.push(convention.cpe_email!);
 
             recipients.filter((e): e is string => !!e).forEach(async (email) => {
