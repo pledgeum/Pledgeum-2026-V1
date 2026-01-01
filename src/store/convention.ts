@@ -360,6 +360,19 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
         let newStatus = convention.status;
 
         // State Machine Logic
+        if (role === 'student') {
+            newSigs.studentAt = now;
+            if (signatureImage) newSigs.studentImg = signatureImage;
+            if (!newSigs.studentCode) newSigs.studentCode = code; // Conserve existing code if present? Or regenerate? 
+            // Let's regenerate or use provided code to ensure fresh signature
+            newSigs.studentCode = code;
+
+            if (convention.status === 'DRAFT') {
+                newStatus = 'SUBMITTED';
+            }
+            // Allow re-signing in SUBMITTED state without error (just updates signature)
+            // But do not change status if already SUBMITTED
+        }
         if (role === 'parent' && convention.est_mineur) {
             // Parent signs FIRST if minor (immediately after student submits)
             if (convention.status === 'SUBMITTED') {
