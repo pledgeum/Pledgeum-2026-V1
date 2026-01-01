@@ -742,8 +742,9 @@ export default function Home() {
 
 function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail: string, userId?: string }) {
   const { getConventionsByRole, signConvention, sendReminder, bulkSignConventions, updateEmail, assignTrackingTeacher } = useConventionStore();
-  const conventions = getConventionsByRole(role, userEmail, userId);
   const { classes } = useSchoolStore();
+  const { addNotification, name } = useUserStore();
+  const conventions = getConventionsByRole(role, userEmail, userId);
   const [selectedConventionId, setSelectedConventionId] = useState<string | null>(null);
   const [isSigModalOpen, setIsSigModalOpen] = useState(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
@@ -808,7 +809,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
     if (!odmPreviewData) return;
 
     // Update Store
-    await signMissionOrders([odmPreviewData.odm.id], signatureImg, `${user?.firstName} ${user?.lastName}`);
+    await signMissionOrders([odmPreviewData.odm.id], signatureImg, name);
 
     // Update Local State (to reflect signature immediately in preview)
     const updatedOdm = {
@@ -830,8 +831,6 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
   // Bulk Selection State
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
   const [isBulkSigning, setIsBulkSigning] = useState(false);
-
-  const { addNotification, name } = useUserStore();
 
   const isActionable = (conv: Convention, role: UserRole) => {
     const status = conv.status;
@@ -1512,7 +1511,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
           onClose={() => setIsSigningOdm(false)}
           onSign={(method, signatureImg) => handleSignOdm(signatureImg || '')}
           title="Signature Ordre de Mission"
-          signeeName={`${user?.firstName} ${user?.lastName}`}
+          signeeName={name}
           signeeEmail={userEmail}
           conventionId={odmPreviewData.convention.id}
           hideOtp={true} // Internal signature for teacher/admin usually doesn't need OTP here
