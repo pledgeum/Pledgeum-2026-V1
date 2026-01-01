@@ -158,7 +158,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
     const handleAddClass = (e: React.FormEvent) => {
         e.preventDefault();
         if (newClass.name) {
-            addClass({ ...newClass, teachersList: [] });
+            addClass({ ...newClass, teachersList: [], studentsList: [] });
             setNewClass({ name: '', mainTeachers: '', cpes: '' });
         }
     };
