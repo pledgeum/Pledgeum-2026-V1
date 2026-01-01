@@ -1431,8 +1431,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
           <EmailCorrectionModal
             isOpen={isEmailModalOpen}
             onClose={() => setIsEmailModalOpen(false)}
-            conventionId={selectedConventionId}
-            roleToUpdate={emailEditRole}
+            roleName={emailEditRole}
             currentEmail={(() => {
               const c = conventions.find(c => c.id === selectedConventionId);
               // Simple mapping, robust implementation would be cleaner
