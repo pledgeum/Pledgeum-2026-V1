@@ -1442,7 +1442,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
               if (emailEditRole === 'company') return c.ent_rep_email;
               if (emailEditRole === 'tutor') return c.tuteur_email;
               return '';
-            })()}
+            })() ?? ''}
             onSave={async (newEmail) => {
               await updateEmail(selectedConventionId, emailEditRole, newEmail);
               setIsEmailModalOpen(false);
