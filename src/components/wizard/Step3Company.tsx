@@ -22,7 +22,7 @@ const stepSchema = conventionSchema.pick({
     tuteur_meme_personne: true,
     tuteur_nom: true,
     tuteur_fonction: true,
-    tuteur_email: z.string().email("Email invalide"),
+    tuteur_email: true,
     frais_restauration: true,
     frais_transport: true,
     frais_hebergement: true,
