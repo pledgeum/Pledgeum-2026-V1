@@ -871,7 +871,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 const schoolAddress = useSchoolStore.getState().schoolAddress;
 
                 if (convention && schoolAddress) {
-                    const companyAddress = `${convention.ent_adresse}, ${convention.ent_cp} ${convention.ent_ville}`;
+                    const companyAddress = `${convention.ent_adresse}, ${convention.ent_code_postal} ${convention.ent_ville}`;
 
                     // 1. Geocode both addresses
                     // Used simplified 0,0 fallback if fail, or improve error handling
