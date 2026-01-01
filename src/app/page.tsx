@@ -198,7 +198,8 @@ export default function Home() {
     business_manager: 'Resp. Bureau des Entreprises',
     assistant_manager: 'Adjoint Gestionnaire',
     stewardship_secretary: 'Secrétaire d\'Intendance',
-    teacher_tracker: 'Enseignant référent chargé du suivi'
+    teacher_tracker: 'Enseignant référent chargé du suivi',
+    at_ddfpt: 'Assistant(e) Technique DDFPT'
   };
 
 
@@ -364,6 +365,7 @@ export default function Home() {
                     <option value="business_manager">Responsable du bureau des entreprises</option>
                     <option value="assistant_manager">Adjoint gestionnaire</option>
                     <option value="stewardship_secretary">Secrétaire d'intendance</option>
+                    <option value="at_ddfpt">Assistant(e) Technique DDFPT</option>
                   </select>
                 </div>
               </div>
@@ -578,15 +580,7 @@ export default function Home() {
           </h1>
           <p className="text-gray-500 mt-1">Gérez vos conventions de stage et signatures.</p>
 
-          {role === 'student' && (
-            <button
-              onClick={() => setIsSearchModalOpen(true)}
-              className="bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 px-6 rounded-full shadow-xl flex items-center transition-transform hover:scale-105"
-            >
-              <Building2 className="w-5 h-5 mr-2" />
-              Rechercher une entreprise
-            </button>
-          )}
+          {role === 'student' && null}
         </div>
 
         {effectiveRole === 'student' ? (
@@ -597,7 +591,7 @@ export default function Home() {
 
               <div
                 onClick={handleNewConvention}
-                className="group bg-white rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-500 p-8 flex flex-col items-center justify-center cursor-pointer transition-colors"
+                className="group bg-white rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-500 p-8 flex flex-col items-center justify-center cursor-pointer transition-colors h-full"
               >
                 <div className="bg-blue-50 p-4 rounded-full group-hover:bg-blue-100 transition-colors">
                   <FileText className="w-8 h-8 text-blue-600" />
@@ -608,6 +602,17 @@ export default function Home() {
 
 
 
+              <div
+                onClick={() => setIsSearchModalOpen(true)}
+                className="group bg-white rounded-xl border-2 border-dashed border-gray-300 hover:border-purple-500 p-8 flex flex-col items-center justify-center cursor-pointer transition-colors h-full"
+                title="Trouver une entreprise ou un organisme d'accueil pour votre stage"
+              >
+                <div className="bg-purple-50 p-4 rounded-full group-hover:bg-purple-100 transition-colors">
+                  <Building2 className="w-8 h-8 text-purple-600" />
+                </div>
+                <h3 className="mt-4 text-lg font-medium text-gray-900 text-center">Trouver une Entreprise<br />ou un Organisme</h3>
+                <p className="text-center text-sm text-gray-500 mt-2">Rechercher parmi les entreprises partenaires pour votre stage.</p>
+              </div>
             </div>
 
             <div className="mt-8">
@@ -620,6 +625,7 @@ export default function Home() {
               conventions={allConventions}
               studentAddress={(() => {
                 // Try to find address from recent convention of user
+                if (user.email === 'pledgeum@gmail.com') return "10 Rue de Rivoli, 75001 Paris";
                 const myConv = getConventionsByRole('student', user.email || '', user.uid)[0];
                 return myConv?.eleve_adresse || '';
               })()}
@@ -1046,7 +1052,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
 
   return (
     <div className="divide-y divide-gray-200">
-      <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center sticky top-0 z-10">
+      <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center sticky top-0 z-1">
         <div className="flex flex-col gap-4 w-full md:w-auto">
           <div className="flex items-center space-x-4">
             {isSchoolAdminRole(role) && actionableCount > 0 && (

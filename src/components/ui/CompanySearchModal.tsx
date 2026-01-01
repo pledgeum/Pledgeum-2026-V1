@@ -1,5 +1,7 @@
 'use client';
 
+import { createPortal } from 'react-dom';
+
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Search, Building2, MapPin, Loader2, Navigation } from 'lucide-react';
 import { Convention } from '@/store/convention';
@@ -218,17 +220,36 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
         }
     };
 
-    if (!isOpen) return null;
+    const [mounted, setMounted] = useState(false);
+    useEffect(() => {
+        setMounted(true);
+        return () => setMounted(false);
+    }, []);
 
-    return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+    // Lock body scroll when open
+    useEffect(() => {
+        if (isOpen) {
+            document.body.style.overflow = 'hidden';
+        } else {
+            document.body.style.overflow = '';
+        }
+        return () => {
+            document.body.style.overflow = '';
+        };
+    }, [isOpen]);
+
+    if (!isOpen || !mounted) return null;
+
+    // Use Portal with extreme Z-Index to guarantee top layer
+    return createPortal(
+        <div className="fixed inset-0 z-[9999] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
             <div className="bg-white rounded-xl shadow-2xl w-full max-w-6xl h-[85vh] flex flex-col overflow-hidden">
                 {/* Header */}
                 <div className="px-6 py-4 border-b border-gray-100 flex justify-between items-center bg-blue-50">
                     <div>
                         <h3 className="text-xl font-bold text-gray-900 flex items-center">
                             <Building2 className="w-6 h-6 mr-2 text-blue-600" />
-                            Rechercher une entreprise
+                            Trouver une entreprise ou un organisme d'accueil
                         </h3>
                     </div>
                     <button onClick={onClose} className="p-2 hover:bg-white rounded-full transition-colors">
@@ -251,7 +272,7 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
                                             onChange={(e) => setOrigins(prev => ({ ...prev, school: e.target.checked }))}
                                             className="form-checkbox h-4 w-4 text-blue-600 transition duration-150 ease-in-out"
                                         />
-                                        <span className="text-sm text-gray-700">Lycée (Établissement)</span>
+                                        <span className="text-sm text-gray-700">Mon lycée</span>
                                     </label>
                                     <label className="flex items-center space-x-2 cursor-pointer">
                                         <input
@@ -261,8 +282,8 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
                                             className="form-checkbox h-4 w-4 text-blue-600"
                                             disabled={!studentAddress}
                                         />
-                                        <span className={`text - sm ${!studentAddress ? 'text-gray-400' : 'text-gray-700'} `}>
-                                            Domicile (Parent)
+                                        <span className={`text-sm ${!studentAddress ? 'text-gray-400' : 'text-gray-700'} `}>
+                                            Mon domicile
                                             {!studentAddress && <span className="ml-1 text-xs text-orange-400">(Non renseigné)</span>}
                                         </span>
                                     </label>
@@ -481,6 +502,7 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
                     </div>
                 </div>
             </div>
-        </div>
+        </div>,
+        document.body
     );
 }

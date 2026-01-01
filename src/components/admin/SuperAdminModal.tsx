@@ -3,6 +3,7 @@
 import { useState } from 'react';
 import { X, Search, ShieldCheck, MessageSquare, Trash2, Building2, User, Mail, Calendar } from 'lucide-react';
 import { useAdminStore, SchoolStatus } from '@/store/admin';
+import { useSchoolStore, Student } from '@/store/school'; // Import School Store
 import { searchSchools, SchoolResult } from '@/lib/educationApi';
 
 interface SuperAdminModalProps {
@@ -35,6 +36,7 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
     };
 
     const handleAuthorize = (school: SchoolResult, status: SchoolStatus) => {
+        // 1. Authorize in Admin Store
         authorizeSchool({
             id: school.id,
             name: school.nom,
@@ -42,6 +44,17 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
             email: school.mail,
             status
         });
+
+        // 2. Automate School Identity Population
+        // This ensures the school is immediately ready with correct details
+        useSchoolStore.getState().updateSchoolIdentity({
+            schoolName: school.nom,
+            schoolAddress: `${school.adresse}, ${school.cp} ${school.ville}`,
+            schoolHeadEmail: school.mail || '', // Use official email as default for Head
+            // Phone is likely not in this API result structure based on searchSchools, 
+            // but if we had it we would map it. Step1School uses defaults anyway.
+        });
+
         // Remove from search results to show it's done or just show "Déjà autorisé"
     };
 

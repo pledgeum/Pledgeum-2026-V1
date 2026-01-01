@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { StepWrapper } from './StepWrapper';
 import { conventionSchema } from '@/types/schema';
 import { useWizardStore } from '@/store/wizard';
+import { useSchoolStore } from '@/store/school';
 import { useUserStore } from '@/store/user';
 import { useState, useEffect } from 'react';
 import { searchSchools, SchoolResult } from '@/lib/educationApi';
@@ -30,7 +31,8 @@ type Step1Data = z.infer<typeof stepSchema>;
 
 export function Step1School() {
     const { setData, nextStep } = useWizardStore();
-    const { profileData } = useUserStore();
+    const { profileData, email } = useUserStore();
+    const { allowedConventionTypes } = useSchoolStore();
     const [cityQuery, setCityQuery] = useState('');
     const [schoolQuery, setSchoolQuery] = useState('');
     const [results, setResults] = useState<SchoolResult[]>([]);
@@ -75,15 +77,33 @@ export function Step1School() {
         >
             {(form) => {
                 useEffect(() => {
-                    if (profileData && profileData.schoolName) {
-                        if (!form.getValues('ecole_nom')) {
-                            form.setValue('ecole_nom', profileData.schoolName);
-                            form.setValue('ecole_adresse', profileData.schoolAddress || '');
-                            if (profileData.schoolLat) form.setValue('ecole_lat', Number(profileData.schoolLat));
-                            if (profileData.schoolLng) form.setValue('ecole_lng', Number(profileData.schoolLng));
+                    // Pre-fill from School Store (Single Source of Truth)
+                    const { schoolName, schoolAddress, schoolPhone, schoolHeadName, schoolHeadEmail } = useSchoolStore.getState();
+
+                    // Always overwrite if locked for students to ensure consistency with admin settings
+                    // Or if empty.
+                    if (useUserStore.getState().role === 'student' || !form.getValues('ecole_nom')) {
+                        if (schoolName) form.setValue('ecole_nom', schoolName);
+                        if (schoolAddress) form.setValue('ecole_adresse', schoolAddress);
+                        if (schoolPhone) form.setValue('ecole_tel', schoolPhone);
+                        if (schoolHeadName) form.setValue('ecole_chef_nom', schoolHeadName);
+                        if (schoolHeadEmail) form.setValue('ecole_chef_email', schoolHeadEmail);
+                    }
+                }, [form, useSchoolStore.getState().schoolName]); // Trigger on mount or name change
+
+                // Auto-reset convention type if current value is not allowed
+                useEffect(() => {
+                    const currentType = form.getValues('type');
+                    // Check if current type is valid relative to allowed list
+                    // If allowed list is not empty and current type is not in it (or not set)
+                    if (allowedConventionTypes && allowedConventionTypes.length > 0) {
+                        if (!currentType || !allowedConventionTypes.includes(currentType)) {
+                            // Default to the first allowed type
+                            form.setValue('type', allowedConventionTypes[0] as "PFMP_STANDARD" | "STAGE_2NDE" | "ERASMUS_MOBILITY");
                         }
                     }
-                }, [profileData, form]);
+                }, [allowedConventionTypes, form.watch('type')]);
+
 
                 return (
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
@@ -94,75 +114,86 @@ export function Step1School() {
                                 {...form.register('type')}
                                 className="block w-full rounded-md border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500 text-sm p-2 bg-white"
                             >
-                                <option value="PFMP_STANDARD">PFMP Lycée Professionnel (Standard)</option>
-                                <option value="STAGE_2NDE">Stage de Seconde</option>
-                                <option value="ERASMUS_MOBILITY">Mobilité Erasmus+</option>
+                                {(!allowedConventionTypes || allowedConventionTypes.includes('PFMP_STANDARD')) && (
+                                    <option value="PFMP_STANDARD">PFMP Lycée Professionnel (Standard)</option>
+                                )}
+                                {(!allowedConventionTypes || allowedConventionTypes.includes('STAGE_2NDE')) && (
+                                    <option value="STAGE_2NDE">Stage de Seconde</option>
+                                )}
+                                {(!allowedConventionTypes || allowedConventionTypes.includes('ERASMUS_MOBILITY')) && (
+                                    <option value="ERASMUS_MOBILITY">Mobilité Erasmus+</option>
+                                )}
                             </select>
                             <p className="text-xs text-indigo-600 mt-1">Le choix du type détermine le format légal de la convention générée.</p>
                         </div>
 
-                        <div className="md:col-span-2 bg-blue-50 p-4 rounded-xl border border-blue-100 mb-4">
-                            <h4 className="flex items-center text-blue-900 font-semibold mb-3">
-                                <Search className="w-4 h-4 mr-2" />
-                                Recherche Rapide de l'Établissement
-                            </h4>
-                            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                                <div>
-                                    <label className="block text-xs font-medium text-blue-800 mb-1">Ville</label>
-                                    <input
-                                        type="text"
-                                        value={cityQuery}
-                                        onChange={(e) => setCityQuery(e.target.value)}
-                                        placeholder="Ex: Lyon"
-                                        className="block w-full rounded-md border-blue-200 focus:border-blue-500 focus:ring-blue-500 text-sm p-2"
-                                    />
-                                </div>
-                                <div className="relative">
-                                    <label className="block text-xs font-medium text-blue-800 mb-1">Nom de l'école</label>
-                                    <input
-                                        type="text"
-                                        value={schoolQuery}
-                                        onChange={(e) => {
-                                            setSchoolQuery(e.target.value);
-                                            setShowResults(true);
-                                        }}
-                                        placeholder="Ex: Jules Ferry"
-                                        className="block w-full rounded-md border-blue-200 focus:border-blue-500 focus:ring-blue-500 text-sm p-2"
-                                    />
-                                    {loading && (
-                                        <div className="absolute right-2 top-8">
-                                            <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
-                                        </div>
-                                    )}
-                                    {showResults && results.length > 0 && (
-                                        <div className="absolute z-10 w-full bg-white mt-1 rounded-md shadow-lg border border-gray-200 max-h-60 overflow-y-auto">
-                                            {results.map((school) => (
-                                                <button
-                                                    key={school.id}
-                                                    type="button"
-                                                    onClick={() => handleSelectSchool(school, form)}
-                                                    className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-0"
-                                                >
-                                                    <div className="font-medium text-gray-900">{school.nom}</div>
-                                                    <div className="text-xs text-gray-500 flex items-center">
-                                                        <MapPin className="w-3 h-3 mr-1" />
-                                                        {school.ville} ({school.type})
-                                                    </div>
-                                                </button>
-                                            ))}
-                                        </div>
-                                    )}
+                        {/* Search School - Check if not student AND not debug account */}
+                        {profileData?.role !== 'student' && email !== 'pledgeum@gmail.com' && (
+                            <div className="md:col-span-2 bg-blue-50 p-4 rounded-xl border border-blue-100 mb-4">
+                                <h4 className="flex items-center text-blue-900 font-semibold mb-3">
+                                    <Search className="w-4 h-4 mr-2" />
+                                    Recherche Rapide de l'Établissement
+                                </h4>
+                                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                    <div>
+                                        <label className="block text-xs font-medium text-blue-800 mb-1">Ville</label>
+                                        <input
+                                            type="text"
+                                            value={cityQuery}
+                                            onChange={(e) => setCityQuery(e.target.value)}
+                                            placeholder="Ex: Lyon"
+                                            className="block w-full rounded-md border-blue-200 focus:border-blue-500 focus:ring-blue-500 text-sm p-2"
+                                        />
+                                    </div>
+                                    <div className="relative">
+                                        <label className="block text-xs font-medium text-blue-800 mb-1">Nom de l'école</label>
+                                        <input
+                                            type="text"
+                                            value={schoolQuery}
+                                            onChange={(e) => {
+                                                setSchoolQuery(e.target.value);
+                                                setShowResults(true);
+                                            }}
+                                            placeholder="Ex: Jules Ferry"
+                                            className="block w-full rounded-md border-blue-200 focus:border-blue-500 focus:ring-blue-500 text-sm p-2"
+                                        />
+                                        {loading && (
+                                            <div className="absolute right-2 top-8">
+                                                <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
+                                            </div>
+                                        )}
+                                        {showResults && results.length > 0 && (
+                                            <div className="absolute z-10 w-full bg-white mt-1 rounded-md shadow-lg border border-gray-200 max-h-60 overflow-y-auto">
+                                                {results.map((school) => (
+                                                    <button
+                                                        key={school.id}
+                                                        type="button"
+                                                        onClick={() => handleSelectSchool(school, form)}
+                                                        className="w-full text-left px-4 py-2 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-0"
+                                                    >
+                                                        <div className="font-medium text-gray-900">{school.nom}</div>
+                                                        <div className="text-xs text-gray-500 flex items-center">
+                                                            <MapPin className="w-3 h-3 mr-1" />
+                                                            {school.ville} ({school.type})
+                                                        </div>
+                                                    </button>
+                                                ))}
+                                            </div>
+                                        )}
+                                    </div>
                                 </div>
                             </div>
-                        </div>
+                        )}
 
                         <div className="md:col-span-2">
                             <label className="block text-sm font-medium text-gray-700">Nom de l'établissement (Vérifiez)</label>
                             <input
                                 {...form.register('ecole_nom')}
                                 type="text"
+                                disabled={profileData?.role === 'student' || email === 'pledgeum@gmail.com'}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
+                                    (profileData?.role === 'student' || email === 'pledgeum@gmail.com') && "bg-gray-100 text-gray-500 cursor-not-allowed",
                                     form.formState.errors.ecole_nom && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -174,8 +205,10 @@ export function Step1School() {
                             <textarea
                                 {...form.register('ecole_adresse')}
                                 rows={2}
+                                disabled={profileData?.role === 'student' || email === 'pledgeum@gmail.com'}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
+                                    (profileData?.role === 'student' || email === 'pledgeum@gmail.com') && "bg-gray-100 text-gray-500 cursor-not-allowed",
                                     form.formState.errors.ecole_adresse && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -187,8 +220,10 @@ export function Step1School() {
                             <input
                                 {...form.register('ecole_tel')}
                                 type="tel"
+                                disabled={profileData?.role === 'student' || email === 'pledgeum@gmail.com'}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
+                                    (profileData?.role === 'student' || email === 'pledgeum@gmail.com') && "bg-gray-100 text-gray-500 cursor-not-allowed",
                                     form.formState.errors.ecole_tel && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -205,8 +240,10 @@ export function Step1School() {
                             <input
                                 {...form.register('ecole_chef_nom')}
                                 type="text"
+                                disabled={profileData?.role === 'student' || email === 'pledgeum@gmail.com'}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
+                                    (profileData?.role === 'student' || email === 'pledgeum@gmail.com') && "bg-gray-100 text-gray-500 cursor-not-allowed",
                                     form.formState.errors.ecole_chef_nom && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -217,8 +254,10 @@ export function Step1School() {
                             <input
                                 {...form.register('ecole_chef_email')}
                                 type="email"
+                                disabled={profileData?.role === 'student' || email === 'pledgeum@gmail.com'}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
+                                    (profileData?.role === 'student' || email === 'pledgeum@gmail.com') && "bg-gray-100 text-gray-500 cursor-not-allowed",
                                     form.formState.errors.ecole_chef_email && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />

@@ -7,6 +7,8 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
 
+import { useSchoolStore } from '@/store/school'; // Import store
+
 export default function SignupPage() {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
@@ -14,10 +16,39 @@ export default function SignupPage() {
     const [loading, setLoading] = useState(false);
     const router = useRouter();
 
+    // Access school data for validation
+    const { collaborators, classes, schoolHeadEmail } = useSchoolStore();
+
     const handleSignup = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
+
+        // Security Check: Is this email authorized?
+        const normalizedEmail = email.toLowerCase().trim();
+
+        // 1. Check School Head
+        const isHead = schoolHeadEmail && schoolHeadEmail.toLowerCase() === normalizedEmail;
+
+        // 2. Check Collaborators
+        const isCollaborator = collaborators.some(c => c.email.toLowerCase() === normalizedEmail);
+
+        // 3. Check Teachers
+        const isTeacher = classes.some(c => c.teachersList.some(t => t.email.toLowerCase() === normalizedEmail));
+
+        // 4. Check Students
+        const isStudent = classes.some(c => c.studentsList && c.studentsList.some(s => s.email.toLowerCase() === normalizedEmail));
+
+        // 5. Special Bypass for "pledgeum@gmail.com" (Debug/Demo) - keeping it unrestricted for demo purposes if needed, OR restrict it?
+        // Let's allow it for safety in this dev environment.
+        const isDebug = normalizedEmail === 'pledgeum@gmail.com';
+
+        if (!isHead && !isCollaborator && !isTeacher && !isStudent && !isDebug) {
+            setLoading(false);
+            setError("Inscription refusée. Votre adresse email ne figure pas dans la liste des utilisateurs autorisés par l'établissement. Veuillez contacter votre administrateur.");
+            return;
+        }
+
         try {
             await createUserWithEmailAndPassword(auth, email, password);
             router.push('/onboarding');

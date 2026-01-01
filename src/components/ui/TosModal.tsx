@@ -13,8 +13,11 @@ export function TosModal({ isOpen = false, onClose }: TosModalProps) {
     const { hasAcceptedTos, acceptTos } = useUserStore();
     const [isLoading, setIsLoading] = useState(false);
 
+    // If status is unknown (loading), do not render yet
+    if (hasAcceptedTos === null) return null;
+
     // Determine if we are in blocking mode (mandatory acceptance) or view mode
-    const isBlocking = !hasAcceptedTos;
+    const isBlocking = hasAcceptedTos === false;
     const isVisible = isBlocking || isOpen;
 
     if (!user || !isVisible) return null;

@@ -2,7 +2,7 @@ import { create } from 'zustand';
 import { db } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
-export type UserRole = 'student' | 'teacher' | 'teacher_tracker' | 'school_head' | 'company_head' | 'tutor' | 'parent' | 'company_head_tutor' | 'ddfpt' | 'business_manager' | 'assistant_manager' | 'stewardship_secretary';
+export type UserRole = 'student' | 'teacher' | 'teacher_tracker' | 'school_head' | 'company_head' | 'tutor' | 'parent' | 'company_head_tutor' | 'ddfpt' | 'business_manager' | 'assistant_manager' | 'stewardship_secretary' | 'at_ddfpt';
 
 export interface Notification {
     id: string;
@@ -23,7 +23,7 @@ interface UserState {
     monitoringTeacher?: { id: string, name: string, email: string }; // For students
     notifications: Notification[];
     unreadCount: number;
-    hasAcceptedTos: boolean; // NEW
+    hasAcceptedTos: boolean | null; // NEW (null = loading/unknown)
     setUser: (name: string, role: UserRole, email: string) => void;
     setRole: (role: UserRole) => void;
     addNotification: (notification: Omit<Notification, 'id' | 'read' | 'date'>) => void;
@@ -45,7 +45,7 @@ export const useUserStore = create<UserState>((set, get) => ({
     monitoringTeacher: undefined,
     notifications: [],
     unreadCount: 0,
-    hasAcceptedTos: false,
+    hasAcceptedTos: null,
     setUser: (name, role, email) => set({ name, role, email }),
     setRole: (role) => set({ role }),
     addNotification: (notif) => set((state) => {
