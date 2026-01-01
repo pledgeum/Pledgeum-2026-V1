@@ -1366,7 +1366,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
           if (role === 'tutor') return c.tuteur_nom || 'Tuteur';
           if (isSchoolAdminRole(role)) return c.ecole_chef_nom || 'Directeur';
           return '';
-        })()}
+        })() ?? ''}
         signeeEmail={(() => {
           const c = conventions.find(c => c.id === selectedConventionId);
           if (!c) return '';
@@ -1380,7 +1380,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
           if (role === 'tutor') return c.tuteur_email;
           if (isSchoolAdminRole(role)) return c.ecole_chef_email;
           return '';
-        })()}
+        })() ?? ''}
       />
 
       <ParentValidationModal
