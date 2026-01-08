@@ -720,10 +720,50 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
         }
     };
 
-    const handleAddCollaborator = (e: React.FormEvent) => {
+    const handleAddCollaborator = async (e: React.FormEvent) => {
         e.preventDefault();
         if (newCollab.name && newCollab.email) {
-            addCollaborator(newCollab);
+            // 1. Generate Credentials
+            const clean = (str: string) => str.toUpperCase()
+                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                .replace(/[^A-Z0-9]/g, "");
+
+            const parts = newCollab.name.split(' ');
+            const lastName = parts.length > 1 ? parts[parts.length - 1] : parts[0];
+            const firstName = parts.length > 1 ? parts[0] : 'PREFIX';
+
+            const sLast = clean(lastName).substring(0, 4).padEnd(4, 'X');
+            const sFirst = clean(firstName).substring(0, 4).padEnd(4, 'X');
+            const random3 = Math.floor(100 + Math.random() * 900);
+            const tempId = `${sLast}${sFirst}${random3}`;
+            const tempCode = Math.floor(100000 + Math.random() * 900000).toString();
+
+            // 2. Add to Store (with credentials)
+            addCollaborator({ ...newCollab, tempId, tempCode });
+
+            // 3. Send Email
+            try {
+                await fetch('/api/send-email', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        to: newCollab.email,
+                        subject: "Invitation à rejoindre Pledgeum",
+                        text: `Bonjour ${newCollab.name},\n\n` +
+                            `Vous avez été invité à rejoindre l'espace d'administration de Pledgeum en tant que ${newCollab.role}.\n\n` +
+                            `Voici vos identifiants de connexion provisoires :\n` +
+                            `Identifiant : ${tempId}\n` +
+                            `Code d'accès : ${tempCode}\n\n` +
+                            `Connectez-vous sur : ${window.location.origin}\n\n` +
+                            `L'équipe Pledgeum`
+                    })
+                });
+                alert(`Invitation envoyée à ${newCollab.email}`);
+            } catch (err) {
+                console.error("Erreur envoi email invitation:", err);
+                alert("Collaborateur ajouté, mais erreur lors de l'envoi de l'email.");
+            }
+
             setNewCollab({ name: '', email: '', role: 'DDFPT' });
         }
     };

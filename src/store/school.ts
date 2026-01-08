@@ -25,6 +25,8 @@ export interface Collaborator {
     name: string;
     email: string;
     role: CollaboratorRole;
+    tempId?: string;
+    tempCode?: string;
 }
 
 export interface Address {
