@@ -11,7 +11,7 @@ export const validatePassword = (password: string) => {
     const result = passwordSchema.safeParse(password);
     if (!result.success) {
         // Safe access to error messages handling potential structural differences
-        const issues = result.error?.errors || (result.error as any)?.issues || [];
+        const issues = result.error?.issues || [];
         const errorMessage = issues[0]?.message || "Le mot de passe ne respecte pas les critères de sécurité.";
 
         return {
