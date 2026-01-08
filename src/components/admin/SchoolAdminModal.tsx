@@ -116,7 +116,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
         importTeachers, addTeacherToClass, removeTeacherFromClass, importGlobalTeachers,
         importStudents, addStudentToClass, removeStudentFromClass, allowedConventionTypes,
         toggleConventionType, schoolHeadEmail, delegatedAdminId, setDelegatedAdmin, schoolName,
-        schoolAddress, schoolPhone, schoolHeadName, generateStudentCredentials, importGlobalStructure,
+        schoolAddress, schoolPhone, schoolHeadName, generateStudentCredentials, generateTeacherCredentials, importGlobalStructure,
         partnerCompanies, importPartners, removePartner,
         // Visibility Store
         hiddenActivities, setHiddenActivities, hiddenJobs, setHiddenJobs, hiddenClasses, setHiddenClasses,
