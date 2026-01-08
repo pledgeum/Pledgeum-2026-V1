@@ -736,7 +736,7 @@ export default function Home() {
         ) : (
           // VALIDATOR DASHBOARD (Teacher, Heads, Tutor)
           <div className="space-y-6">
-            {(role === 'teacher' || role === 'at_ddfpt') && (
+            {(role === 'teacher' || role === 'at_ddfpt' || role === 'ddfpt') && (
               <div className="flex justify-end space-x-4">
                 {/* Class Document Management Button for Main Teachers and Admin Roles */}
                 {(role === 'teacher' || role === 'ddfpt' || role === 'at_ddfpt') && (
