@@ -6,6 +6,7 @@ import { collection, addDoc, query, where, getDocs, updateDoc, doc, setDoc, arra
 import { sendNotification } from '@/lib/notification';
 import { generateVerificationUrl } from '@/app/actions/sign';
 import { sha256 } from 'js-sha256';
+import { UserRole } from '@/store/user';
 
 export type ConventionStatus =
     | 'DRAFT'
