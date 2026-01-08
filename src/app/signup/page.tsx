@@ -45,10 +45,10 @@ export default function SignupPage() {
         const isCollaborator = collaborators.some(c => c.email.toLowerCase() === normalizedEmail);
 
         // 3. Check Teachers
-        const isTeacher = classes.some(c => c.teachersList.some(t => t.email.toLowerCase() === normalizedEmail));
+        const isTeacher = classes.some(c => c.teachersList.some(t => t.email?.toLowerCase() === normalizedEmail));
 
         // 4. Check Students
-        const isStudent = classes.some(c => c.studentsList && c.studentsList.some(s => s.email.toLowerCase() === normalizedEmail));
+        const isStudent = classes.some(c => c.studentsList && c.studentsList.some(s => s.email?.toLowerCase() === normalizedEmail));
 
         // 5. Special Bypass for "pledgeum@gmail.com" (Debug/Demo) - keeping it unrestricted for demo purposes if needed, OR restrict it?
         // Let's allow it for safety in this dev environment.
@@ -105,7 +105,7 @@ export default function SignupPage() {
             else if (isTeacher) {
                 // Find the teacher
                 for (const cls of classes) {
-                    const t = cls.teachersList.find(t => t.email.toLowerCase() === normalizedEmail);
+                    const t = cls.teachersList.find(t => t.email?.toLowerCase() === normalizedEmail);
                     if (t) {
                         detectedRole = 'teacher';
                         detectedName = `${t.firstName} ${t.lastName}`;
@@ -116,7 +116,7 @@ export default function SignupPage() {
             // 4. Check Students
             else if (isStudent) {
                 for (const cls of classes) {
-                    const s = cls.studentsList.find(s => s.email.toLowerCase() === normalizedEmail);
+                    const s = cls.studentsList.find(s => s.email?.toLowerCase() === normalizedEmail);
                     if (s) {
                         detectedRole = 'student';
                         detectedName = `${s.firstName} ${s.lastName}`;
