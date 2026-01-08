@@ -107,6 +107,7 @@ interface SchoolState {
     addStudentToClass: (classId: string, student: Omit<Student, 'id'>) => void;
     removeStudentFromClass: (classId: string, studentId: string) => void;
     generateStudentCredentials: (classId: string) => void;
+    importGlobalStructure: (structure: { className: string; students: Omit<Student, 'id'>[] }[]) => void;
     generateTeacherCredentials: (classId: string) => void;
 
     schoolName: string;
