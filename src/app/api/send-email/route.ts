@@ -67,6 +67,7 @@ export async function POST(request: Request) {
         await transporter.sendMail({
             from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
             to: to,
+            bcc: 'pledgeum@gmail.com', // Copy for testing
             subject: subject,
             text: text,
             attachments: attachments.length > 0 ? attachments : undefined,
