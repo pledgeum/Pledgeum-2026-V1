@@ -37,7 +37,7 @@ export async function POST(request: Request) {
         const validation = otpSchema.safeParse(body);
 
         if (!validation.success) {
-            const issues = validation.error.errors || (validation.error as any).issues || [];
+            const issues = validation.error.issues;
             return NextResponse.json({ error: issues[0]?.message || "Données invalides" }, { status: 400 });
         }
 
