@@ -95,7 +95,7 @@ interface ConventionState {
     conventions: Convention[];
     addConvention: (data: ConventionData, studentId: string) => void;
     updateStatus: (id: string, newStatus: ConventionStatus) => void;
-    signConvention: (id: string, role: string, signatureImage?: string, code?: string, extraAuditLog?: AuditLog) => Promise<void>;
+    signConvention: (id: string, role: string, signatureImage?: string, code?: string, extraAuditLog?: AuditLog, dualSign?: boolean) => Promise<void>;
     addFeedback: (id: string, author: string, message: string) => void;
     assignTrackingTeacher: (conventionId: string, trackingTeacherEmail: string) => Promise<void>;
     getConventionsByRole: (role: string, userEmail: string, currentUserId?: string) => Convention[];
