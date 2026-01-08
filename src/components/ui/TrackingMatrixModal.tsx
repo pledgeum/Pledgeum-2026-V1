@@ -7,23 +7,26 @@ import { getCoordinates, calculateDistance } from '@/lib/geocoding';
 interface Props {
     isOpen: boolean;
     onClose: () => void;
-    currentTeacherEmail: string; // To highlight current user
+    currentTeacherEmail?: string; // Optional if not strictly used for logic yet
+    classId?: string; // Added to allow pre-selection
 }
 
-export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentTeacherEmail }) => {
+export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentTeacherEmail, classId }) => {
     const { conventions, assignTrackingTeacher } = useConventionStore();
     const { classes, schoolAddress } = useSchoolStore();
 
-    const [selectedClassId, setSelectedClassId] = useState<string>('');
+    const [selectedClassId, setSelectedClassId] = useState<string>(classId || '');
     const [distances, setDistances] = useState<Record<string, number>>({}); // Key: "studentId-teacherId" -> distance
     const [isLoadingDistances, setIsLoadingDistances] = useState(false);
     const [assigningState, setAssigningState] = useState<string | null>(null); // "studentId-teacherId" being assigned
 
     useEffect(() => {
-        if (classes.length > 0 && !selectedClassId) {
+        if (classId) {
+            setSelectedClassId(classId);
+        } else if (classes.length > 0 && !selectedClassId) {
             setSelectedClassId(classes[0].id);
         }
-    }, [classes, selectedClassId]);
+    }, [classes, selectedClassId, classId]);
 
     // Filter Data
     const selectedClass = classes.find(c => c.id === selectedClassId);
