@@ -29,10 +29,10 @@ export interface Absence {
 
 export interface AuditLog {
     date: string;
-    action: 'CREATED' | 'OTP_SENT' | 'OTP_VALIDATED' | 'SIGNED';
+    action: 'CREATED' | 'OTP_SENT' | 'OTP_VALIDATED' | 'SIGNED' | 'ATTESTATION_SIGNED';
     actorEmail: string;
+    details: string;
     ip?: string;
-    details?: string;
 }
 
 export interface Convention extends ConventionData {
@@ -349,7 +349,8 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
     })),
 
     // Logique métier de transition d'état lors d'une signature
-    signConvention: async (id, role, signatureImage, providedCode, extraAuditLog) => {
+    // Logique métier de transition d'état lors d'une signature
+    signConvention: async (id, role, signatureImage, providedCode, extraAuditLog, dualSign = false) => {
         const { conventions } = get();
         const convention = conventions.find(c => c.id === id);
         if (!convention) return;
@@ -359,22 +360,28 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
         const newSigs = { ...convention.signatures };
         let newStatus = convention.status;
 
+        // Helper to check if a role has signed
+        const hasSigned = (r: UserRole) => {
+            if (r === 'student') return !!newSigs.studentAt;
+            if (r === 'parent') return !!newSigs.parentAt;
+            if (r === 'teacher') return !!newSigs.teacherAt;
+            if (r === 'company_head') return !!newSigs.companyAt;
+            if (r === 'tutor') return !!newSigs.tutorAt;
+            if (r === 'school_head') return !!newSigs.headAt;
+            return false;
+        };
+
         // State Machine Logic
         if (role === 'student') {
             newSigs.studentAt = now;
             if (signatureImage) newSigs.studentImg = signatureImage;
-            if (!newSigs.studentCode) newSigs.studentCode = code; // Conserve existing code if present? Or regenerate? 
-            // Let's regenerate or use provided code to ensure fresh signature
             newSigs.studentCode = code;
 
             if (convention.status === 'DRAFT') {
                 newStatus = 'SUBMITTED';
             }
-            // Allow re-signing in SUBMITTED state without error (just updates signature)
-            // But do not change status if already SUBMITTED
         }
-        if (role === 'parent' && convention.est_mineur) {
-            // Parent signs FIRST if minor (immediately after student submits)
+        else if (role === 'parent' && convention.est_mineur) {
             if (convention.status === 'SUBMITTED') {
                 newSigs.parentAt = now;
                 if (signatureImage) newSigs.parentImg = signatureImage;
@@ -383,35 +390,72 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             }
         }
         else if (role === 'teacher') {
-            if (convention.est_mineur) {
-                // If minor, Teacher signs AFTER Parent
-                if (convention.status === 'SIGNED_PARENT') {
-                    newSigs.teacherAt = now;
-                    if (signatureImage) newSigs.teacherImg = signatureImage;
-                    newSigs.teacherCode = code;
-                    newStatus = 'VALIDATED_TEACHER';
+            const canSign = (convention.est_mineur && convention.status === 'SIGNED_PARENT') ||
+                (!convention.est_mineur && (convention.status === 'SUBMITTED' || convention.status === 'SIGNED_PARENT'));
+
+            if (canSign) {
+                newSigs.teacherAt = now;
+                if (signatureImage) newSigs.teacherImg = signatureImage;
+                newSigs.teacherCode = code;
+                newStatus = 'VALIDATED_TEACHER';
+            }
+        }
+        else if (role === 'company_head' || role === 'tutor') {
+            // Flexible Order Logic: Can sign if Teacher has validated
+            // Base condition: Teacher must have validated (so status is at least VALIDATED_TEACHER)
+            // Or partners already started signing (SIGNED_COMPANY, SIGNED_TUTOR)
+            const isReadyForPartners = ['VALIDATED_TEACHER', 'SIGNED_COMPANY', 'SIGNED_TUTOR'].includes(convention.status);
+
+            if (isReadyForPartners) {
+                // Apply Main Signature
+                if (role === 'company_head') {
+                    newSigs.companyAt = now;
+                    if (signatureImage) newSigs.companyImg = signatureImage;
+                    newSigs.companyCode = code;
                 }
-            } else {
-                // If major, Teacher signs AFTER Student
-                if (convention.status === 'SUBMITTED') {
-                    newSigs.teacherAt = now;
-                    if (signatureImage) newSigs.teacherImg = signatureImage;
-                    newSigs.teacherCode = code;
+                if (role === 'tutor') {
+                    newSigs.tutorAt = now;
+                    if (signatureImage) newSigs.tutorImg = signatureImage;
+                    newSigs.tutorCode = code;
+                }
+
+                // Apply Dual Signature if requested
+                if (dualSign) {
+                    const dualRole = role === 'company_head' ? 'tutor' : 'company_head';
+                    // We use the same image and code? Or generate new?
+                    // To imply "delegation" or "same person", same image + same code is appropriate.
+                    // But technically they are distinct fields.
+                    if (dualRole === 'company_head') {
+                        newSigs.companyAt = now;
+                        if (signatureImage) newSigs.companyImg = signatureImage;
+                        newSigs.companyCode = code;
+                    } else {
+                        newSigs.tutorAt = now;
+                        if (signatureImage) newSigs.tutorImg = signatureImage;
+                        newSigs.tutorCode = code;
+                    }
+                }
+
+                // Determine New Status
+                // If BOTH Company and Tutor have signed -> SIGNED_TUTOR (Ready for Head)
+                // If only Company -> SIGNED_COMPANY
+                // If only Tutor -> VALIDATED_TEACHER (technically unchanged status, but signature added)
+                // NOTE: We rely on checking the updated `newSigs` object
+                const companySigned = !!newSigs.companyAt;
+                const tutorSigned = !!newSigs.tutorAt;
+
+                if (companySigned && tutorSigned) {
+                    newStatus = 'SIGNED_TUTOR'; // Both signed, ready for Head
+                } else if (companySigned) {
+                    newStatus = 'SIGNED_COMPANY'; // Company signed, waiting for Tutor
+                } else if (tutorSigned) {
+                    // Tutor signed, waiting for Company.
+                    // We keep VALIDATED_TEACHER so UI says "En attente : Chef d'Entreprise" (via Logic in page.tsx)
+                    // Or we introduce a new status? Let's stick to existing statuses to avoid breaking UI.
+                    // VALIDATED_TEACHER effectively means "Waiting for Company/Partners"
                     newStatus = 'VALIDATED_TEACHER';
                 }
             }
-        }
-        else if (role === 'company_head' && convention.status === 'VALIDATED_TEACHER') {
-            newSigs.companyAt = now;
-            if (signatureImage) newSigs.companyImg = signatureImage;
-            newSigs.companyCode = code;
-            newStatus = 'SIGNED_COMPANY';
-        }
-        else if (role === 'tutor' && convention.status === 'SIGNED_COMPANY') {
-            newSigs.tutorAt = now;
-            if (signatureImage) newSigs.tutorImg = signatureImage;
-            newSigs.tutorCode = code;
-            newStatus = 'SIGNED_TUTOR';
         }
         else if (role === 'school_head' && convention.status === 'SIGNED_TUTOR') {
             newSigs.headAt = now;
@@ -421,6 +465,28 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
         }
 
         try {
+            // Verify if (status changed) OR (signatures changed)
+            // We compare signature timestamps count to detect if a signature was added
+            const countSigs = (s: any) => [s.studentAt, s.parentAt, s.teacherAt, s.companyAt, s.tutorAt, s.headAt].filter(Boolean).length;
+            const oldSigCount = countSigs(convention.signatures);
+            const newSigCount = countSigs(newSigs);
+
+            const signaturesChanged = newSigCount > oldSigCount;
+            const statusChanged = newStatus !== convention.status;
+
+            const allowedResign =
+                (role === 'student' && ['DRAFT', 'SUBMITTED', 'REJECTED'].includes(convention.status)) ||
+                (role === 'parent' && convention.status === 'SIGNED_PARENT') ||
+                (role === 'teacher' && convention.status === 'VALIDATED_TEACHER') ||
+                (role === 'company_head' && convention.status === 'SIGNED_COMPANY') ||
+                (role === 'tutor' && convention.status === 'SIGNED_TUTOR') ||
+                (role === 'school_head' && convention.status === 'VALIDATED_HEAD');
+
+            if (!statusChanged && !signaturesChanged && !allowedResign) {
+                console.warn(`Signature ignored: Status ${newStatus} unchanged for role ${role}. (Minor: ${convention.est_mineur}, Status: ${convention.status})`);
+                throw new Error(`La signature n'a pas pu être prise en compte. Statut: ${convention.status}, Rôle: ${role}.`);
+            }
+
             // Compute Verification Hash (Server-Side Logic via Action)
             // Create a preview of the new state to generate the correct signature
             const tempConvention = {
@@ -478,44 +544,47 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 )
             }));
 
-            // Send Notification to Next Actor
+            // Determine Dashboard Link based on Environment
             const origin = typeof window !== 'undefined' ? window.location.origin : '';
-            const dashboardLink = `${origin}/`;
+            const isLocal = origin.includes('localhost');
+            const dashboardLink = isLocal ? 'http://localhost:3000/' : 'https://www.pledgeum.fr/';
 
             if (newStatus === 'SIGNED_PARENT') {
                 // Parent has signed -> Notify Teacher to Validate
+                const parentName = convention.rep_legal_prenom ? `${convention.rep_legal_prenom} ${convention.rep_legal_nom}` : convention.rep_legal_nom;
                 await sendNotification(
                     convention.prof_email,
-                    'Convention PFMP à valider (Suite signature parent)',
-                    `Bonjour,\n\nLe représentant légal de ${convention.eleve_prenom} ${convention.eleve_nom} a signé la convention.\n\nMerci de vérifier et valider la convention : ${dashboardLink}\n\nCordialement.`
+                    `Convention PFMP à valider - ${convention.eleve_prenom} ${convention.eleve_nom} - ${convention.ecole_nom}`,
+                    `Bonjour,\n\nLe représentant légal (${parentName}) de l'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Classe: ${convention.eleve_classe}) a signé la convention pour le stage chez ${convention.ent_nom} (${convention.ent_ville}).\n\nMerci de vérifier et valider la convention : ${dashboardLink}\n\nCordialement.`
                 );
             }
             else if (newStatus === 'VALIDATED_TEACHER') {
                 // Teacher has validated -> Notify Company
                 await sendNotification(
                     convention.ent_rep_email,
-                    'Convention PFMP à signer (Entreprise)',
-                    `Bonjour,\n\nLa convention de ${convention.eleve_prenom} ${convention.eleve_nom} a été validée par l'enseignant référent.\n\nC'est à votre tour de signer : ${dashboardLink}\n\nCordialement.`
+                    `Convention PFMP à signer - ${convention.eleve_prenom} ${convention.eleve_nom} - ${convention.ecole_nom}`,
+                    `Bonjour,\n\nLa convention de l'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Classe: ${convention.eleve_classe}) pour le stage chez ${convention.ent_nom} (${convention.ent_ville}) a été validée par l'enseignant référent (${convention.prof_nom}).\n\nC'est à votre tour de signer : ${dashboardLink}\n\nCordialement.`
                 );
             }
             else if (newStatus === 'SIGNED_COMPANY') {
                 await sendNotification(
                     convention.tuteur_email,
-                    'Convention PFMP à signer (Tuteur)',
-                    `Bonjour,\n\nLe représentant de l'entreprise a signé la convention de ${convention.eleve_prenom} ${convention.eleve_nom}.\n\nMerci de la valider : ${dashboardLink}\n\nCordialement.`
+                    `Convention PFMP à signer - ${convention.eleve_prenom} ${convention.eleve_nom} - ${convention.ecole_nom}`,
+                    `Bonjour,\n\nLe représentant de l'entreprise (${convention.ent_rep_nom}) a signé la convention de l'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Classe: ${convention.eleve_classe}) pour le stage chez ${convention.ent_nom} (${convention.ent_ville}).\n\nMerci de la valider : ${dashboardLink}\n\nCordialement.`
                 );
             }
             else if (newStatus === 'SIGNED_TUTOR') {
+                const tutorName = convention.tuteur_prenom ? `${convention.tuteur_prenom} ${convention.tuteur_nom}` : convention.tuteur_nom;
                 await sendNotification(
                     convention.ecole_chef_email,
-                    'Convention PFMP à valider (Chef Etablissement)',
-                    `Bonjour,\n\nLe tuteur a signé la convention de ${convention.eleve_prenom} ${convention.eleve_nom}.\n\nMerci de procéder à la validation finale : ${dashboardLink}\n\nCordialement.`
+                    `Convention PFMP à valider - ${convention.eleve_prenom} ${convention.eleve_nom} - ${convention.ecole_nom}`,
+                    `Bonjour,\n\nLe tuteur (${tutorName}) a signé la convention de l'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Classe: ${convention.eleve_classe}) pour le stage chez ${convention.ent_nom} (${convention.ent_ville}).\n\nMerci de procéder à la validation finale : ${dashboardLink}\n\nCordialement.`
                 );
             }
             else if (newStatus === 'VALIDATED_HEAD') {
                 // FINAL VALIDATION: Notify EVERYONE
-                const subject = `Convention PFMP Validée - ${convention.eleve_prenom} ${convention.eleve_nom}`;
-                const msg = `Bonjour,\n\nLa convention de stage est désormais entièrement signée et validée par le Chef d'Établissement scolaire.\n\nVous pouvez télécharger le document final sur votre tableau de bord : ${dashboardLink}\n\nBon stage !`;
+                const subject = `Convention PFMP Finalisée - ${convention.eleve_prenom} ${convention.eleve_nom} - ${convention.ecole_nom}`;
+                const msg = `Bonjour,\n\nLa convention de stage de l'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Classe: ${convention.eleve_classe}) chez ${convention.ent_nom} (${convention.ent_ville}) a été signée par tous et validée par le Chef d'Établissement (${convention.ecole_chef_nom}).\n\nVous pouvez télécharger le document final sur votre tableau de bord : ${dashboardLink}\n\nBon stage !`;
 
                 const recipients = [
                     convention.eleve_email,
@@ -531,12 +600,8 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 await Promise.all(recipients.map(email => sendNotification(email, subject, msg)));
             }
 
-            if (newStatus === convention.status) {
-                console.warn(`Signature ignored: Status ${newStatus} unchanged for role ${role}`);
-                throw new Error("La signature n'a pas pu être prise en compte (Statut du dossier incompatible).");
-            }
-
             console.log(`Convention ${id} signed by ${role}. New status: ${newStatus}`);
+
         } catch (error) {
             console.error("Error signing convention:", error);
             throw error; // Re-throw to UI
@@ -603,28 +668,31 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 conventions: [...state.conventions, { ...newConvention, id: docRef.id }]
             }));
             // Send Email Notification
+            // Send Email Notification to Student (Confirmation)
             if (data.eleve_email) {
                 await sendNotification(
                     data.eleve_email,
-                    'Confirmation de votre demande de convention PFMP',
-                    `Bonjour ${data.eleve_prenom},\n\nVotre demande de convention a bien été enregistrée. Elle doit maintenant être validée par votre enseignant référent/professeur principal.\n\nCordialement,\nL'équipe PFMP`
+                    `Confirmation : Convention PFMP - ${data.eleve_prenom} ${data.eleve_nom} - ${data.ecole_nom}`,
+                    `Bonjour ${data.eleve_prenom},\n\nVotre convention de stage (Classe: ${data.eleve_classe}) pour l'entreprise ${data.ent_nom} (${data.ent_ville}) a bien été signée par vous-même (l'élève) et enregistrée.\n\nElle doit maintenant être validée par votre enseignant référent/professeur principal.\n\nCordialement,\nL'équipe PFMP`
                 );
             }
 
-            // Notify Next Actor (Parent if Minor, Teacher if Major)
+            // Determine Dashboard Link based on Environment
             const origin = typeof window !== 'undefined' ? window.location.origin : '';
+            const isLocal = origin.includes('localhost');
+            const dashboardLink = isLocal ? 'http://localhost:3000/' : 'https://www.pledgeum.fr/';
 
             if (data.est_mineur && data.rep_legal_email) {
                 await sendNotification(
                     data.rep_legal_email,
-                    'Convention PFMP à signer (Parent)',
-                    `Bonjour,\n\nVotre enfant ${data.eleve_prenom} a créé une demande de convention.\n\nMerci de vous connecter pour vérifier les informations et la signer : ${origin}\n\nCordialement.`
+                    `Convention PFMP à signer - ${data.eleve_prenom} ${data.eleve_nom} - ${data.ecole_nom}`,
+                    `Bonjour,\n\nLa convention de stage de l'élève ${data.eleve_prenom} ${data.eleve_nom} (Classe: ${data.eleve_classe}) chez ${data.ent_nom} (${data.ent_ville}) vient d'être signée par l'élève.\n\nMerci de vous connecter pour vérifier les informations et la signer : ${dashboardLink}\n\nCordialement.`
                 );
             } else if (data.prof_email) {
                 await sendNotification(
                     data.prof_email,
-                    'Nouvelle convention PFMP à valider',
-                    `Bonjour,\n\nUne nouvelle demande de convention a été soumise par ${data.eleve_prenom} ${data.eleve_nom} (Majeur).\n\nConnectez-vous pour la valider : ${origin}\n\nCordialement.`
+                    `Convention PFMP à valider - ${data.eleve_prenom} ${data.eleve_nom} - ${data.ecole_nom}`,
+                    `Bonjour,\n\nLa convention de stage de l'élève ${data.eleve_prenom} ${data.eleve_nom} (Classe: ${data.eleve_classe}) chez ${data.ent_nom} (${data.ent_ville}) vient d'être signée par l'élève (Majeur).\n\nConnectez-vous pour la valider : ${dashboardLink}\n\nCordialement.`
                 );
             }
         } catch (e) {
@@ -657,7 +725,9 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
 
         let recipientEmail = '';
         let recipientRoleName = '';
-        const dashboardLink = typeof window !== 'undefined' ? `${window.location.origin}/` : '';
+        const origin = typeof window !== 'undefined' ? window.location.origin : '';
+        const isLocal = origin.includes('localhost');
+        const dashboardLink = isLocal ? 'http://localhost:3000/' : 'https://www.pledgeum.fr/';
 
         // Determine who to remind
         switch (convention.status) {
@@ -719,7 +789,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
 
             await sendNotification(
                 recipientEmail,
-                `[${convention.ecole_nom}] Rappel : Convention en attente (${convention.eleve_prenom} ${convention.eleve_nom} - ${convention.eleve_classe})`,
+                `Rappel : Convention en attente - ${convention.eleve_prenom} ${convention.eleve_nom} - ${convention.ecole_nom}`,
                 emailBody
             );
 
@@ -848,12 +918,30 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
 
             await updateDoc(doc(db, "conventions", conventionId), {
                 ...attestationData,
-                attestationHash: hashDisplay
+                attestationHash: hashDisplay,
+                auditLogs: arrayUnion({
+                    date: new Date().toISOString(),
+                    action: 'ATTESTATION_SIGNED' as const,
+                    actorEmail: convention.ent_rep_email, // Assuming signed by company rep usually
+                    details: `Signature de l'attestation par ${signerName} (${signerFunction})`
+                })
             });
+
+            const newLog: AuditLog = {
+                date: new Date().toISOString(),
+                action: 'ATTESTATION_SIGNED',
+                actorEmail: convention.ent_rep_email,
+                details: `Signature de l'attestation par ${signerName} (${signerFunction})`
+            };
 
             set((state) => ({
                 conventions: state.conventions.map(c =>
-                    c.id === conventionId ? { ...c, ...attestationData, attestationHash: hashDisplay } : c
+                    c.id === conventionId ? {
+                        ...c,
+                        ...attestationData,
+                        attestationHash: hashDisplay,
+                        auditLogs: [...(c.auditLogs || []), newLog]
+                    } : c
                 )
             }));
         } catch (error) {

@@ -71,6 +71,22 @@ const localStyles = StyleSheet.create({
         alignItems: 'center',
         marginBottom: 4,
     },
+    // Styled "Stamp" for auth code
+    authCodeBox: {
+        marginTop: 4,
+        paddingVertical: 2,
+        paddingHorizontal: 4,
+        backgroundColor: '#f0f9ff',
+        borderWidth: 1,
+        borderColor: '#0284c7',
+        borderRadius: 2,
+        alignSelf: 'flex-start',
+    },
+    authCodeText: {
+        fontSize: 5,
+        color: '#0369a1',
+        fontFamily: pdfTheme.fonts.bold,
+    }
 });
 
 // Map legacy styles to theme and local styles
@@ -253,7 +269,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                     Vu la délibération du conseil d’administration du lycée approuvant la convention-type et autorisant le chef d’établissement à conclure au nom de l’établissement toute convention relative aux périodes de formation en milieu professionnel conforme à la convention-type.
                 </Text>
 
-                {qrCodeUrl && <QrCodeFooter url={qrCodeUrl} code={hashCode} />}
+                {data.status === 'VALIDATED_HEAD' && qrCodeUrl && <QrCodeFooter url={qrCodeUrl} code={hashCode} />}
             </Page>
 
             {/* --- LEGAL ARTICLES (Page 2+) --- */}
@@ -387,17 +403,29 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                         <View style={styles.signatureBox}>
                             <Text style={styles.signatureLabel}>Le chef d’établissement</Text>
                             {data.signatures?.headImg && <Image src={data.signatures.headImg} style={{ width: 100, height: 40 }} />}
-                            {data.signatures?.headCode && <Text style={{ fontSize: 6, color: 'black', marginTop: 2 }}>Code d'authentification de la signature numérique : {data.signatures.headCode}</Text>}
+                            {data.signatures?.headCode && (
+                                <View style={localStyles.authCodeBox}>
+                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.headCode}</Text>
+                                </View>
+                            )}
                         </View>
                         <View style={styles.signatureBox}>
                             <Text style={styles.signatureLabel}>Le représentant de l’entreprise</Text>
                             {data.signatures?.companyImg && <Image src={data.signatures.companyImg} style={{ width: 100, height: 40 }} />}
-                            {data.signatures?.companyCode && <Text style={{ fontSize: 6, color: 'black', marginTop: 2 }}>Code d'authentification de la signature numérique : {data.signatures.companyCode}</Text>}
+                            {data.signatures?.companyCode && (
+                                <View style={localStyles.authCodeBox}>
+                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.companyCode}</Text>
+                                </View>
+                            )}
                         </View>
                         <View style={styles.signatureBox}>
                             <Text style={styles.signatureLabel}>L’élève</Text>
                             {data.signatures?.studentImg && <Image src={data.signatures.studentImg} style={{ width: 100, height: 40 }} />}
-                            {data.signatures?.studentCode && <Text style={{ fontSize: 6, color: 'black', marginTop: 2 }}>Code d'authentification de la signature numérique : {data.signatures.studentCode}</Text>}
+                            {data.signatures?.studentCode && (
+                                <View style={localStyles.authCodeBox}>
+                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.studentCode}</Text>
+                                </View>
+                            )}
                         </View>
                         {/* Legal Rep Box - Always Visible */}
                         <View style={styles.signatureBox}>
@@ -407,7 +435,11 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                             {data.est_mineur && (
                                 <>
                                     {data.signatures?.parentImg && <Image src={data.signatures.parentImg} style={{ width: 100, height: 40 }} />}
-                                    {data.signatures?.parentCode && <Text style={{ fontSize: 6, color: 'black', marginTop: 2 }}>Code d'authentification de la signature numérique : {data.signatures.parentCode}</Text>}
+                                    {data.signatures?.parentCode && (
+                                        <View style={localStyles.authCodeBox}>
+                                            <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.parentCode}</Text>
+                                        </View>
+                                    )}
                                 </>
                             )}
 
@@ -415,23 +447,35 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                             {!data.est_mineur && (
                                 <>
                                     {data.signatures?.studentImg && <Image src={data.signatures.studentImg} style={{ width: 100, height: 40 }} />}
-                                    {data.signatures?.studentCode && <Text style={{ fontSize: 6, color: 'black', marginTop: 2 }}>Code d'authentification de la signature numérique : {data.signatures.studentCode}</Text>}
+                                    {data.signatures?.studentCode && (
+                                        <View style={localStyles.authCodeBox}>
+                                            <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.studentCode}</Text>
+                                        </View>
+                                    )}
                                 </>
                             )}
                         </View>
                         <View style={styles.signatureBox}>
                             <Text style={styles.signatureLabel}>Le tuteur</Text>
                             {data.signatures?.tutorImg && <Image src={data.signatures.tutorImg} style={{ width: 100, height: 40 }} />}
-                            {data.signatures?.tutorCode && <Text style={{ fontSize: 6, color: 'black', marginTop: 2 }}>Code d'authentification de la signature numérique : {data.signatures.tutorCode}</Text>}
+                            {data.signatures?.tutorCode && (
+                                <View style={localStyles.authCodeBox}>
+                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.tutorCode}</Text>
+                                </View>
+                            )}
                         </View>
                         <View style={styles.signatureBox}>
                             <Text style={styles.signatureLabel}>L’enseignant référent/Prof. Principal</Text>
                             {data.signatures?.teacherImg && <Image src={data.signatures.teacherImg} style={{ width: 100, height: 40 }} />}
-                            {data.signatures?.teacherCode && <Text style={{ fontSize: 6, color: 'black', marginTop: 2 }}>Code d'authentification de la signature numérique : {data.signatures.teacherCode}</Text>}
+                            {data.signatures?.teacherCode && (
+                                <View style={localStyles.authCodeBox}>
+                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.teacherCode}</Text>
+                                </View>
+                            )}
                         </View>
                     </View>
                 </View>
-                {qrCodeUrl && <QrCodeFooter url={qrCodeUrl} code={hashCode} />}
+                {data.status === 'VALIDATED_HEAD' && qrCodeUrl && <QrCodeFooter url={qrCodeUrl} code={hashCode} />}
             </Page>
 
             {/* --- ANNEXE 1: PEDAGOGIQUE --- */}
@@ -455,7 +499,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
 
                 <Text style={[styles.sectionTitle, { marginTop: 10 }]}>Modalités de suivi</Text>
                 <Text style={styles.text}>Suivi sur site / à distance par l'enseignant référent/professeur principal.</Text>
-                {qrCodeUrl && <QrCodeFooter url={qrCodeUrl} code={hashCode} />}
+                {data.status === 'VALIDATED_HEAD' && qrCodeUrl && <QrCodeFooter url={qrCodeUrl} code={hashCode} />}
             </Page>
 
             {/* --- ANNEXE 2: FINANCIERE --- */}
@@ -505,7 +549,9 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
             {/* --- QR CODE FOOTER (All Pages) --- */}
 
             {/* --- CERTIFICATE PAGE --- */}
-            <CertificatePage data={data} hashCode={hashCode} qrCodeUrl={qrCodeUrl} />
+            {data.status === 'VALIDATED_HEAD' && (
+                <CertificatePage data={data} hashCode={hashCode} qrCodeUrl={qrCodeUrl} />
+            )}
         </Document >
     );
 }

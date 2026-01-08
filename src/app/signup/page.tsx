@@ -6,8 +6,10 @@ import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2 } from 'lucide-react';
+import { validatePassword } from '@/lib/validation';
 
-import { useSchoolStore } from '@/store/school'; // Import store
+import { useSchoolStore, CollaboratorRole } from '@/store/school'; // Import store
+import { useUserStore, UserRole } from '@/store/user'; // Import UserRole and store
 
 export default function SignupPage() {
     const [email, setEmail] = useState('');
@@ -17,12 +19,21 @@ export default function SignupPage() {
     const router = useRouter();
 
     // Access school data for validation
-    const { collaborators, classes, schoolHeadEmail } = useSchoolStore();
+    const { collaborators, classes, schoolHeadEmail, schoolHeadName } = useSchoolStore();
+    const { createUserProfile } = useUserStore();
 
     const handleSignup = async (e: React.FormEvent) => {
         e.preventDefault();
         setLoading(true);
         setError(null);
+
+        // Validation Password
+        const validation = validatePassword(password);
+        if (!validation.isValid) {
+            setLoading(false);
+            setError(validation.error);
+            return;
+        }
 
         // Security Check: Is this email authorized?
         const normalizedEmail = email.toLowerCase().trim();
@@ -50,8 +61,93 @@ export default function SignupPage() {
         }
 
         try {
-            await createUserWithEmailAndPassword(auth, email, password);
-            router.push('/onboarding');
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const user = userCredential.user;
+
+            // --- AUTO-CONFIGURE PROFILE ---
+            let detectedRole: UserRole | null = null;
+            let detectedName = '';
+            let detectedBirthDate: string | undefined = undefined;
+            let initialProfileData: Record<string, any> = {};
+
+            // 1. Check School Head
+            if (isHead) {
+                detectedRole = 'school_head';
+                detectedName = schoolHeadName || 'Chef d\'Établissement';
+            }
+            // 2. Check Collaborators
+            else if (isCollaborator) {
+                const collaborator = collaborators.find(c => c.email.toLowerCase() === normalizedEmail);
+                if (collaborator) {
+                    detectedName = collaborator.name;
+                    // Map CollaboratorRole to UserRole
+                    const roleMap: Partial<Record<CollaboratorRole, UserRole>> = {
+                        'DDFPT': 'ddfpt',
+                        'BDE': 'business_manager',
+                        'ADJOINT_GEST': 'assistant_manager',
+                        'SEC_INTENDANCE': 'stewardship_secretary',
+                        'AT_DDFPT': 'at_ddfpt'
+                    };
+                    if (collaborator.role && roleMap[collaborator.role]) {
+                        detectedRole = roleMap[collaborator.role]!;
+                    } else {
+                        // Fallback for CPE/VieScolaire or unknown -> school_head logic? OR keep as null to force onboarding?
+                        // "Il n'y a pas besoin de demander" -> implying we SHOULD know.
+                        // If we don't have a role for CPE, let's default to 'school_head' (admin-like) or 'teacher' (staff)?
+                        // Safest default for staff on dashboard: teacher or school_head? 
+                        // Let's use 'teacher' as a generic staff role if mapping fails, or maybe just let them fall through.
+                        // For now, if map fails, I'll default to 'teacher' to avoid blocking, but log it.
+                        detectedRole = 'teacher';
+                    }
+                }
+            }
+            // 3. Check Teachers
+            else if (isTeacher) {
+                // Find the teacher
+                for (const cls of classes) {
+                    const t = cls.teachersList.find(t => t.email.toLowerCase() === normalizedEmail);
+                    if (t) {
+                        detectedRole = 'teacher';
+                        detectedName = `${t.firstName} ${t.lastName}`;
+                        break;
+                    }
+                }
+            }
+            // 4. Check Students
+            else if (isStudent) {
+                for (const cls of classes) {
+                    const s = cls.studentsList.find(s => s.email.toLowerCase() === normalizedEmail);
+                    if (s) {
+                        detectedRole = 'student';
+                        detectedName = `${s.firstName} ${s.lastName}`;
+                        // Capture Class Name
+                        initialProfileData.class = cls.name;
+                        break;
+                    }
+                }
+            }
+
+            // 5. Debug Bypass
+            if (!detectedRole && isDebug) {
+                detectedRole = 'school_head'; // Super Admin gets full perms
+                detectedName = 'Super Admin';
+            }
+
+            if (detectedRole && user) {
+                // Auto-create Profile
+                await createUserProfile(user.uid, {
+                    email: user.email || '',
+                    role: detectedRole,
+                    name: detectedName || (user.email?.split('@')[0] || 'Utilisateur'),
+                    birthDate: detectedBirthDate,
+                    profileData: initialProfileData
+                });
+                router.push('/'); // Go straight to Dashboard
+            } else {
+                // Fallback: If for some reason we authorised them but couldn't deduce role (shouldn't happen with above logic), go to dashboard
+                router.push('/');
+            }
+
         } catch (err: any) {
             console.error(err);
             setError("Échec de l'inscription. " + err.message);

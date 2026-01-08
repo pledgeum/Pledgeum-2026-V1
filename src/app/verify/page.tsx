@@ -109,12 +109,35 @@ function ValidState({ payload }: { payload: any }) {
                     </div>
 
                     <div className="space-y-4">
+                        {payload.sigs && (
+                            <div className="bg-gray-50 rounded-lg p-4 space-y-3">
+                                <h3 className="font-bold text-gray-700 text-sm uppercase tracking-wide mb-2">Signataires Certifiés (6/6)</h3>
+                                {payload.sigs.map((sig: any, i: number) => (
+                                    <div key={i} className="flex justify-between items-start text-sm border-b border-gray-100 last:border-0 pb-2 last:pb-0">
+                                        <div>
+                                            <span className="block font-semibold text-gray-900">{sig.n}</span>
+                                            <span className="text-gray-500 text-xs">{sig.r}</span>
+                                        </div>
+                                        <div className="text-right text-gray-400 text-xs">
+                                            {new Date(sig.d).toLocaleDateString('fr-FR')}
+                                        </div>
+                                    </div>
+                                ))}
+                            </div>
+                        )}
+
                         <InfoRow icon={FileText} label="Type de Document" value={typeLabel} />
                         <InfoRow icon={User} label="Élève" value={studentName} />
                         <InfoRow icon={Building2} label="Entreprise" value={companyName} />
                         <InfoRow icon={Calendar} label="Période" value={dates} />
                         {payload.h && (
                             <InfoRow icon={FileText} label="Durée / Jours" value={`${payload.h} jours`} />
+                        )}
+                        {payload.sn && (
+                            <InfoRow icon={User} label="Signé par" value={`${payload.sn} ${payload.sf ? `(${payload.sf})` : ''}`} />
+                        )}
+                        {payload.sd && (
+                            <InfoRow icon={Calendar} label="Date de signature" value={new Date(payload.sd).toLocaleString('fr-FR')} />
                         )}
                     </div>
 

@@ -11,10 +11,24 @@ export async function generateVerificationUrl(data: Convention, type: 'conventio
         s: data.eleve_nom + ' ' + data.eleve_prenom, // Student
         e: data.ent_nom, // Enterprise
         d: { s: data.stage_date_debut, f: data.stage_date_fin }, // Dates
-        // Status removed to keep hash stable across workflow
-        // st: data.status,
+        // For convention, include signatories
+        ...(type === 'convention' ? {
+            sigs: [
+                { n: data.eleve_nom + ' ' + data.eleve_prenom, r: 'Élève', d: data.signatures?.studentAt },
+                { n: data.rep_legal_nom ? data.rep_legal_nom + ' ' + data.rep_legal_prenom : 'Représentant Légal', r: 'Représentant Légal', d: data.signatures?.parentAt },
+                { n: data.tuteur_nom, r: 'Tuteur', d: data.signatures?.tutorAt },
+                { n: data.prof_nom, r: 'Enseignant Référent', d: data.signatures?.teacherAt },
+                { n: data.ent_rep_nom, r: 'Représentant Entreprise', d: data.signatures?.companyAt },
+                { n: data.ecole_chef_nom, r: "Chef d'Établissement", d: data.signatures?.headAt },
+            ].filter(s => s.d) // Only keep signed ones
+        } : {}),
         // For attestation, include hours
-        ...(type === 'attestation' ? { h: data.attestation_total_jours } : {})
+        ...(type === 'attestation' ? {
+            h: data.attestation_total_jours,
+            sn: data.attestation_signer_name,
+            sf: data.attestation_signer_function,
+            sd: data.attestationDate
+        } : {})
     };
 
     // 2. Sign

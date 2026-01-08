@@ -1,8 +1,11 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { X, GraduationCap, Search, Mail, Calendar, School, CheckSquare, Square, Send, ClipboardList, MessageSquare, Users } from 'lucide-react';
+import { X, GraduationCap, Search, Mail, Calendar, School, CheckSquare, Square, Send, ClipboardList, MessageSquare, Users, Loader2 } from 'lucide-react';
 import { useConventionStore, Convention } from '@/store/convention';
+import { db } from '@/lib/firebase';
+import { collection, getDocs } from 'firebase/firestore';
+import { sendNotification } from '@/lib/notification';
 
 interface AlumniModalProps {
     isOpen: boolean;
@@ -12,12 +15,20 @@ interface AlumniModalProps {
 
 // Mock Alumni Data - In a real app, this would come from a dedicated collection or archived conventions
 const MOCK_ALUMNI = [
-    { id: 'alu_1', prenom: 'Thomas', nom: 'Dubois', classe: 'T-SN', diplome: 'Bac Pro SN', promo: '2023', email: 'thomas.dubois@email.com', stage: 'Tech Solutions', job: 'Développeur Junior' },
-    { id: 'alu_2', prenom: 'Marie', nom: 'Lefebvre', classe: 'T-MELEC', diplome: 'Bac Pro MELEC', promo: '2023', email: 'marie.lefebvre@email.com', stage: 'Elec Auto', job: 'Technicienne' },
-    { id: 'alu_3', prenom: 'Lucas', nom: 'Martin', classe: 'T-SN', diplome: 'Bac Pro SN', promo: '2022', email: 'lucas.martin@email.com', stage: 'Web Agence', job: 'Freelance' },
-    { id: 'alu_4', prenom: 'Emma', nom: 'Bernard', classe: 'T-GA', diplome: 'Bac Pro GA', promo: '2022', email: 'emma.bernard@email.com', stage: 'Compta & Co', job: 'Comptable' },
-    { id: 'alu_5', prenom: 'Hugo', nom: 'Petit', classe: 'T-SN', diplome: 'Bac Pro SN', promo: '2023', email: 'hugo.petit@email.com', stage: 'CyberSec', job: 'Poursuite d\'études' },
+    { id: 'Alu7x9s2k4m5vJ8nB3rW', prenom: 'Thomas', nom: 'Dubois', classe: 'T-SN', diplome: 'Bac Pro SN', promo: '2023', email: 'pledgeum@gmail.com', stage: 'Tech Solutions', job: 'Développeur Junior', date_naissance: '15/05/2005', lycee: 'Lycée Polyvalent Gustave Eiffel', ville: 'Armentières' },
+    { id: 'Alu8nB3rWaL9zX2mK7pQ', prenom: 'Marie', nom: 'Lefebvre', classe: 'T-MELEC', diplome: 'Bac Pro MELEC', promo: '2023', email: 'marie.lefebvre@email.com', stage: 'Elec Auto', job: 'Technicienne', date_naissance: '22/11/2004', lycee: 'Lycée Polyvalent Gustave Eiffel', ville: 'Armentières' },
+    { id: 'AluWaL9zX2mK7pQ4vJ8n', prenom: 'Lucas', nom: 'Martin', classe: 'T-SN', diplome: 'Bac Pro SN', promo: '2022', email: 'lucas.martin@email.com', stage: 'Web Agence', job: 'Freelance', date_naissance: '10/02/2004', lycee: 'Lycée Polyvalent Gustave Eiffel', ville: 'Armentières' },
+    { id: 'AluX2mK7pQ4vJ8nB3rWa', prenom: 'Emma', nom: 'Bernard', classe: 'T-GA', diplome: 'Bac Pro GA', promo: '2022', email: 'emma.bernard@email.com', stage: 'Compta & Co', job: 'Comptable', date_naissance: '30/08/2004', lycee: 'Lycée Polyvalent Gustave Eiffel', ville: 'Armentières' },
+    { id: 'Alu4vJ8nB3rWaL9zX2mK', prenom: 'Hugo', nom: 'Petit', classe: 'T-SN', diplome: 'Bac Pro SN', promo: '2023', email: 'hugo.petit@email.com', stage: 'CyberSec', job: 'Poursuite d\'études', date_naissance: '12/12/2005', lycee: 'Lycée Polyvalent Gustave Eiffel', ville: 'Armentières' },
 ];
+
+const LEGACY_ID_MAP: Record<string, string> = {
+    'Alu7x9s2k4m5vJ8nB3rW': 'alu_1',
+    'Alu8nB3rWaL9zX2mK7pQ': 'alu_2',
+    'AluWaL9zX2mK7pQ4vJ8n': 'alu_3',
+    'AluX2mK7pQ4vJ8nB3rWa': 'alu_4',
+    'Alu4vJ8nB3rWaL9zX2mK': 'alu_5',
+};
 
 export function AlumniModal({ isOpen, onClose, authorizedSchoolName }: AlumniModalProps) {
     const [searchTerm, setSearchTerm] = useState('');
@@ -26,6 +37,41 @@ export function AlumniModal({ isOpen, onClose, authorizedSchoolName }: AlumniMod
 
     const [selectedDiploma, setSelectedDiploma] = useState<string>('all');
     const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+    const [sending, setSending] = useState(false);
+
+    // Live Alumni Data
+    const [alumniList, setAlumniList] = useState(MOCK_ALUMNI);
+
+    useEffect(() => {
+        const fetchAlumniUpdates = async () => {
+            if (!isOpen) return;
+            try {
+                const querySnapshot = await getDocs(collection(db, "alumni"));
+                const updates: Record<string, any> = {};
+                querySnapshot.forEach((doc) => {
+                    updates[doc.id] = doc.data();
+                });
+
+                if (Object.keys(updates).length > 0) {
+                    setAlumniList(prevList => prevList.map(alumni => {
+                        // Check for update on new ID OR legacy ID
+                        const update = updates[alumni.id] || updates[LEGACY_ID_MAP[alumni.id]];
+                        if (update) {
+                            // Merge updates, prioritizing Firestore data for dynamic fields
+                            return { ...alumni, ...update };
+                        }
+                        return alumni;
+                    }));
+                }
+            } catch (error) {
+                console.error("Error fetching alumni updates:", error);
+            }
+        };
+
+        if (isOpen) {
+            fetchAlumniUpdates();
+        }
+    }, [isOpen]);
 
     // Email Composer State
     const [isEmailComposerOpen, setIsEmailComposerOpen] = useState(false);
@@ -34,11 +80,30 @@ export function AlumniModal({ isOpen, onClose, authorizedSchoolName }: AlumniMod
 
     if (!isOpen) return null;
 
-    const filteredAlumni = MOCK_ALUMNI.filter(alumni => {
+    if (!isOpen) return null;
+
+    const normalizeText = (text: string) =>
+        text.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+    const filteredAlumni = alumniList.filter(alumni => {
+        const fullName = `${alumni.prenom} ${alumni.nom}`;
+        const reverseName = `${alumni.nom} ${alumni.prenom}`;
+
+        const searchNorm = normalizeText(searchTerm);
+        const fullNorm = normalizeText(fullName);
+        const reverseNorm = normalizeText(reverseName);
+        const nomNorm = normalizeText(alumni.nom);
+        const prenomNorm = normalizeText(alumni.prenom);
+        const stageNorm = normalizeText(alumni.stage);
+        const companyNorm = (alumni as any).companyName ? normalizeText((alumni as any).companyName) : '';
+
         const matchesSearch = (
-            alumni.nom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            alumni.prenom.toLowerCase().includes(searchTerm.toLowerCase()) ||
-            alumni.stage.toLowerCase().includes(searchTerm.toLowerCase())
+            fullNorm.includes(searchNorm) ||
+            reverseNorm.includes(searchNorm) ||
+            nomNorm.includes(searchNorm) ||
+            prenomNorm.includes(searchNorm) ||
+            stageNorm.includes(searchNorm) ||
+            (companyNorm && companyNorm.includes(searchNorm))
         );
         const matchesYear = selectedYear === 'all' || alumni.promo === selectedYear;
         const matchesClass = selectedClass === 'all' || alumni.classe === selectedClass;
@@ -47,9 +112,9 @@ export function AlumniModal({ isOpen, onClose, authorizedSchoolName }: AlumniMod
         return matchesSearch && matchesYear && matchesClass && matchesDiploma;
     });
 
-    const uniqueYears = Array.from(new Set(MOCK_ALUMNI.map(a => a.promo))).sort().reverse();
-    const uniqueClasses = Array.from(new Set(MOCK_ALUMNI.map(a => a.classe))).sort();
-    const uniqueDiplomas = Array.from(new Set(MOCK_ALUMNI.map(a => a.diplome))).sort();
+    const uniqueYears = Array.from(new Set(alumniList.map((a: any) => a.promo))).sort().reverse();
+    const uniqueClasses = Array.from(new Set(alumniList.map((a: any) => a.classe))).sort();
+    const uniqueDiplomas = Array.from(new Set(alumniList.map((a: any) => a.diplome))).sort();
 
     const toggleSelection = (id: string) => {
         const newSet = new Set(selectedIds);
@@ -70,20 +135,54 @@ export function AlumniModal({ isOpen, onClose, authorizedSchoolName }: AlumniMod
         setIsEmailComposerOpen(true);
     };
 
-    const submitEmail = () => {
+    const submitEmail = async () => {
         if (!emailSubject || !emailBody) {
             alert("Veuillez remplir l'objet et le message.");
             return;
         }
-        alert(`Email envoyé avec succès à ${selectedIds.size} destinataires.\n\nObjet: ${emailSubject}`);
+
+        setSending(true);
+        let sentCount = 0;
+
+        for (const id of Array.from(selectedIds)) {
+            const alumni = alumniList.find((a: any) => a.id === id);
+            if (alumni && alumni.email) {
+                // If testing with pledgeum@gmail.com, we might want to override? 
+                // But generally we send to alumni.email. 
+                // The user can edit the mock data or assumes the system works.
+                // However, user specifically said they didn't receive it on their test box.
+                // Maybe they expect a copy? 
+                // Or maybe they are "Thomas Dubois" in their mind?
+                // Let's just send to the email.
+                await sendNotification(alumni.email, emailSubject, emailBody);
+                sentCount++;
+            }
+        }
+
+        setSending(false);
+        alert(`Email envoyé avec succès à ${sentCount} destinataires.`);
         setIsEmailComposerOpen(false);
         setEmailSubject('');
         setEmailBody('');
         setSelectedIds(new Set());
     };
 
-    const handleSendSurvey = () => {
-        alert(`Le sondage "Situation Professionnelle" a été envoyé à ${selectedIds.size} anciens élèves.\n\nLes réponses seront collectées individuellement dans l'onglet "Statistiques".`);
+    const handleSendSurvey = async () => {
+        setSending(true);
+        let sentCount = 0;
+        const surveySubject = "Enquête : Que devenez-vous ?";
+        const appUrl = window.location.origin; // Get current base URL
+        const surveyBody = (prenom: string, id: string) => `Bonjour ${prenom},\n\nVotre ancien établissement souhaite avoir de vos nouvelles. Merci de prendre 2 minutes pour répondre à ce court sondage sur votre situation actuelle.\n\n${appUrl}/alumni-sondage?id=${id}\n\nCordialement,\nL'équipe administrative.`;
+
+        for (const id of Array.from(selectedIds)) {
+            const alumni = alumniList.find((a: any) => a.id === id);
+            if (alumni && alumni.email) {
+                await sendNotification(alumni.email, surveySubject, surveyBody(alumni.prenom, alumni.id));
+                sentCount++;
+            }
+        }
+        setSending(false);
+        alert(`Le sondage "Situation Professionnelle" a été envoyé à ${sentCount} anciens élèves.`);
         setSelectedIds(new Set());
     };
 
@@ -192,17 +291,19 @@ export function AlumniModal({ isOpen, onClose, authorizedSchoolName }: AlumniMod
                             <div className="flex space-x-2">
                                 <button
                                     onClick={handleSendEmail}
-                                    className="flex items-center px-3 py-1.5 bg-white border border-blue-200 text-blue-700 text-sm font-bold rounded-lg hover:bg-blue-50 transition-colors shadow-sm"
+                                    disabled={sending}
+                                    className="flex items-center px-3 py-1.5 bg-white border border-blue-200 text-blue-700 text-sm font-bold rounded-lg hover:bg-blue-50 transition-colors shadow-sm disabled:opacity-50"
                                 >
                                     <Send className="w-4 h-4 mr-2" />
                                     Email
                                 </button>
                                 <button
                                     onClick={handleSendSurvey}
-                                    className="flex items-center px-3 py-1.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm"
+                                    disabled={sending}
+                                    className="flex items-center px-3 py-1.5 bg-blue-600 text-white text-sm font-bold rounded-lg hover:bg-blue-700 transition-colors shadow-sm disabled:opacity-50"
                                 >
-                                    <ClipboardList className="w-4 h-4 mr-2" />
-                                    Sondage
+                                    {sending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <ClipboardList className="w-4 h-4 mr-2" />}
+                                    {sending ? 'Envoi...' : 'Sondage'}
                                 </button>
                             </div>
                         )}
@@ -241,9 +342,63 @@ export function AlumniModal({ isOpen, onClose, authorizedSchoolName }: AlumniMod
                                         <School className="w-4 h-4 mr-2 text-gray-400" />
                                         <span>{alumni.diplome} ({alumni.classe})</span>
                                     </div>
-                                    <div className="flex items-center">
-                                        <div className="w-4 h-4 mr-2 flex items-center justify-center">🏢</div>
-                                        <span>Ex-stagiaire chez <span className="font-medium text-gray-900">{alumni.stage}</span></span>
+                                    <div className="flex items-start">
+                                        <div className="w-4 h-4 mr-2 mt-0.5 flex items-center justify-center">
+                                            {(alumni as any).isContinuingStudies ? <GraduationCap className="w-4 h-4" /> : '🏢'}
+                                        </div>
+                                        <div className="flex flex-col">
+                                            <span>
+                                                {(alumni as any).isContinuingStudies ? (
+                                                    <>
+                                                        <span className="block font-medium text-blue-700">Étudiant - {(alumni as any).studyProgram || 'Etudes Supérieures'}</span>
+                                                        {(alumni as any).isEmployed && (
+                                                            <span className="text-gray-600 text-sm block mt-1">
+                                                                Et en poste chez <span className="font-medium">{(alumni as any).companyName}</span>
+                                                            </span>
+                                                        )}
+                                                    </>
+                                                ) : (alumni as any).isEmployed ? (
+                                                    <>En poste chez <span className="font-medium text-gray-900">{(alumni as any).companyName || alumni.stage}</span></>
+                                                ) : (
+                                                    <>Ex-stagiaire chez <span className="font-medium text-gray-900">{alumni.stage}</span></>
+                                                )}
+                                            </span>
+
+                                            {/* Company Details (SIRET/City) - Only if employed */}
+                                            {((alumni as any).isEmployed && (alumni as any).siret) && (
+                                                <span className="text-xs text-gray-500 mt-0.5">
+                                                    SIRET: {(alumni as any).siret}
+                                                </span>
+                                            )}
+                                            {((alumni as any).isEmployed && (alumni as any).companyAddress) && (
+                                                <span className="text-xs text-gray-500">
+                                                    {/* Extract City if possible, or show full address */}
+                                                    {(alumni as any).companyAddress}
+                                                </span>
+                                            )}
+                                        </div>
+                                    </div>
+
+                                    {/* Status Badges */}
+                                    <div className="flex flex-wrap gap-2 mt-2">
+                                        {(alumni as any).isOpenToInterns && (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800">
+                                                <CheckSquare className="w-3 h-3 mr-1" />
+                                                Prend des stagiaires
+                                            </span>
+                                        )}
+                                        {(alumni as any).isLookingForJob && (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-orange-100 text-orange-800">
+                                                <Search className="w-3 h-3 mr-1" />
+                                                En recherche d'emploi
+                                            </span>
+                                        )}
+                                        {(alumni as any).updatedAt && (
+                                            <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-600 border border-gray-200" title={`Mis à jour le ${new Date((alumni as any).updatedAt).toLocaleDateString()}`}>
+                                                <Calendar className="w-3 h-3 mr-1" />
+                                                Maj: {new Date((alumni as any).updatedAt).toLocaleDateString()}
+                                            </span>
+                                        )}
                                     </div>
                                 </div>
 
@@ -321,10 +476,11 @@ export function AlumniModal({ isOpen, onClose, authorizedSchoolName }: AlumniMod
                             </button>
                             <button
                                 onClick={submitEmail}
-                                className="px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 flex items-center shadow-sm"
+                                disabled={sending}
+                                className="px-4 py-2 bg-blue-600 text-white font-bold rounded-lg hover:bg-blue-700 flex items-center shadow-sm disabled:opacity-50"
                             >
-                                <Send className="w-4 h-4 mr-2" />
-                                Envoyer le message
+                                {sending ? <Loader2 className="w-4 h-4 mr-2 animate-spin" /> : <Send className="w-4 h-4 mr-2" />}
+                                {sending ? 'Envoi...' : 'Envoyer le message'}
                             </button>
                         </div>
                     </div>

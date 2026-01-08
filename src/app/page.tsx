@@ -1,6 +1,8 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import { LoadingSpinner } from '@/components/ui/LoadingSpinner';
+import { StudentDocumentButton } from '@/components/ui/StudentDocumentButton';
 import { WizardForm } from '@/components/wizard/WizardForm';
 import { useUserStore, UserRole } from '@/store/user';
 import { useWizardStore } from '@/store/wizard';
@@ -19,7 +21,7 @@ import {
   FileText, LogOut, Plus, Trash2, Loader2, AlertCircle, CheckCircle,
   Menu, X, Calendar, MapPin, Building, User, Mail, Phone, ExternalLink,
   ShieldCheck, MessageSquare, Settings, UserCircle, AlertTriangle, Search,
-  Briefcase, Send, Eye, PenTool, UserPlus, Users, Bell, Shield, Building2, Clock
+  Briefcase, Send, Eye, PenTool, UserPlus, Users, Bell, Shield, Building2, Clock, ClipboardList, FileSpreadsheet
 } from 'lucide-react';
 import { useAuth } from '@/context/AuthContext';
 import { useRouter } from 'next/navigation';
@@ -38,11 +40,16 @@ import { useMissionOrderStore, MissionOrder } from '@/store/missionOrder';
 
 import { EmailCorrectionModal } from '@/components/ui/EmailCorrectionModal';
 import TrackingAssignmentModal from '@/components/ui/TrackingAssignmentModal';
-import { doc, setDoc } from 'firebase/firestore';
+import { doc, setDoc, query, collection, getDocs, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 
 import { AlumniModal } from '@/components/ui/AlumniModal';
 import { useAdminStore } from '@/store/admin';
+import { TrackingMatrixModal } from '@/components/ui/TrackingMatrixModal';
+import { ClassDocumentModal } from '@/components/ui/ClassDocumentModal';
+import { useDocumentStore } from '@/store/documents';
+import { StudentDocumentModal } from '@/components/ui/StudentDocumentModal';
+
 
 // Dynamic import of the Preview component to isolate PDF logic and avoid SSR/build issues
 const PdfPreview = dynamic(() => import('@/components/pdf/PdfPreview'), {
@@ -58,6 +65,11 @@ const PDFViewer = dynamic(
 // Helper for Admin Roles
 const isSchoolAdminRole = (r: UserRole) => {
   return r === 'school_head' || r === 'ddfpt' || r === 'business_manager' || r === 'assistant_manager' || r === 'stewardship_secretary';
+};
+
+// Helper for Filter Access (includes Admin Roles + Teachers + AT DDFPT)
+const hasFilterAccess = (r: UserRole) => {
+  return isSchoolAdminRole(r) || r === 'teacher' || r === 'teacher_tracker' || r === 'at_ddfpt' || r === 'company_head' || r === 'tutor' || r === 'company_head_tutor';
 };
 
 export default function Home() {
@@ -88,16 +100,54 @@ export default function Home() {
   const [allConventions, setAllConventions] = useState<Convention[]>([]); // For search functionality
   const { fetchAllConventions } = useConventionStore();
 
+
+
+  const { classes } = useSchoolStore();
+
+  const [isTrackingMatrixOpen, setIsTrackingMatrixOpen] = useState(false);
+  const [isClassDocModalOpen, setIsClassDocModalOpen] = useState(false);
+  const [studentDocModalClassId, setStudentDocModalClassId] = useState<string | null>(null); // New state
+
   // Helper to check profile completion
   const isProfileComplete = () => {
     if (!role) return true;
     const required: string[] = [];
+
+    // Core fields for everyone
+    // required.push('firstName', 'lastName', 'email'); // Usually present from auth/creation
+
+    if (role === 'student') {
+      // Check basic info
+      const basic = ['firstName', 'lastName', 'email', 'birthDate', 'schoolName'].every(f => profileData?.[f]);
+
+      // Check Contact (Legacy flat vs New Object)
+      // New onboarding saves 'address' as object {street, city, postalCode} and 'phone'
+      // Old might correspond to flat fields? Let's check what we have.
+      // Actually, let's look at what is ACTUALLY saved.
+      // New: phone, address (object), legalRepresentatives (array)
+      // Old: phone, address (string), zipCode, city, parentName...
+
+      const hasContact = (profileData?.phone) && (
+        (profileData.address && typeof profileData.address === 'object') ||
+        (profileData.address && profileData.zipCode && profileData.city)
+      );
+
+      // Check Parent
+      const hasParent = (
+        (profileData?.legalRepresentatives && Array.isArray(profileData.legalRepresentatives) && profileData.legalRepresentatives.length > 0) ||
+        (profileData?.parentName && profileData?.parentEmail && profileData?.parentPhone)
+      );
+
+      return basic && hasContact && hasParent;
+    }
+
     switch (role) {
-      case 'student': required.push('address', 'phone', 'class', 'diploma'); break;
       case 'company_head':
-      case 'company_head_tutor': required.push('companyName', 'siret', 'address', 'function'); break;
-      case 'tutor': required.push('function', 'phone'); break;
-      case 'parent': required.push('address', 'phone'); break;
+      case 'company_head_tutor': required.push('firstName', 'lastName', 'email', 'phone', 'companyName', 'siret', 'address', 'function'); break;
+      case 'tutor': required.push('firstName', 'lastName', 'email', 'function', 'phone'); break;
+      case 'parent': required.push('firstName', 'lastName', 'email', 'address', 'phone'); break;
+      case 'teacher':
+      case 'teacher_tracker': required.push('firstName', 'lastName', 'email', 'phone'); break;
       default: return true;
     }
     return required.every(field => profileData?.[field] && String(profileData[field]).trim() !== '');
@@ -112,17 +162,45 @@ export default function Home() {
   // Dual Role Logic
   const [dualRoleView, setDualRoleView] = useState<'company_head' | 'tutor'>('company_head');
 
-  // Auth & Profile Guard
+  useEffect(() => {
+    // Enforce Profile Completion
+    if (user && role && !loading && Object.keys(profileData || {}).length > 0) {
+      if (!isProfileComplete()) {
+        setIsProfileModalOpen(true);
+      }
+    }
+  }, [user, role, profileData, loading]);
+
   useEffect(() => {
     async function checkProfile() {
       if (user) {
-        const hasProfile = await fetchUserProfile(user.uid);
-        if (!hasProfile) {
-          router.push('/onboarding');
-        } else {
-          // Profile exists, track connection for GDPR retention policy
+        // If profileData is already loaded (by ProfileGuard), don't fetch again purely for existence check
+        // unless strictly necessary. ProfileGuard ensures we have data or redirect.
+        // We can trust specific fields like 'role' or keys in profileData.
+
+        // If strictly need to check existence for /onboarding redirect:
+        if (Object.keys(profileData || {}).length > 0) {
+          // Already have data.
           trackConnection(user.uid);
           fetchConventions(user.uid, user.email || undefined);
+          if (user.email) {
+            useUserStore.getState().fetchNotifications(user.email);
+          }
+          return;
+        }
+
+        // Fallback: If for some reason data is empty (and Guard let us through? unlikely for dashboard)
+        // verify one last time without triggering global loading if possible, or just trust the flow.
+        const hasProfile = await fetchUserProfile(user.uid);
+        if (!hasProfile) {
+          // No profile yet, TosModal will trigger due to hasAcceptedTos: false
+          // router.push('/onboarding');
+        } else {
+          trackConnection(user.uid);
+          fetchConventions(user.uid, user.email || undefined);
+          if (user.email) {
+            useUserStore.getState().fetchNotifications(user.email);
+          }
         }
       }
     }
@@ -132,7 +210,7 @@ export default function Home() {
     } else if (user) {
       checkProfile();
     }
-  }, [user, loading, router, fetchConventions, fetchUserProfile]);
+  }, [user, loading, router, fetchConventions, fetchUserProfile, profileData]);
 
   if (loading) {
     return (
@@ -245,7 +323,7 @@ export default function Home() {
           <div className="md:hidden flex items-center">
             <button
               onClick={() => setIsMobileMenuOpen(!isMobileMenuOpen)}
-              className="p-2 -mr-2 rounded-md text-gray-400 hover:text-gray-500 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
+              className="p-2 -mr-2 rounded-md text-gray-500 hover:text-gray-600 hover:bg-gray-100 focus:outline-none focus:ring-2 focus:ring-inset focus:ring-blue-500"
             >
               <span className="sr-only">Open menu</span>
               {isMobileMenuOpen ? (
@@ -258,6 +336,18 @@ export default function Home() {
 
           {/* DESKTOP ACTIONS */}
           <div className="hidden md:flex items-center space-x-6">
+            {/* Global Company Search Trigger - Restricted for Companies/Tutors */}
+            {!['company_head', 'tutor', 'company_head_tutor'].includes(role) && (
+              <button
+                onClick={() => setIsSearchModalOpen(true)}
+                className="flex items-center text-gray-500 hover:text-blue-600 transition-colors text-xs font-bold"
+                title="Rechercher une entreprise partenaire"
+              >
+                <Building2 className="w-4 h-4 mr-1" />
+                Trouver une entreprise
+              </button>
+            )}
+
             <button
               onClick={() => setIsTosModalOpen(true)}
               className="flex items-center text-gray-500 hover:text-blue-600 transition-colors text-xs font-bold"
@@ -280,7 +370,7 @@ export default function Home() {
 
             <button
               onClick={() => setIsDeleteModalOpen(true)}
-              className="flex items-center text-gray-300 hover:text-red-600 transition-colors"
+              className="flex items-center text-gray-400 hover:text-red-600 transition-colors"
               title="Supprimer mon compte (Droit à l'oubli)"
             >
               <Trash2 className="w-4 h-4" />
@@ -300,13 +390,15 @@ export default function Home() {
             {(isSchoolAdminRole(role) || (user.email === 'pledgeum@gmail.com' && role === 'teacher_tracker')) && (
               <button
                 onClick={() => setIsMissionOrderModalOpen(true)}
-                className="flex items-center px-3 py-1.5 bg-green-100 text-green-900 rounded-lg hover:bg-green-200 transition-colors mr-2"
+                className="flex items-center text-gray-500 hover:text-green-600 transition-colors text-xs font-bold mr-4"
                 title="Gérer les signatures des Ordres de Mission"
               >
-                <FileText className="w-4 h-4 mr-2" />
-                <span className="text-sm font-bold">Ordres de Mission</span>
+                <div className="bg-green-50 text-green-600 p-1.5 rounded-lg mr-2">
+                  <FileText className="w-4 h-4" />
+                </div>
+                Ordres de Mission
                 {useMissionOrderStore.getState().missionOrders.filter(o => o.status === 'PENDING').length > 0 && (
-                  <span className="ml-2 bg-green-600 text-white text-[10px] px-1.5 py-0.5 rounded-full">
+                  <span className="ml-2 bg-green-600 text-white text-[9px] px-1.5 py-0.5 rounded-full">
                     {useMissionOrderStore.getState().missionOrders.filter(o => o.status === 'PENDING').length}
                   </span>
                 )}
@@ -319,20 +411,25 @@ export default function Home() {
                 {(isSchoolAuthorized(profileData?.ecole_nom || getConventionsByRole('school_head', user.email || '', user.uid)[0]?.ecole_nom || '') || user.email === 'pledgeum@gmail.com') && (
                   <button
                     onClick={() => setIsAlumniModalOpen(true)}
-                    className="hidden md:flex items-center px-3 py-1.5 bg-indigo-100 text-indigo-900 rounded-lg hover:bg-indigo-200 transition-colors"
+                    className="hidden md:flex items-center text-gray-500 hover:text-indigo-600 transition-colors text-xs font-bold mr-4"
                     title="Accéder au réseau des anciens élèves"
                   >
-                    <span className="text-sm font-bold">🎓 Alumni</span>
+                    <div className="bg-indigo-50 text-indigo-600 p-1.5 rounded-lg mr-2">
+                      <span className="text-sm">🎓</span>
+                    </div>
+                    Alumni
                   </button>
                 )}
 
                 <button
                   onClick={() => setIsSchoolAdminModalOpen(true)}
-                  className="flex items-center px-3 py-1.5 bg-blue-100 text-blue-900 rounded-lg hover:bg-blue-200 transition-colors"
+                  className="flex items-center text-gray-500 hover:text-blue-600 transition-colors text-xs font-bold"
                   title="Gérer les classes et le vivier d'enseignants pour le suivi"
                 >
-                  <Users className="w-4 h-4 mr-2" />
-                  <span className="text-sm font-bold">Admin. Établissement (Classes & Suivi)</span>
+                  <div className="bg-blue-50 text-blue-600 p-1.5 rounded-lg mr-2">
+                    <Users className="w-4 h-4" />
+                  </div>
+                  Admin. Établissement
                 </button>
               </div>
             )}
@@ -383,7 +480,7 @@ export default function Home() {
           <div className="relative shrink-0 ml-4">
             <button
               onClick={() => setIsNotifOpen(!isNotifOpen)}
-              className="p-1 rounded-full text-gray-400 hover:text-gray-500 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
+              className="p-1 rounded-full text-gray-500 hover:text-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500"
             >
               <span className="sr-only">Voir les notifications</span>
               <Bell className="w-6 h-6" />
@@ -410,7 +507,12 @@ export default function Home() {
                         <div
                           key={notif.id}
                           className={`px-4 py-3 hover:bg-gray-50 transition-colors border-b border-gray-100 last:border-0 ${!notif.read ? 'bg-blue-50' : ''}`}
-                          onClick={() => markAsRead(notif.id)}
+                          onClick={() => {
+                            markAsRead(notif.id);
+                            if (!notif.read && unreadCount === 1) {
+                              setIsNotifOpen(false);
+                            }
+                          }}
                         >
                           <div className="flex justify-between items-start">
                             <p className={`text-sm font-medium ${!notif.read ? 'text-blue-900' : 'text-gray-900'}`}>{notif.title}</p>
@@ -422,7 +524,7 @@ export default function Home() {
                               {notif.actionLabel} →
                             </button>
                           )}
-                          <p className="text-[10px] text-gray-400 mt-2 text-right">
+                          <p className="text-[10px] text-gray-500 mt-2 text-right">
                             {new Date(notif.date).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
                           </p>
                         </div>
@@ -465,7 +567,7 @@ export default function Home() {
           )}
 
           <button
-            onClick={() => router.push('/onboarding')}
+            onClick={() => setIsProfileModalOpen(true)}
             className="text-xs text-blue-600 hover:text-blue-800 underline ml-2"
           >
             Modifier
@@ -474,7 +576,7 @@ export default function Home() {
       </header>
       {/* MOBILE MENU DROPDOWN */}
       {isMobileMenuOpen && (
-        <div className="md:hidden border-b border-gray-200 bg-white">
+        <div className="md:hidden fixed top-16 left-0 right-0 z-40 border-b border-gray-200 bg-white shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             {/* User Info Mobile */}
             <div className="px-3 py-2 flex items-center space-x-3 mb-2 border-b border-gray-100">
@@ -486,6 +588,18 @@ export default function Home() {
                 <p className="text-xs text-gray-500">{roleLabels[role]}</p>
               </div>
             </div>
+
+            {!['company_head', 'tutor', 'company_head_tutor'].includes(role) && (
+              <button
+                onClick={() => { setIsSearchModalOpen(true); setIsMobileMenuOpen(false); }}
+                className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-700 hover:bg-gray-50"
+              >
+                <div className="flex items-center">
+                  <Building2 className="w-4 h-4 mr-2" />
+                  Trouver une entreprise
+                </div>
+              </button>
+            )}
 
             <button
               onClick={() => { setIsTosModalOpen(true); setIsMobileMenuOpen(false); }}
@@ -618,31 +732,66 @@ export default function Home() {
             <div className="mt-8">
               <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={user.uid} />
             </div>
-
-            <CompanySearchModal
-              isOpen={isSearchModalOpen}
-              onClose={() => setIsSearchModalOpen(false)}
-              conventions={allConventions}
-              studentAddress={(() => {
-                // Try to find address from recent convention of user
-                if (user.email === 'pledgeum@gmail.com') return "10 Rue de Rivoli, 75001 Paris";
-                const myConv = getConventionsByRole('student', user.email || '', user.uid)[0];
-                return myConv?.eleve_adresse || '';
-              })()}
-              schoolAddress="123 Avenue de la République, 75011 Paris" // Could come from env or db
-            />
           </>
         ) : (
           // VALIDATOR DASHBOARD (Teacher, Heads, Tutor)
-          <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-            <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={user.uid} />
+          <div className="space-y-6">
+            {(role === 'teacher' || role === 'at_ddfpt') && (
+              <div className="flex justify-end space-x-4">
+                {/* Class Document Management Button for Main Teachers and Admin Roles */}
+                {(role === 'teacher' || role === 'ddfpt' || role === 'at_ddfpt') && (
+                  <button
+                    onClick={() => setIsClassDocModalOpen(true)}
+                    className="flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                  >
+                    <FileText className="w-4 h-4 mr-2" />
+                    Ajouter des documents
+                  </button>
+                )}
+
+                <button
+                  onClick={() => router.push('/dashboard/evaluations')}
+                  className="flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
+                >
+                  <ClipboardList className="w-4 h-4 mr-2" />
+                  Créer une Évaluation
+                </button>
+
+                {role === 'teacher' && (
+                  <button
+                    onClick={() => setIsTrackingMatrixOpen(true)}
+                    className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                  >
+                    <MapPin className="w-4 h-4 mr-2" />
+                    Gérer les visites de suivi (Matrice)
+                  </button>
+                )}
+              </div>
+            )}
+            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+              <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={user.uid} />
+            </div>
           </div>
         )}
         <ProfileModal
           isOpen={isProfileModalOpen}
           onClose={() => setIsProfileModalOpen(false)}
           conventionDefaults={getConventionsByRole(role, user.email || '', user.uid)[0]}
+          blocking={!isProfileComplete()}
         />
+
+        {/* Helper to find the class managed by this teacher */}
+        <TrackingMatrixModal
+          isOpen={isTrackingMatrixOpen}
+          onClose={() => setIsTrackingMatrixOpen(false)}
+          classId={(() => {
+            // Find class where current user is main teacher
+            // For demo, if 'pledgeum@gmail.com' (admin/dev), fallback to first class or specific test class
+            const myClass = classes.find(c => c.mainTeacher?.email === user.email);
+            return myClass?.id || classes[0]?.id || '';
+          })()}
+        />
+
         <SchoolAdminModal
           isOpen={isSchoolAdminModalOpen}
           onClose={() => setIsSchoolAdminModalOpen(false)}
@@ -733,6 +882,29 @@ export default function Home() {
           isOpen={isMissionOrderModalOpen}
           onClose={() => setIsMissionOrderModalOpen(false)}
         />
+        <ClassDocumentModal
+          isOpen={isClassDocModalOpen}
+          onClose={() => setIsClassDocModalOpen(false)}
+        />
+        <StudentDocumentModal
+          classId={studentDocModalClassId}
+          onClose={() => setStudentDocModalClassId(null)}
+        />
+        <CompanySearchModal
+          isOpen={isSearchModalOpen}
+          onClose={() => setIsSearchModalOpen(false)}
+          conventions={allConventions}
+          studentAddress={(() => {
+            // Address logic: prefer student address if available, else null
+            if (role === 'student') {
+              const myConv = getConventionsByRole('student', user.email || '', user.uid)[0];
+              return myConv?.eleve_adresse || '';
+            }
+            if (user.email === 'pledgeum@gmail.com') return "10 Rue de Rivoli, 75001 Paris";
+            return ""; // Other roles likely don't need 'Home' origin or can set it manually
+          })()}
+          schoolAddress="123 Avenue de la République, 75011 Paris"
+        />
       </div>
     </main>
   );
@@ -741,6 +913,7 @@ export default function Home() {
 // Sub-component for list rendering to keep Page clean
 
 function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail: string, userId?: string }) {
+  const router = useRouter();
   const { getConventionsByRole, signConvention, sendReminder, bulkSignConventions, updateEmail, assignTrackingTeacher } = useConventionStore();
   const { classes } = useSchoolStore();
   const { addNotification, name } = useUserStore();
@@ -753,6 +926,25 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
   const [isAttestationModalOpen, setIsAttestationModalOpen] = useState(false);
 
   const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
+
+  // Evaluation Templates State
+  const [evaluationTemplates, setEvaluationTemplates] = useState<any[]>([]);
+  useEffect(() => {
+    // Only fetch for relevant roles to avoid unnecessary reads
+    if (role === 'student' || role === 'parent' || role === 'company_head') return;
+
+    // Fetch ALL evaluations to find assigned ones (optimization: could filter later)
+    const fetchTemplates = async () => {
+      try {
+        const q = query(collection(db, "evaluation_templates"));
+        const snapshot = await getDocs(q);
+        setEvaluationTemplates(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+      } catch (e) {
+        console.error("Error fetching evaluation templates", e);
+      }
+    };
+    fetchTemplates();
+  }, [role]);
 
   // Filters State
   const [filterClass, setFilterClass] = useState('');
@@ -845,9 +1037,18 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
     // Parent signs SUBMITTED only if Minor
     if (role === 'parent' && status === 'SUBMITTED' && conv.est_mineur) return true;
 
-    if (role === 'company_head' && status === 'VALIDATED_TEACHER') return true;
-    if (role === 'tutor' && status === 'SIGNED_COMPANY') return true;
-    if (isSchoolAdminRole(role) && status === 'SIGNED_TUTOR') return true;
+    // Flexible Signing Logic for Partners
+    // They can sign if Teacher validated (VALIDATED_TEACHER), or if one of them already signed (SIGNED_COMPANY)
+    // We must check if THEY already signed to avoid showing the button again
+    if (role === 'company_head' || role === 'tutor') {
+      const isReady = ['VALIDATED_TEACHER', 'SIGNED_COMPANY'].includes(status);
+      if (!isReady) return false;
+
+      if (role === 'company_head') return !conv.signatures?.companyAt;
+      if (role === 'tutor') return !conv.signatures?.tutorAt;
+    }
+
+    if (role === 'school_head' && status === 'SIGNED_TUTOR') return true;
     return false;
   };
 
@@ -855,8 +1056,8 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
 
   // Filtering Logic
   const filteredConventions = conventions.filter(c => {
-    // 1. School Admin / Staff Logic check is implied by getConventionsByRole, but let's double check role permission for UI
-    if (!isSchoolAdminRole(role)) return true; // Students/Teachers see their own lists (already filtered by Store)
+    // 1. Check permission for UI filtering (Lists are already securely fetched by Store based on Role)
+    if (!hasFilterAccess(role)) return true;
 
     // 2. Apply UI Filters
     if (filterClass && c.eleve_classe !== filterClass) return false;
@@ -870,29 +1071,20 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
   });
 
   // Sorting Logic
+  // Sorting Logic
   const sortedConventions = [...filteredConventions].sort((a, b) => {
-    // Enhanced Sorting for Tracking Views (Tracker Role OR Teacher looking at their tracking list)
-    // 1. Conventions where USER is the assigned tracking teacher come FIRST
-    const aIsTrackedByUser = a.prof_suivi_email === userEmail;
-    const bIsTrackedByUser = b.prof_suivi_email === userEmail;
+    // If ANY filter is active (Class, Year, or Name), sort ALPHABETICALLY by Student Name
+    if (filterClass || filterYear || filterName) {
+      const nameA = `${a.eleve_nom} ${a.eleve_prenom}`.toLowerCase();
+      const nameB = `${b.eleve_nom} ${b.eleve_prenom}`.toLowerCase();
+      return nameA.localeCompare(nameB);
+    }
 
-    if (aIsTrackedByUser && !bIsTrackedByUser) return -1;
-    if (!aIsTrackedByUser && bIsTrackedByUser) return 1;
-
-    // 2. Actionable Items
-    const aActionable = isActionable(a, role);
-    const bActionable = isActionable(b, role);
-
-    if (aActionable && !bActionable) return -1;
-    if (!aActionable && bActionable) return 1;
-
-    // 3. Chronological order by Start Date (Next starting first)
-    // Assuming ISO/YYYY-MM-DD strings sort correctly lexicographically, but Date objects safer
-    const dateA = new Date(a.stage_date_debut).getTime();
-    const dateB = new Date(b.stage_date_debut).getTime();
-    if (dateA !== dateB) return dateA - dateB;
-
-    return new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime();
+    // Default (No Filters): Sort by Creation Date (Most Recent first)
+    // The user requested "classified from most recent to oldest"
+    const dateA = new Date(a.createdAt).getTime();
+    const dateB = new Date(b.createdAt).getTime();
+    return dateB - dateA;
   });
 
   // Bulk Selection Helpers
@@ -950,7 +1142,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
   };
 
 
-  const handleSign = async (method: 'canvas' | 'otp', signatureImage?: string, extraAuditLog?: any) => {
+  const handleSign = async (method: 'canvas' | 'otp', signatureImage?: string, extraAuditLog?: any, dualSign?: boolean) => {
     // If bulk logic exists, it might need update too, but focusing on single sign for now
     if (selectedConventionId) {
       // For bulk signing (if enabled later), we'd need to handle logs per convention
@@ -964,7 +1156,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
         .filter(c => isActionable(c, role) && selectedIds.has(c.id));
 
       try {
-        await Promise.all(conventionsToSign.map(c => signConvention(c.id, role, signatureImage)));
+        await Promise.all(conventionsToSign.map(c => signConvention(c.id, role, signatureImage))); // Bulk dual sign not supported yet
         setSelectedIds(new Set());
         setIsBulkSigning(false);
         addNotification({
@@ -976,7 +1168,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
       }
     } else if (selectedConventionId) {
       try {
-        await signConvention(selectedConventionId, role, signatureImage, undefined, extraAuditLog);
+        await signConvention(selectedConventionId, role, signatureImage, undefined, extraAuditLog, dualSign);
         addNotification({
           title: 'Signature enregistrée',
           message: `La convention a été signée avec succès (Méthode: ${method === 'canvas' ? 'Manuscrite' : 'OTP'}).`,
@@ -991,21 +1183,28 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
     }
     setIsSigModalOpen(false);
   };
+  // ...
+  // ... (Skipping getActionLabel etc)
+  // ...
 
-  const getActionLabel = (status: string, role: UserRole) => {
+
+  const getActionLabel = (status: string, role: UserRole, conv: Convention) => {
     if (role === 'teacher') {
       if (status === 'SUBMITTED' || status === 'SIGNED_PARENT') return 'Valider le projet';
       if (status === 'REJECTED') return 'Voir les motifs';
     }
     if (role === 'parent' && status === 'SUBMITTED') return 'Vérifier et Signer';
 
-    // Generic signature needed
-    const needsSig =
-      (role === 'company_head' && status === 'VALIDATED_TEACHER') ||
-      (role === 'tutor' && status === 'SIGNED_COMPANY') ||
-      (isSchoolAdminRole(role) && status === 'SIGNED_TUTOR');
+    // Flexible Logic
+    if (role === 'company_head' || role === 'tutor') {
+      const isReady = ['VALIDATED_TEACHER', 'SIGNED_COMPANY'].includes(status);
+      if (isReady) {
+        if (role === 'company_head' && !conv.signatures?.companyAt) return 'Signer la convention';
+        if (role === 'tutor' && !conv.signatures?.tutorAt) return 'Signer la convention';
+      }
+    }
 
-    if (needsSig) return 'Signer la convention';
+    if (role === 'school_head' && status === 'SIGNED_TUTOR') return 'Signer la convention';
 
     return 'Voir le dossier';
   };
@@ -1024,7 +1223,12 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
     switch (conv.status) {
       case 'SUBMITTED': pendingRole = conv.est_mineur ? 'Représentant Légal' : 'Enseignant Référent/Professeur Principal'; break;
       case 'SIGNED_PARENT': pendingRole = 'Enseignant Référent/Professeur Principal'; break;
-      case 'VALIDATED_TEACHER': pendingRole = 'Chef d\'Entreprise'; break;
+      case 'VALIDATED_TEACHER':
+        // Could be both or just one if flexible
+        if (conv.signatures?.tutorAt && !conv.signatures?.companyAt) pendingRole = 'Chef d\'Entreprise';
+        else if (!conv.signatures?.tutorAt && conv.signatures?.companyAt) pendingRole = 'Tuteur'; // Rare if status update worked, but handle it
+        else pendingRole = 'Tuteur et Chef d\'Entreprise';
+        break;
       case 'SIGNED_COMPANY': pendingRole = 'Tuteur'; break;
       case 'SIGNED_TUTOR': pendingRole = 'Chef d\'Établissement'; break;
       case 'REJECTED': return <span className="text-red-600 font-medium">Demande rejetée / À corriger</span>;
@@ -1069,13 +1273,13 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
           </div>
 
           {/* FILTERS TOOLBAR (Only for Admin Roles) */}
-          {isSchoolAdminRole(role) && (
+          {hasFilterAccess(role) && (
             <div className="flex flex-wrap items-center gap-3 mt-2 md:mt-0">
               <div className="relative">
                 <select
                   value={filterClass}
                   onChange={(e) => setFilterClass(e.target.value)}
-                  className="block w-40 pl-3 pr-8 py-1.5 text-sm border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md"
+                  className="block w-40 pl-3 pr-8 py-1.5 text-sm text-gray-900 border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md"
                 >
                   <option value="">Toutes classes</option>
                   {uniqueClasses.map(c => <option key={c} value={c}>{c}</option>)}
@@ -1085,7 +1289,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
                 <select
                   value={filterYear}
                   onChange={(e) => setFilterYear(e.target.value)}
-                  className="block w-40 pl-3 pr-8 py-1.5 text-sm border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md"
+                  className="block w-40 pl-3 pr-8 py-1.5 text-sm text-gray-900 border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md"
                 >
                   <option value="">Toutes années</option>
                   {uniqueYears.map(y => <option key={y} value={y}>{y}</option>)}
@@ -1097,7 +1301,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
                   placeholder="Rechercher élève..."
                   value={filterName}
                   onChange={(e) => setFilterName(e.target.value)}
-                  className="block w-48 pl-3 pr-3 py-1.5 text-sm border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md"
+                  className="block w-48 pl-3 pr-3 py-1.5 text-sm text-gray-900 border-gray-300 placeholder:text-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md"
                 />
               </div>
               {(filterClass || filterYear || filterName) && (
@@ -1125,6 +1329,29 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
 
       {sortedConventions.map((conv) => {
         const actionable = isActionable(conv, role);
+
+        // Find assigned evaluation for this convention's class
+        const assignedTemplate = (() => {
+          const cls = classes.find(c => c.name === conv.eleve_classe);
+          if (!cls) return null;
+          return evaluationTemplates.find(t => t.assignedClassIds?.includes(cls.id));
+        })();
+
+        // Check if user is authorized to FILL the evaluation
+        const canFillEvaluation = assignedTemplate && (
+          (role === 'teacher' && (conv.prof_email === userEmail || conv.prof_suivi_email === userEmail)) || // Teacher
+          (role === 'teacher_tracker' && conv.prof_suivi_email === userEmail) || // Tracker
+          (role === 'tutor' && conv.tuteur_email === userEmail) || // Tutor
+          (userEmail === 'pledgeum@gmail.com' && (role === 'teacher' || role === 'tutor' || role === 'teacher_tracker')) // TEST ACCOUNT (Only if acts as Teacher/Tutor)
+        );
+
+        // Check if user is authorized to VIEW (Head, DDFPT) - They see the button, but page handles "completed" check
+        const canViewEvaluation = assignedTemplate && (
+          role === 'school_head' ||
+          role === 'ddfpt' ||
+          role === 'at_ddfpt'
+        );
+
         return (
           <div
             key={conv.id}
@@ -1155,8 +1382,8 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
                 <div>
                   <h4 className="text-base font-bold text-gray-900">
                     {role === 'student'
-                      ? `Stage chez ${conv.ent_nom}`
-                      : `${conv.eleve_prenom} ${conv.eleve_nom} chez ${conv.ent_nom}`}
+                      ? `Stage chez ${conv.ent_nom} (${conv.ent_ville})`
+                      : `${conv.eleve_prenom} ${conv.eleve_nom} chez ${conv.ent_nom} (${conv.ent_ville})`}
                   </h4>
                   <div className="flex flex-col sm:flex-row sm:items-center text-sm text-gray-500 mt-1">
                     <span className="font-medium text-gray-700 mr-2">{conv.eleve_classe}</span>
@@ -1224,7 +1451,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
               {/* Status Label - Right Side */}
               <div className="flex flex-col items-end space-y-1">
                 {getSignatureStatusLabel(conv)}
-                <span className="text-xs text-gray-400">
+                <span className="text-xs text-gray-500">
                   Mis à jour le {new Date(conv.updatedAt).toLocaleDateString()}
                 </span>
               </div>
@@ -1236,6 +1463,18 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
                 <SignatureTimeline convention={conv} />
               </div>
 
+              {/* Class Documents Button - Visible to ALL roles */}
+              {(() => {
+                const cls = classes.find(c => c.name === conv.eleve_classe);
+                if (!cls) return null;
+
+                return (
+                  <div className="flex-1 sm:flex-none">
+                    <StudentDocumentButton classId={cls.id} />
+                  </div>
+                );
+              })()}
+
               <div className="w-full sm:w-auto flex flex-col sm:flex-row gap-2">
                 <button
                   onClick={() => {
@@ -1246,6 +1485,30 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
                 >
                   Convention
                 </button>
+
+                {/* EVALUATIONS BUTTONS */}
+                {assignedTemplate && (
+                  <div className="flex-1 sm:flex-none">
+                    {canFillEvaluation && (
+                      <button
+                        onClick={() => router.push(`/dashboard/evaluations/${assignedTemplate.id}/fill/${conv.id}`)}
+                        className="w-full sm:w-auto px-3 py-2 border border-purple-200 shadow-sm text-sm font-medium rounded-md text-purple-700 bg-purple-50 hover:bg-purple-100 flex items-center justify-center"
+                      >
+                        <FileSpreadsheet className="w-4 h-4 mr-2" />
+                        Remplir l'évaluation
+                      </button>
+                    )}
+                    {canViewEvaluation && !canFillEvaluation && (
+                      <button
+                        onClick={() => router.push(`/dashboard/evaluations/${assignedTemplate.id}/fill/${conv.id}`)}
+                        className="w-full sm:w-auto px-3 py-2 border border-purple-200 shadow-sm text-sm font-medium rounded-md text-purple-700 bg-purple-50 hover:bg-purple-100 flex items-center justify-center"
+                      >
+                        <FileSpreadsheet className="w-4 h-4 mr-2" />
+                        Voir l'évaluation
+                      </button>
+                    )}
+                  </div>
+                )}
 
                 {/* Absences Button */}
                 {conv.status === 'VALIDATED_HEAD' && (
@@ -1261,7 +1524,8 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
                   </button>
                 )}
 
-                {/* Attestation Button */}
+
+
                 {/* Attestation Button */}
                 {conv.status === 'VALIDATED_HEAD' && (
                   <button
@@ -1308,7 +1572,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
                     onClick={() => handleOpenSignModal(conv.id)}
                     className="flex-1 sm:flex-none px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 animate-pulse"
                   >
-                    {getActionLabel(conv.status, role)}
+                    {getActionLabel(conv.status, role, conv)}
                   </button>
                 ) : (
                   role !== 'student' && role !== 'parent' && (
@@ -1381,6 +1645,21 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
           if (isSchoolAdminRole(role)) return c.ecole_chef_email;
           return '';
         })() ?? ''}
+        canSignDual={(() => {
+          const c = conventions.find(c => c.id === selectedConventionId);
+          if (!c) return false;
+
+          // Allow Dual Signing for Company Head and Tutor roles
+          if (role === 'company_head') return true;
+          if (role === 'tutor') return true;
+
+          return false;
+        })()}
+        dualRoleLabel={(() => {
+          if (role === 'company_head') return "Je déclare être également le tuteur de cet élève";
+          if (role === 'tutor') return "En cochant cette case et en complément de mon statut de tuteur, je déclare avoir pouvoir de signer pour l'entreprise. Si cette case est décochée, je signe uniquement en qualité de tuteur, le chef d'entreprise ou le représentant du chef d'entreprise signera de son côté.";
+          return "";
+        })()}
       />
 
       <ParentValidationModal
@@ -1489,7 +1768,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
                   </button>
                 )}
 
-                <button onClick={() => setOdmPreviewData(null)} className="text-gray-400 hover:text-gray-600 ml-2">
+                <button onClick={() => setOdmPreviewData(null)} className="text-gray-500 hover:text-gray-700 ml-2">
                   <X className="w-6 h-6" />
                 </button>
               </div>

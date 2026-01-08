@@ -1,26 +1,57 @@
 rules_version = '2';
+
 service cloud.firestore {
   match /databases/{database}/documents {
-    
-    // Default deny
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+
+    // Helper to check if user owns the document
+    function isOwner(userId) {
+      return isAuthenticated() && request.auth.uid == userId;
+    }
+
+    // Default: Deny all
     match /{document=**} {
       allow read, write: if false;
     }
 
-    // Conventions:
-    // - Public READ (get) allowed for verification page (by ID only)
-    // - Collection LIST denied (to prevent scraping)
-    // - Write/Delete restricted to authenticated users (existing logic assumed)
-    match /conventions/{conventionId} {
-      allow get: if true; // PUBLIC ACCESS by ID for ./verify/conventions/[id]
-      allow list: if request.auth != null; // Only authenticated users can list
-      
-      // Keep existing write logic (assumed)
-      allow write: if request.auth != null; 
+    // Users: Users can read/write only their own profile
+    match /users/{userId} {
+      allow read, write: if isOwner(userId);
     }
 
-    match /users/{userId} {
-      allow read, write: if request.auth != null && request.auth.uid == userId;
+    // Conventions: Authenticated users only
+    // Ideally should be role-based, but starting with Auth-only as Step 1
+    match /conventions/{conventionId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Notifications: Authenticated users only
+    // Needed for Client-side 'createInAppNotification' and reading
+    match /notifications/{notificationId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Mission Orders: Authenticated users only
+    match /missionOrders/{orderId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // Alumni: Authenticated users only
+    match /alumni/{alumniId} {
+      allow read, write: if isAuthenticated();
+    }
+
+    // OTPs: Deny All (Server-side Admin SDK only)
+    match /otps/{otpId} {
+      allow read, write: if false;
+    }
+
+    // Rate Limits: Deny All (Server-side Admin SDK only)
+    match /rate_limits/{limitId} {
+      allow read, write: if false;
     }
   }
 }

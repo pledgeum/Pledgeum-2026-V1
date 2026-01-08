@@ -101,13 +101,23 @@ export function Step2Student() {
                         setIfEmpty('eleve_date_naissance', profileData.birthDate);
                         setIfEmpty('eleve_email', profileData.email);
                         setIfEmpty('eleve_tel', profileData.phone);
-                        setIfEmpty('eleve_adresse', profileData.address);
-                        setIfEmpty('eleve_cp', profileData.zipCode);
-                        setIfEmpty('eleve_ville', profileData.city);
+
+                        // Address handling (Object vs String legacy)
+                        if (profileData.address && typeof profileData.address === 'object') {
+                            const addr = profileData.address as any;
+                            setIfEmpty('eleve_adresse', addr.street || addr.address); // Fallback for safety
+                            setIfEmpty('eleve_cp', addr.postalCode || addr.zipCode || addr.cp); // Handle potential naming variance
+                            setIfEmpty('eleve_ville', addr.city || addr.ville);
+                        } else {
+                            setIfEmpty('eleve_adresse', profileData.address);
+                            setIfEmpty('eleve_cp', profileData.zipCode || profileData.postalCode);
+                            setIfEmpty('eleve_ville', profileData.city);
+                        }
+
                         setIfEmpty('eleve_classe', profileData.class);
                         setIfEmpty('diplome_intitule', profileData.diploma);
 
-                        // Only pre-fill parent data if the student is MINOR based on profile birthdate
+                        // Only pre-fill parent data if the student is MINOR (based on calculated age)
                         let isMinorProfile = false;
                         if (profileData.birthDate) {
                             const birthDate = new Date(profileData.birthDate);
@@ -121,10 +131,25 @@ export function Step2Student() {
                         }
 
                         if (isMinorProfile) {
-                            setIfEmpty('rep_legal_nom', profileData.parentName);
-                            setIfEmpty('rep_legal_email', profileData.parentEmail);
-                            setIfEmpty('rep_legal_tel', profileData.parentPhone);
-                            setIfEmpty('rep_legal_adresse', profileData.parentAddress);
+                            // Legal Representatives (New Array Structure)
+                            if (profileData.legalRepresentatives && Array.isArray(profileData.legalRepresentatives) && profileData.legalRepresentatives.length > 0) {
+                                const rep1 = profileData.legalRepresentatives[0];
+                                const fullName = `${rep1.firstName || ''} ${rep1.lastName || ''}`.trim();
+                                setIfEmpty('rep_legal_nom', fullName);
+                                setIfEmpty('rep_legal_email', rep1.email);
+                                setIfEmpty('rep_legal_tel', rep1.phone);
+
+                                if (rep1.address && typeof rep1.address === 'object') {
+                                    const a = rep1.address;
+                                    setIfEmpty('rep_legal_adresse', `${a.street || ''} ${a.postalCode || ''} ${a.city || ''}`.trim());
+                                }
+                            } else {
+                                // Fallback to flat fields
+                                setIfEmpty('rep_legal_nom', profileData.parentName);
+                                setIfEmpty('rep_legal_email', profileData.parentEmail);
+                                setIfEmpty('rep_legal_tel', profileData.parentPhone);
+                                setIfEmpty('rep_legal_adresse', profileData.parentAddress);
+                            }
                         }
                     }
                 }, [profileData, form]);
@@ -206,15 +231,24 @@ export function Step2Student() {
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Classe</label>
-                            <input
-                                {...form.register('eleve_classe')}
-                                className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
-                                    form.formState.errors.eleve_classe
-                                        ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                            <div className="relative">
+                                <input
+                                    {...form.register('eleve_classe')}
+                                    disabled={!!profileData?.class} // Lock if coming from profile
+                                    className={cn(
+                                        "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
+                                        form.formState.errors.eleve_classe
+                                            ? "border-red-500 focus:border-red-500 focus:ring-red-500"
+                                            : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
+                                        profileData?.class ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""
+                                    )}
+                                />
+                                {profileData?.class && (
+                                    <span className="absolute right-3 top-3 text-xs text-gray-400 italic">
+                                        (Fixé par l'établissement)
+                                    </span>
                                 )}
-                            />
+                            </div>
                             {form.formState.errors.eleve_classe && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_classe.message}</p>}
                         </div>
 

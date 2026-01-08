@@ -1,24 +1,43 @@
 import { NextResponse } from 'next/server';
-import { db } from '@/lib/firebase';
-import { collection, query, where, getDocs, deleteDoc, doc, updateDoc, arrayUnion } from 'firebase/firestore';
+import { adminDb } from '@/lib/firebase-admin';
 import { headers } from 'next/headers';
+import { checkRateLimit, verifyUserSession } from '@/lib/server-security';
+import { z } from 'zod';
+import admin from 'firebase-admin';
+
+const verifySchema = z.object({
+    email: z.string().email(),
+    code: z.string().length(4)
+});
 
 export async function POST(request: Request) {
     try {
-        const { email, code } = await request.json();
-
-        if (!email || !code) {
-            return NextResponse.json({ error: "Paramètres manquants" }, { status: 400 });
+        const user = await verifyUserSession(request);
+        if (!user) {
+            return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
         }
 
-        const otpsRef = collection(db, "otps");
-        const q = query(
-            otpsRef,
-            where("email", "==", email),
-            where("code", "==", code)
-        );
+        // 1. Rate Limiting (Prevent Brute Force)
+        const isAllowed = await checkRateLimit(request, 'otp-verify');
+        if (!isAllowed) {
+            return NextResponse.json({ error: "Trop de tentatives. Réessayez dans 15 minutes." }, { status: 429 });
+        }
 
-        const querySnapshot = await getDocs(q);
+        const body = await request.json();
+        const validation = verifySchema.safeParse(body);
+
+        if (!validation.success) {
+            return NextResponse.json({ error: "Format invalide" }, { status: 400 });
+        }
+
+        const { email, code } = validation.data;
+
+        // Admin SDK Query
+        const otpsRef = adminDb.collection("otps");
+        const querySnapshot = await otpsRef
+            .where("email", "==", email)
+            .where("code", "==", code)
+            .get();
 
         if (querySnapshot.empty) {
             return NextResponse.json({ success: false, error: "Code invalide" }, { status: 400 });
@@ -29,7 +48,7 @@ export async function POST(request: Request) {
         const now = new Date();
 
         // There might be multiple OTPs if spammed, check all matches
-        const deletePromises: Promise<void>[] = [];
+        const batch = adminDb.batch();
 
         let conventionId = '';
 
@@ -41,10 +60,10 @@ export async function POST(request: Request) {
                 conventionId = data.conventionId;
             }
             // Delete used/expired OTPs to prevent reuse
-            deletePromises.push(deleteDoc(doc(db, "otps", docSnapshot.id)));
+            batch.delete(docSnapshot.ref);
         });
 
-        await Promise.all(deletePromises);
+        await batch.commit();
 
         if (valid && conventionId) {
             // Audit Log
@@ -59,8 +78,8 @@ export async function POST(request: Request) {
                     details: 'Code OTP validé avec succès'
                 };
 
-                await updateDoc(doc(db, "conventions", conventionId), {
-                    auditLogs: arrayUnion(auditLog)
+                await adminDb.collection("conventions").doc(conventionId).update({
+                    auditLogs: admin.firestore.FieldValue.arrayUnion(auditLog)
                 });
 
                 return NextResponse.json({ success: true, auditLog });

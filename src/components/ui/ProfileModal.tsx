@@ -11,9 +11,10 @@ interface ProfileModalProps {
     isOpen: boolean;
     onClose: () => void;
     conventionDefaults?: Convention;
+    blocking?: boolean;
 }
 
-export function ProfileModal({ isOpen, onClose, conventionDefaults }: ProfileModalProps) {
+export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = false }: ProfileModalProps) {
     const { user, logout } = useAuth();
     const { role, profileData, updateProfileData, name, birthDate } = useUserStore();
     const [formData, setFormData] = useState<Record<string, string>>({});
@@ -41,7 +42,10 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults }: ProfileMod
             };
 
             // Universal defaults
-            setDefault('email', user?.email);
+            // FORCE email to match Auth email (cannot be changed)
+            if (user?.email) {
+                initialData['email'] = user.email;
+            }
 
             // Try to split name if available
             if (name && (!initialData.lastName || !initialData.firstName)) {
@@ -49,6 +53,46 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults }: ProfileMod
                 if (parts.length > 0) {
                     setDefault('firstName', parts[0]);
                     if (parts.length > 1) setDefault('lastName', parts.slice(1).join(' '));
+                }
+            }
+
+            // Sync with new nested structure (Student)
+            if (role === 'student') {
+                // Address Object
+                if (initialData.address && typeof initialData.address === 'object') {
+                    const addr = initialData.address as any;
+                    if (addr.street) initialData['address'] = addr.street;
+                    if (addr.postalCode) initialData['zipCode'] = addr.postalCode;
+                    if (addr.city) initialData['city'] = addr.city;
+                }
+
+                // Legal Representatives
+                if (initialData.legalRepresentatives && Array.isArray(initialData.legalRepresentatives)) {
+                    const reps = initialData.legalRepresentatives as any[];
+                    if (reps.length > 0) {
+                        const rep1 = reps[0];
+                        if (rep1.firstName || rep1.lastName) initialData['parentName'] = `${rep1.firstName || ''} ${rep1.lastName || ''}`.trim();
+                        if (rep1.email) initialData['parentEmail'] = rep1.email;
+                        if (rep1.phone) initialData['parentPhone'] = rep1.phone;
+
+                        // Parse rep1 address (object to string)
+                        if (rep1.address && typeof rep1.address === 'object') {
+                            const a = rep1.address;
+                            initialData['parentAddress'] = `${a.street || ''} ${a.postalCode || ''} ${a.city || ''}`.trim();
+                        }
+
+                        if (reps.length > 1) {
+                            const rep2 = reps[1];
+                            if (rep2.firstName || rep2.lastName) initialData['parent2Name'] = `${rep2.firstName || ''} ${rep2.lastName || ''}`.trim();
+                            if (rep2.email) initialData['parent2Email'] = rep2.email;
+                            if (rep2.phone) initialData['parent2Phone'] = rep2.phone;
+
+                            if (rep2.address && typeof rep2.address === 'object') {
+                                const a = rep2.address;
+                                initialData['parent2Address'] = `${a.street || ''} ${a.postalCode || ''} ${a.city || ''}`.trim();
+                            }
+                        }
+                    }
                 }
             }
 
@@ -83,7 +127,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults }: ProfileMod
             }
             setFormData(initialData);
         }
-    }, [isOpen, profileData, conventionDefaults, role]);
+    }, [isOpen, profileData, conventionDefaults, role, user]); // Added user dependency
 
     // School Search Effect
     useEffect(() => {
@@ -160,7 +204,72 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults }: ProfileMod
         if (!user) return;
         setLoading(true);
         try {
-            await updateProfileData(user.uid, formData);
+            const updates: Record<string, any> = { ...formData };
+
+            // Sync back to nested structure (Student)
+            if (role === 'student') {
+                // Address
+                if (updates.address || updates.zipCode || updates.city) {
+                    updates['address'] = {
+                        street: updates.address || '',
+                        postalCode: updates.zipCode || '',
+                        city: updates.city || ''
+                    };
+                }
+
+                // Legal Representatives
+                const currentReps = (profileData.legalRepresentatives as any[]) || [];
+                const rep1 = currentReps[0] || { role: 'Responsable Légal 1' };
+
+                // Parse Name
+                const p1Name = updates.parentName || '';
+                const p1Space = p1Name.indexOf(' ');
+                if (p1Space > 0) {
+                    rep1.firstName = p1Name.substring(0, p1Space);
+                    rep1.lastName = p1Name.substring(p1Space + 1);
+                } else {
+                    rep1.lastName = p1Name;
+                    rep1.firstName = '';
+                }
+
+                rep1.email = updates.parentEmail || '';
+                rep1.phone = updates.parentPhone || '';
+
+                // Address: If flat string differs from reconstructed object, update object with flat string in 'street'
+                const oldAddrStr = rep1.address ? `${rep1.address.street || ''} ${rep1.address.postalCode || ''} ${rep1.address.city || ''}`.trim() : '';
+                if (updates.parentAddress && updates.parentAddress !== oldAddrStr) {
+                    // User edited the string. Save as unstructured in street for now.
+                    rep1.address = { street: updates.parentAddress, postalCode: '', city: '' };
+                }
+
+                const newReps = [rep1];
+
+                // Rep 2
+                if (updates.parent2Name) {
+                    const rep2 = currentReps[1] || { role: 'Responsable Légal 2' };
+                    const p2Name = updates.parent2Name || '';
+                    const p2Space = p2Name.indexOf(' ');
+                    if (p2Space > 0) {
+                        rep2.firstName = p2Name.substring(0, p2Space);
+                        rep2.lastName = p2Name.substring(p2Space + 1);
+                    } else {
+                        rep2.lastName = p2Name;
+                        rep2.firstName = '';
+                    }
+                    rep2.email = updates.parent2Email || '';
+                    rep2.phone = updates.parent2Phone || '';
+
+                    const oldAddrStr2 = rep2.address ? `${rep2.address.street || ''} ${rep2.address.postalCode || ''} ${rep2.address.city || ''}`.trim() : '';
+                    if (updates.parent2Address && updates.parent2Address !== oldAddrStr2) {
+                        rep2.address = { street: updates.parent2Address, postalCode: '', city: '' };
+                    }
+                    newReps.push(rep2);
+                }
+
+                updates['legalRepresentatives'] = newReps;
+            }
+
+            await updateProfileData(user.uid, updates);
             onClose();
         } catch (error) {
             console.error("Failed to save profile", error);
@@ -172,7 +281,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults }: ProfileMod
 
     if (!isOpen) return null;
 
-    const renderField = (name: string, label: string, icon: React.ReactNode, type: string = "text", placeholder: string = "") => (
+    const renderField = (name: string, label: string, icon: React.ReactNode, type: string = "text", placeholder: string = "", disabled: boolean = false) => (
         <div className="space-y-1">
             <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
                 {icon}
@@ -184,7 +293,8 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults }: ProfileMod
                 value={formData[name] || ''}
                 onChange={handleChange}
                 placeholder={placeholder}
-                className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all"
+                disabled={disabled}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${disabled ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
             />
         </div>
     );
@@ -206,7 +316,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults }: ProfileMod
                                         role === 'tutor' ? 'Tuteur' : role
                         }</p>
                     </div>
-                    <button onClick={onClose} className="text-white/80 hover:text-white transition-colors">
+                    <button onClick={onClose} className={`text-white/80 hover:text-white transition-colors ${blocking ? 'hidden' : ''}`}>
                         <X className="h-6 w-6" />
                     </button>
                 </div>
@@ -216,23 +326,23 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults }: ProfileMod
 
                     {/* Common Fields */}
                     <div className="grid grid-cols-2 gap-4">
-                        {renderField("lastName", "Nom", <User className="w-4 h-4" />)}
-                        {renderField("firstName", "Prénom", <User className="w-4 h-4" />)}
+                        {renderField("lastName", "Nom", <User className="w-4 h-4" />, "text", "", ["student", "teacher", "teacher_tracker"].includes(role))}
+                        {renderField("firstName", "Prénom", <User className="w-4 h-4" />, "text", "", ["student", "teacher", "teacher_tracker"].includes(role))}
                     </div>
-                    {renderField("email", "Email", <Mail className="w-4 h-4" />, "email")}
+                    {renderField("email", "Email (Identifiant)", <Mail className="w-4 h-4" />, "email", "", true)}
                     {renderField("phone", "Téléphone", <Phone className="w-4 h-4" />, "tel")}
 
                     <hr className="border-gray-100" />
 
                     {role === 'student' && (
                         <>
-                            {renderField("birthDate", "Date de Naissance", <Calendar className="w-4 h-4" />, "date")}
+                            {renderField("birthDate", "Date de Naissance", <Calendar className="w-4 h-4" />, "date", "", true)}
                             {renderField("address", "Adresse Personnelle", <MapPin className="w-4 h-4" />)}
                             <div className="grid grid-cols-2 gap-4">
                                 {renderField("zipCode", "Code Postal", <MapPin className="w-4 h-4" />)}
                                 {renderField("city", "Ville", <MapPin className="w-4 h-4" />)}
                             </div>
-                            {renderField("class", "Classe", <GraduationCap className="w-4 h-4" />)}
+                            {renderField("class", "Classe", <GraduationCap className="w-4 h-4" />, "text", "", true)}
                             {renderField("diploma", "Diplôme Préparé", <GraduationCap className="w-4 h-4" />)}
 
                             {/* Section École (Moved Up) */}
@@ -248,63 +358,74 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults }: ProfileMod
                                             <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 relative group">
                                                 <h4 className="font-semibold text-blue-900">{formData.schoolName}</h4>
                                                 <p className="text-sm text-blue-700">{formData.schoolAddress}</p>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setFormData(prev => ({ ...prev, schoolName: '', schoolAddress: '', schoolLat: '', schoolLng: '' }))}
-                                                    className="absolute top-2 right-2 text-blue-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
-                                                >
-                                                    <X className="w-4 h-4" />
-                                                </button>
+                                                {/* Only allow removing school if NOT a student (Admins/Teachers might need to change it, but students are assigned) */}
+                                                {role !== 'student' && (
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setFormData(prev => ({ ...prev, schoolName: '', schoolAddress: '', schoolLat: '', schoolLng: '' }))}
+                                                        className="absolute top-2 right-2 text-blue-400 hover:text-red-500 opacity-0 group-hover:opacity-100 transition-opacity"
+                                                    >
+                                                        <X className="w-4 h-4" />
+                                                    </button>
+                                                )}
                                             </div>
                                         ) : (
                                             <div className="space-y-3 relative">
-                                                <p className="text-sm text-gray-500">Recherchez votre établissement.</p>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <div>
-                                                        <label className="text-xs font-medium text-gray-500">Ville</label>
-                                                        <input
-                                                            type="text"
-                                                            value={cityQuery}
-                                                            onChange={(e) => setCityQuery(e.target.value)}
-                                                            placeholder="Ex: Lyon"
-                                                            className="w-full px-3 py-2 border rounded text-sm"
-                                                        />
+                                                {role === 'student' ? (
+                                                    <div className="text-sm text-gray-500 italic">
+                                                        Votre établissement est défini par l'administration.
                                                     </div>
-                                                    <div className="relative">
-                                                        <label className="text-xs font-medium text-gray-500">Nom de l'école</label>
-                                                        <div className="relative">
-                                                            <Search className="absolute left-2 top-2.5 w-4 h-4 text-gray-400" />
-                                                            <input
-                                                                type="text"
-                                                                value={schoolQuery}
-                                                                onChange={(e) => {
-                                                                    setSchoolQuery(e.target.value);
-                                                                    setShowSchoolResults(true);
-                                                                }}
-                                                                placeholder="Ex: Jules Ferry"
-                                                                className="w-full pl-8 pr-3 py-2 border rounded text-sm"
-                                                            />
-                                                            {isSearchingSchool && <Loader2 className="absolute right-2 top-2.5 w-4 h-4 animate-spin text-blue-500" />}
-                                                        </div>
-
-                                                        {/* Results Dropdown */}
-                                                        {showSchoolResults && schoolResults.length > 0 && (
-                                                            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto">
-                                                                {schoolResults.map((school) => (
-                                                                    <button
-                                                                        key={school.id}
-                                                                        type="button"
-                                                                        onClick={() => handleSelectSchool(school)}
-                                                                        className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-0"
-                                                                    >
-                                                                        <div className="font-medium text-gray-900">{school.nom}</div>
-                                                                        <div className="text-xs text-gray-500">{school.ville} ({school.type})</div>
-                                                                    </button>
-                                                                ))}
+                                                ) : (
+                                                    <>
+                                                        <p className="text-sm text-gray-500">Recherchez votre établissement.</p>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <div>
+                                                                <label className="text-xs font-medium text-gray-500">Ville</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={cityQuery}
+                                                                    onChange={(e) => setCityQuery(e.target.value)}
+                                                                    placeholder="Ex: Lyon"
+                                                                    className="w-full px-3 py-2 border rounded text-sm"
+                                                                />
                                                             </div>
-                                                        )}
-                                                    </div>
-                                                </div>
+                                                            <div className="relative">
+                                                                <label className="text-xs font-medium text-gray-500">Nom de l'école</label>
+                                                                <div className="relative">
+                                                                    <Search className="absolute left-2 top-2.5 w-4 h-4 text-gray-400" />
+                                                                    <input
+                                                                        type="text"
+                                                                        value={schoolQuery}
+                                                                        onChange={(e) => {
+                                                                            setSchoolQuery(e.target.value);
+                                                                            setShowSchoolResults(true);
+                                                                        }}
+                                                                        placeholder="Ex: Jules Ferry"
+                                                                        className="w-full pl-8 pr-3 py-2 border rounded text-sm"
+                                                                    />
+                                                                    {isSearchingSchool && <Loader2 className="absolute right-2 top-2.5 w-4 h-4 animate-spin text-blue-500" />}
+                                                                </div>
+
+                                                                {/* Results Dropdown */}
+                                                                {showSchoolResults && schoolResults.length > 0 && (
+                                                                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto">
+                                                                        {schoolResults.map((school) => (
+                                                                            <button
+                                                                                key={school.id}
+                                                                                type="button"
+                                                                                onClick={() => handleSelectSchool(school)}
+                                                                                className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-0"
+                                                                            >
+                                                                                <div className="font-medium text-gray-900">{school.nom}</div>
+                                                                                <div className="text-xs text-gray-500">{school.ville} ({school.type})</div>
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         )}
                                     </div>
@@ -489,7 +610,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults }: ProfileMod
                         <button
                             type="button"
                             onClick={onClose}
-                            className="px-4 py-2 text-gray-700 font-medium hover:bg-gray-100 rounded-lg transition-colors"
+                            className={`px-4 py-2 text-gray-700 font-medium hover:bg-gray-100 rounded-lg transition-colors ${blocking ? 'hidden' : ''}`}
                         >
                             Annuler
                         </button>

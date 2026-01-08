@@ -1,10 +1,11 @@
 'use client';
 
 import { useState } from 'react';
-import { X, Search, ShieldCheck, MessageSquare, Trash2, Building2, User, Mail, Calendar } from 'lucide-react';
+import { X, Search, ShieldCheck, MessageSquare, Trash2, Building2, User, Mail, Calendar, Key } from 'lucide-react';
 import { useAdminStore, SchoolStatus } from '@/store/admin';
 import { useSchoolStore, Student } from '@/store/school'; // Import School Store
 import { searchSchools, SchoolResult } from '@/lib/educationApi';
+import { sendWelcomeEmail, initializeSchoolIdentity } from '@/app/actions/schoolAdmin';
 
 interface SuperAdminModalProps {
     isOpen: boolean;
@@ -19,6 +20,7 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
     const [searchTerm, setSearchTerm] = useState('');
     const [searchResults, setSearchResults] = useState<SchoolResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
+    const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
 
     if (!isOpen) return null;
 
@@ -35,7 +37,7 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
         }
     };
 
-    const handleAuthorize = (school: SchoolResult, status: SchoolStatus) => {
+    const handleAuthorize = async (school: SchoolResult, status: SchoolStatus) => {
         // 1. Authorize in Admin Store
         authorizeSchool({
             id: school.id,
@@ -45,17 +47,46 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
             status
         });
 
-        // 2. Automate School Identity Population
-        // This ensures the school is immediately ready with correct details
-        useSchoolStore.getState().updateSchoolIdentity({
-            schoolName: school.nom,
-            schoolAddress: `${school.adresse}, ${school.cp} ${school.ville}`,
-            schoolHeadEmail: school.mail || '', // Use official email as default for Head
-            // Phone is likely not in this API result structure based on searchSchools, 
-            // but if we had it we would map it. Step1School uses defaults anyway.
-        });
+        // 2. Persist Identity to Server (Firestore)
+        // This ensures the school is immediately ready with correct details on first login
+        try {
+            await initializeSchoolIdentity(school.id, {
+                name: school.nom,
+                address: school.adresse,
+                city: school.ville,
+                postalCode: school.cp,
+                email: school.mail || '',
+                // phone not available in SchoolResult currently
+            });
 
-        // Remove from search results to show it's done or just show "Déjà autorisé"
+            // Update local store just in case
+            useSchoolStore.getState().updateSchoolIdentity({
+                schoolName: school.nom,
+                schoolAddress: `${school.adresse}, ${school.cp} ${school.ville}`,
+                schoolHeadEmail: school.mail || '',
+            });
+        } catch (error) {
+            console.error("Failed to initialize school identity:", error);
+            alert("Attention : L'école a été autorisée mais l'initialisation des données a échoué.");
+        }
+    };
+
+    const handleSendEmail = async (school: any) => {
+        if (!school.email) {
+            alert("Cet établissement n'a pas d'email.");
+            return;
+        }
+        if (!confirm(`Envoyer les identifiants à ${school.email} ?`)) return;
+
+        setSendingEmailId(school.id);
+        const result = await sendWelcomeEmail(school.id, school.email, school.name);
+        setSendingEmailId(null);
+
+        if (result.success) {
+            alert("Email envoyé avec succès !");
+        } else {
+            alert("Erreur lors de l'envoi : " + result.error);
+        }
     };
 
     return (
@@ -130,6 +161,12 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                     <div>
                                                         <p className="font-bold text-sm text-gray-900">{school.nom}</p>
                                                         <p className="text-xs text-gray-500">{school.ville} ({school.cp})</p>
+                                                        {school.mail && (
+                                                            <p className="text-xs text-purple-600 flex items-center mt-0.5">
+                                                                <Mail className="w-3 h-3 mr-1" />
+                                                                {school.mail}
+                                                            </p>
+                                                        )}
                                                     </div>
                                                     {!isAuth ? (
                                                         <div className="flex space-x-2">
@@ -187,10 +224,18 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                         </div>
                                                     </div>
                                                 </div>
-                                                <div className="flex items-center space-x-4">
+                                                <div className="flex items-center space-x-2">
                                                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${school.status === 'BETA' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
                                                         {school.status}
                                                     </span>
+                                                    <button
+                                                        onClick={() => handleSendEmail(school)}
+                                                        disabled={sendingEmailId === school.id}
+                                                        className="p-1.5 text-gray-400 hover:text-purple-600 hover:bg-purple-50 rounded-md transition-colors disabled:opacity-50"
+                                                        title="Envoyer email de bienvenue (Identifiants)"
+                                                    >
+                                                        <Key className={`w-4 h-4 ${sendingEmailId === school.id ? 'animate-pulse' : ''}`} />
+                                                    </button>
                                                     <button
                                                         onClick={() => removeSchool(school.id)}
                                                         className="text-gray-400 hover:text-red-500 transition-colors"

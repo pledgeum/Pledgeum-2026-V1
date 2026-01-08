@@ -5,6 +5,7 @@ import { createPortal } from 'react-dom';
 import { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Search, Building2, MapPin, Loader2, Navigation } from 'lucide-react';
 import { Convention } from '@/store/convention';
+import { useSchoolStore } from '@/store/school';
 import { getCoordinates, calculateDistance } from '@/lib/geocoding';
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from '@react-google-maps/api';
 
@@ -27,6 +28,10 @@ interface CompanyResult {
     email: string;
     lat: number;
     lon: number;
+    // New fields
+    activity?: string;
+    jobs?: string[];
+    isPartner?: boolean;
 }
 
 interface OriginMarker {
@@ -46,9 +51,36 @@ const defaultCenter = {
 };
 
 export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddress, conventions }: CompanySearchModalProps) {
+    const { partnerCompanies, hiddenActivities, hiddenJobs, hiddenClasses } = useSchoolStore();
+
+    // Siret -> Classes Map from Conventions (for visibility check)
+    const classesBySiret = useMemo(() => {
+        const map = new Map<string, Set<string>>();
+        conventions.forEach(c => {
+            if (c.ent_siret && c.eleve_classe) {
+                if (!map.has(c.ent_siret)) map.set(c.ent_siret, new Set());
+                map.get(c.ent_siret)?.add(c.eleve_classe);
+            }
+        });
+        return map;
+    }, [conventions]);
+
+    const uniqueActivities = useMemo(() => {
+        const set = new Set(partnerCompanies.map(p => p.activity).filter(Boolean));
+        // Filter out hidden activities
+        return Array.from(set).filter(a => !hiddenActivities.includes(a)).sort();
+    }, [partnerCompanies, hiddenActivities]);
+
+    const uniqueJobs = useMemo(() => {
+        const set = new Set(partnerCompanies.flatMap(p => p.jobs || []).filter(Boolean));
+        // Filter out hidden jobs
+        return Array.from(set).filter(j => !hiddenJobs.includes(j)).sort();
+    }, [partnerCompanies, hiddenJobs]);
     const [origins, setOrigins] = useState<{ school: boolean; home: boolean }>({ school: true, home: false });
     const [radius, setRadius] = useState<number | null>(10);
     const [sectionFilter, setSectionFilter] = useState<string>('');
+    const [activityFilter, setActivityFilter] = useState<string>('');
+    const [jobFilter, setJobFilter] = useState<string>('');
 
     const [results, setResults] = useState<CompanyResult[]>([]);
     const [originMarkers, setOriginMarkers] = useState<OriginMarker[]>([]);
@@ -73,7 +105,10 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
         setMap(null);
     }, []);
 
-    const availableSections = useMemo(() => Array.from(new Set(conventions.map(c => c.eleve_classe).filter(Boolean))), [conventions]);
+    const availableSections = useMemo(() => {
+        const sections = Array.from(new Set(conventions.map(c => c.eleve_classe).filter(Boolean)));
+        return sections.filter(s => !hiddenClasses.includes(s)).sort();
+    }, [conventions, hiddenClasses]);
 
     // Auto-fit bounds when results or origins change
     useEffect(() => {
@@ -101,40 +136,24 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
         }
     }, [map, results, originMarkers]);
 
-    const [debugLogs, setDebugLogs] = useState<string[]>([]);
 
-    const addLog = (msg: string, data?: any) => {
-        const text = data ? `${msg} ${JSON.stringify(data)}` : msg;
-        console.log(msg, data || '');
-        setDebugLogs(prev => [...prev, `[${new Date().toLocaleTimeString()}] ${text}`]);
-    };
 
     const handleSearch = async () => {
         setLoading(true);
         setSearched(true);
         setResults([]);
-        setDebugLogs([]); // Clear previous logs
         setSelectedMarker(null);
-
-        addLog("Starting search...");
-        addLog("Conventions provided:", conventions.length);
 
         try {
             // 1. Geocode Origins
             const originPoints = [];
             if (origins.school && schoolAddress) {
-                addLog("Geocoding School:", schoolAddress);
                 const coords = await getCoordinates(schoolAddress);
-                addLog("School coords:", coords);
                 if (coords) originPoints.push({ type: 'school', ...coords });
-                else addLog("Failed to geocode School");
             }
             if (origins.home && studentAddress) {
-                addLog("Geocoding Home:", studentAddress);
                 const coords = await getCoordinates(studentAddress);
-                addLog("Home coords:", coords);
                 if (coords) originPoints.push({ type: 'home', ...coords });
-                else addLog("Failed to geocode Home");
             }
 
             // Update Origin Markers State
@@ -146,7 +165,6 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
             })));
 
             if (originPoints.length === 0) {
-                addLog("No valid origins found.");
                 alert("Veuillez sélectionner au moins un point de départ valide.");
                 setLoading(false);
                 return;
@@ -157,6 +175,8 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
 
             // 2. Process Companies
             const companiesMap = new Map<string, Omit<CompanyResult, 'distance'>>();
+
+            // A. From Conventions (History)
             conventions.forEach(c => {
                 if (c.ent_siret && c.ent_adresse && !companiesMap.has(c.ent_siret)) {
                     companiesMap.set(c.ent_siret, {
@@ -172,51 +192,113 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
                 }
             });
 
+            // B. From Partners (Store)
+            partnerCompanies.forEach(p => {
+                if (companiesMap.has(p.siret)) {
+                    // Update existing with partner info
+                    const existing = companiesMap.get(p.siret)!;
+                    companiesMap.set(p.siret, {
+                        ...existing,
+                        activity: p.activity,
+                        jobs: p.jobs,
+                        isPartner: true,
+                        // Use partner coordinates if available and convention ones are 0
+                        lat: (existing.lat === 0 && p.coordinates) ? p.coordinates.lat : existing.lat,
+                        lon: (existing.lon === 0 && p.coordinates) ? p.coordinates.lng : existing.lon,
+                        // If partner has address and convention doesn't (unlikely), use partner's.
+                    });
+                } else {
+                    // Add new partner
+                    const fullAddress = p.address.includes(p.city) ? p.address : `${p.address} ${p.postalCode} ${p.city}`;
+                    companiesMap.set(p.siret, {
+                        id: p.siret,
+                        name: p.name,
+                        address: fullAddress,
+                        section: '', // No section history
+                        siret: p.siret,
+                        contact: '',
+                        email: '',
+                        lat: p.coordinates?.lat || 0,
+                        lon: p.coordinates?.lng || 0,
+                        activity: p.activity,
+                        jobs: p.jobs,
+                        isPartner: true
+                    });
+                }
+            });
+
             const uniqueCompanies = Array.from(companiesMap.values());
-            addLog("Unique companies to process:", uniqueCompanies.length);
             const filteredResults: CompanyResult[] = [];
 
             for (const company of uniqueCompanies) {
-                if (sectionFilter && company.section !== sectionFilter) continue;
+                // VISIBILITY CHECKS (Admin Configuration)
+                // 1. Activity Visibility
+                if (company.activity && hiddenActivities.includes(company.activity)) continue;
 
-                // Geocode
-                // Geocode
-                // Note: In production, batch geocoding or caching is critical. API limit is usually 50/sec or limited daily.
-                addLog(`Processing: ${company.name} (${company.address})`);
-                const companyCoords = await getCoordinates(company.address);
-                if (companyCoords) {
-                    addLog(`  -> Coords: ${companyCoords.lat}, ${companyCoords.lon}`);
-                    company.lat = companyCoords.lat;
-                    company.lon = companyCoords.lon;
+                // 2. Class Visibility
+                // If company is associated with classes, check if it has at least one visible class.
+                // If it has NO class history (pure partner), it remains visible.
+                const companyClasses = classesBySiret.get(company.siret);
+                if (companyClasses && companyClasses.size > 0) {
+                    const hasVisibleClass = Array.from(companyClasses).some(c => !hiddenClasses.includes(c));
+                    if (!hasVisibleClass) continue;
+                }
 
-                    // Calculate min distance to any selected origin
-                    let minDist = Infinity;
-                    for (const origin of originPoints) {
-                        const dist = calculateDistance(origin.lat, origin.lon, company.lat, company.lon);
-                        if (dist < minDist) minDist = dist;
-                    }
-                    addLog(`  -> Distance: ${minDist.toFixed(1)} km`);
+                // 3. Job Visibility (Filter displayed jobs)
+                // We create a copy of the company object to avoid mutating the Map/Store source
+                let displayCompany = { ...company };
+                if (displayCompany.jobs && displayCompany.jobs.length > 0) {
+                    displayCompany.jobs = displayCompany.jobs.filter(j => !hiddenJobs.includes(j));
+                    // Optional: If we want to hide companies that have NO visible jobs left?
+                    // "Par défaut tout apparait" -> If filtered list is empty but activity is valid, keep it?
+                    // Let's keep it, as the company might still be relevant by name/activity.
+                }
 
-                    // Check radius
-                    if (radius === null || minDist <= radius) {
-                        filteredResults.push({ ...company, distance: parseFloat(minDist.toFixed(1)) });
+                // Filters (User Selection)
+                if (sectionFilter && displayCompany.section !== sectionFilter) continue;
+
+                if (activityFilter) {
+                    const act = (displayCompany.activity || '').toLowerCase();
+                    if (!act.includes(activityFilter.toLowerCase())) continue;
+                }
+
+                if (jobFilter) {
+                    const jobsStr = (displayCompany.jobs || []).join(' ').toLowerCase();
+                    if (!jobsStr.includes(jobFilter.toLowerCase())) continue;
+                }
+
+                // Use the modified displayCompany for the result
+                // Geocode if needed
+                if (displayCompany.lat === 0 || displayCompany.lon === 0) {
+                    // Note: In production, batch geocoding or caching is critical. API limit is usually 50/sec or limited daily.
+                    const companyCoords = await getCoordinates(displayCompany.address);
+                    if (companyCoords) {
+                        displayCompany.lat = companyCoords.lat;
+                        displayCompany.lon = companyCoords.lon;
                     } else {
-                        addLog(`  -> Outside radius (${minDist.toFixed(1)}km > ${radius}km)`);
+                        continue; // Cannot place on map
                     }
-                } else {
-                    addLog("  -> Failed to geocode company");
+                }
+
+                // Calculate min distance to any selected origin
+                let minDist = Infinity;
+                for (const origin of originPoints) {
+                    const dist = calculateDistance(origin.lat, origin.lon, displayCompany.lat, displayCompany.lon);
+                    if (dist < minDist) minDist = dist;
+                }
+
+                // Check radius
+                if (radius === null || minDist <= radius) {
+                    filteredResults.push({ ...displayCompany, distance: parseFloat(minDist.toFixed(1)) });
                 }
             }
-            addLog("Final filtered results:", filteredResults.length);
 
             setResults(filteredResults.sort((a, b) => a.distance - b.distance));
         } catch (error) {
             console.error(error);
-            addLog("Error during search:", error);
             alert("Erreur lors de la recherche.");
         } finally {
             setLoading(false);
-            addLog("Search complete.");
         }
     };
 
@@ -307,7 +389,7 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
                                     </select>
                                 </div>
                                 <div>
-                                    <label className="block text-xs font-semibold text-gray-700 mb-1">Section</label>
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1">Classe</label>
                                     <select
                                         value={sectionFilter}
                                         onChange={(e) => setSectionFilter(e.target.value)}
@@ -316,6 +398,35 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
                                         <option value="">Toutes</option>
                                         {availableSections.map(s => (
                                             <option key={s} value={s}>{s}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-3">
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1">Activité</label>
+                                    <select
+                                        value={activityFilter}
+                                        onChange={(e) => setActivityFilter(e.target.value)}
+                                        className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                        <option value="">Toutes</option>
+                                        {uniqueActivities.map(act => (
+                                            <option key={act} value={act}>{act}</option>
+                                        ))}
+                                    </select>
+                                </div>
+                                <div>
+                                    <label className="block text-xs font-semibold text-gray-700 mb-1">Filière de formation</label>
+                                    <select
+                                        value={jobFilter}
+                                        onChange={(e) => setJobFilter(e.target.value)}
+                                        className="w-full text-sm border-gray-300 rounded-md focus:ring-blue-500 focus:border-blue-500"
+                                    >
+                                        <option value="">Tous</option>
+                                        {uniqueJobs.map(job => (
+                                            <option key={job} value={job}>{job}</option>
                                         ))}
                                     </select>
                                 </div>
@@ -351,30 +462,39 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
                                         }}
                                     >
                                         <div className="flex justify-between items-start">
-                                            <h4 className="font-bold text-gray-800 text-sm group-hover:text-blue-600 transition-colors">{company.name}</h4>
+                                            <h4 className="font-bold text-gray-800 text-sm group-hover:text-blue-600 transition-colors flex items-center gap-1">
+                                                {company.name}
+                                                {company.isPartner && (
+                                                    <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-green-50 text-green-700 ml-1 border border-green-100">
+                                                        Partenaire
+                                                    </span>
+                                                )}
+                                            </h4>
                                             <span className="text-xs font-bold text-blue-600 bg-blue-50 px-1.5 py-0.5 rounded ml-2 whitespace-nowrap">
                                                 {company.distance} km
                                             </span>
                                         </div>
                                         <p className="text-xs text-gray-500 mt-1 line-clamp-1">{company.address}</p>
+                                        <p className="text-[10px] text-gray-400 mt-0.5">SIRET : {company.siret}</p>
+                                        {company.activity && <p className="text-[10px] text-gray-400 truncate mt-0.5">{company.activity}</p>}
+
                                         <div className="mt-2 flex flex-wrap gap-1">
-                                            <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
-                                                {company.section}
-                                            </span>
+                                            {company.section && (
+                                                <span className="inline-flex px-2 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600">
+                                                    {company.section}
+                                                </span>
+                                            )}
+                                            {company.jobs && company.jobs.map((job, jIdx) => (
+                                                <span key={jIdx} className="inline-flex px-2 py-0.5 rounded text-[10px] font-medium bg-blue-50 text-blue-600">
+                                                    {job}
+                                                </span>
+                                            ))}
                                         </div>
                                     </div>
                                 ))
                             )}
 
-                            {/* Debug Logs Section */}
-                            {debugLogs.length > 0 && (
-                                <div className="mt-4 p-2 bg-gray-100 rounded text-[10px] font-mono border border-gray-300 overflow-y-auto max-h-[200px]">
-                                    <div className="font-bold mb-1">Debug Output:</div>
-                                    {debugLogs.map((log, i) => (
-                                        <div key={i} className="whitespace-pre-wrap">{log}</div>
-                                    ))}
-                                </div>
-                            )}
+
                         </div>
                     </div>
 
@@ -465,7 +585,8 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
                                                         <div>
                                                             <h3 className="font-bold text-sm text-gray-900">{selectedMarker.name}</h3>
                                                             <p className="text-xs text-gray-600 mb-1">{selectedMarker.address}</p>
-                                                            <p className="text-xs text-gray-500 mb-2">Contact: {selectedMarker.contact}</p>
+                                                            <p className="text-xs text-gray-500 mb-1 font-mono">SIRET: {selectedMarker.siret}</p>
+                                                            {selectedMarker.contact && <p className="text-xs text-gray-500 mb-2">Contact: {selectedMarker.contact}</p>}
 
                                                             <a
                                                                 href={mapsUrl}

@@ -34,8 +34,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     }, []);
 
     const logout = async () => {
-        await firebaseSignOut(auth);
-        router.push('/login');
+        try {
+            await firebaseSignOut(auth);
+            // Dynamic import or direct access if easier, assuming context usage
+            // But since we are in context, we can't easily use hooks. 
+            // Better to clean up via store directly if imported.
+            const { useUserStore } = await import('@/store/user');
+            useUserStore.getState().reset();
+        } catch (error) {
+            console.error("Logout error:", error);
+            // Even if firebase fails (network?), we should clear local state & redirect
+        } finally {
+            router.push('/login');
+        }
     };
 
     return (

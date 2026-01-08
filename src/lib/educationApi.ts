@@ -6,6 +6,7 @@ export interface SchoolResult {
     ville: string;
     cp: string;
     mail?: string;
+    telephone?: string;
     lat?: number;
     lng?: number;
 }
@@ -55,6 +56,7 @@ export async function searchSchools(query: string, city?: string, type?: string)
             ville: record.nom_commune,
             cp: record.code_postal,
             mail: record.mail,
+            telephone: record.telephone,
             lat: record.latitude,
             lng: record.longitude
         }));

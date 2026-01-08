@@ -126,7 +126,6 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
             addNotification({
                 title: 'Convention envoyée',
                 message: 'Votre demande a été transmise à l\'enseignant référent/professeur principal pour validation (sauvegardée dans Firestore).',
-                actionLabel: 'Suivre le statut',
             });
 
             setIsSuccess(true);
@@ -187,7 +186,7 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
                     {currentStep === 4 && <Step4Internship />}
 
                     {currentStep === 5 && (
-                        <div className="text-center p-10 bg-white rounded-xl shadow space-y-6">
+                        <div className="text-center p-10 bg-white rounded-xl shadow space-y-6 pb-32">
                             <div>
                                 <h2 className="text-2xl font-bold text-green-600 mb-2">Formulaire Complété !</h2>
                                 <p className="text-gray-600">Veuillez vérifier le document ci-dessous avant de l'envoyer.</p>
@@ -211,13 +210,7 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
                                             </button>
                                         </div>
                                     ) : (
-                                        <button
-                                            onClick={() => setIsSigModalOpen(true)}
-                                            className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow transition-colors flex items-center"
-                                        >
-                                            <Wand2 className="w-5 h-5 mr-2" />
-                                            Signer la convention
-                                        </button>
+                                        <p className="text-sm text-gray-500 italic">En attente de signature...</p>
                                     )}
                                 </div>
                             </div>
@@ -231,17 +224,34 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
                                 conventionId={`temp_${Date.now()}`} // Temporary ID for OTP association
                             />
 
-                            <div className="pt-6 border-t border-gray-100 flex flex-col items-center">
+                            {/* Floating Footer using Portal or Fixed Position */}
+                            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 p-4 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] z-40 flex flex-col items-center justify-center gap-3 safe-area-bottom">
                                 {error && (
-                                    <p className="text-red-600 mb-4">{error}</p>
+                                    <p className="text-red-600 text-sm font-medium animate-pulse">{error}</p>
                                 )}
-                                <button
-                                    onClick={handleSubmit}
-                                    disabled={isLoading || !signature}
-                                    className={`px-8 py-3 bg-blue-600 text-white font-bold rounded-full shadow-lg flex items-center ${isLoading || !signature ? 'opacity-50 cursor-not-allowed bg-gray-400' : 'hover:bg-blue-700 transition-transform transform hover:scale-105'}`}
-                                >
-                                    {isLoading ? 'Envoi en cours...' : "Valider et Envoyer à l'Enseignant"}
-                                </button>
+
+                                {!signature ? (
+                                    <button
+                                        onClick={() => setIsSigModalOpen(true)}
+                                        className="w-full max-w-sm px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg transition-colors flex items-center justify-center"
+                                    >
+                                        <Wand2 className="w-5 h-5 mr-2" />
+                                        Signer la convention
+                                    </button>
+                                ) : (
+                                    <button
+                                        onClick={handleSubmit}
+                                        disabled={isLoading}
+                                        className={`w-full max-w-sm px-8 py-3 bg-green-600 text-white font-bold rounded-xl shadow-lg flex items-center justify-center ${isLoading ? 'opacity-75 cursor-not-allowed' : 'hover:bg-green-700 hover:scale-105 transition-all'}`}
+                                    >
+                                        {isLoading ? (
+                                            <>
+                                                <div className="animate-spin rounded-full h-5 w-5 border-b-2 border-white mr-2"></div>
+                                                Envoi en cours...
+                                            </>
+                                        ) : "Valider et Envoyer à l'Enseignant"}
+                                    </button>
+                                )}
                             </div>
                         </div>
                     )}

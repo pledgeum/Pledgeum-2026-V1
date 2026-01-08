@@ -1,24 +1,49 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useEffect } from 'react';
 import { X, PenTool, Mail, CheckCircle, Loader2 } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
+import { auth } from '@/lib/firebase';
 
 interface SignatureModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSign: (method: 'canvas' | 'otp', signatureImage?: string, extraAuditLog?: any) => void;
+    onSign: (method: 'canvas' | 'otp', signatureImage?: string, extraAuditLog?: any, dualSign?: boolean) => Promise<void> | void;
     title?: string;
     signeeName: string;
     signeeEmail: string;
     conventionId: string;
-    hideOtp?: boolean; // New optional prop
+    hideOtp?: boolean;
+    canSignDual?: boolean;
+    dualRoleLabel?: string;
 }
 
-export function SignatureModal({ isOpen, onClose, onSign, title = "Signer la convention", signeeName, signeeEmail, conventionId, hideOtp = false }: SignatureModalProps) {
+export function SignatureModal({
+    isOpen,
+    onClose,
+    onSign,
+    title = "Signer la convention",
+    signeeName,
+    signeeEmail,
+    conventionId,
+    hideOtp = false,
+    canSignDual = false,
+    dualRoleLabel = "Signer pour les deux rôles"
+}: SignatureModalProps) {
     const [activeTab, setActiveTab] = useState<'canvas' | 'otp'>('canvas');
     const [otpCode, setOtpCode] = useState('');
     const [otpSent, setOtpSent] = useState(false);
     const [loading, setLoading] = useState(false);
+    const [isDualSignChecked, setIsDualSignChecked] = useState(false);
     const sigCanvas = useRef<any>({});
+
+    useEffect(() => {
+        if (isOpen) {
+            setLoading(false);
+            setOtpCode('');
+            setOtpSent(false);
+            setActiveTab('canvas');
+            setIsDualSignChecked(false);
+        }
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
@@ -26,85 +51,54 @@ export function SignatureModal({ isOpen, onClose, onSign, title = "Signer la con
         sigCanvas.current.clear();
     };
 
-
-
-    const handleSignatureSave = (signature: string) => {
-        if (hideOtp) {
-            onSign('canvas', signature);
-        } else {
-            // Save image logic if needed locally, but here we switch to OTP
-            // Wait, onSign signature for OTP flows is usually done AFTER verification.
-            // But for 'canvas' flow with OTP, we usually store the image then verify.
-            // My previous logic was: setStep('otp') and trigger email.
-            // But the onSign callback expects (method, signatureImage).
-            // Let's store the signature image in state or ref to pass later?
-            // Actually, for simplicity and keeping existing flow:
-            // If hideOtp -> Call onSign('canvas', signature) directly.
-            // If !hideOtp -> Trigger OTP flow. We might lose the drawing if we switch tabs?
-            // Existing logic had tabs. Let's see handleOtpSubmit. 
-            // handleOtpSubmit generates a NEW canvas image.
-
-            // So if we sign via Canvas + OTP, do we keep the drawing?
-            // The previous implementation of SignatureModal didn't seem to combine them.
-            // It was either "Sign with Canvas" (and maybe save?) OR "Sign with OTP" (text code).
-            // Let's stick to: If Canvas Submit -> If hideOtp -> Done. If !hideOtp -> Go to OTP?
-            // Actually, standard usually is: Draw -> Save -> Done. OR Request OTP -> Verify -> Done.
-            // The prompt implies we reuse the system.
-            // For now, let's implement handleSignatureSave to:
-            // 1. If hideOtp, just finish.
-            // 2. If !hideOtp, we probably want to verify identity even if they drew.
-            // But looking at existing tabs, they are separate methods.
-            // Let's keep it simple: Canvas tab -> Draws -> Submit.
-            // If hideOtp (bulk), submit immediately.
-            // If !hideOtp, maybe we just want standard behavior (alert "Please use OTP to verify"? Or just finish?)
-            // Actually, for 'canvas' tab, if we are internal, we trust it.
-            // If external, `hideOtp` is false, so `handleCanvasSubmit` should probably just call `onSign`.
-            // Wait, looking at lines 34-35:
-            // const dataUrl = ...
-            // handleSignatureSave(dataUrl)
-
-            // So if I implement handleSignatureSave:
-            if (hideOtp) {
-                onSign('canvas', signature);
-            } else {
-                // If not hiding OTP, maybe we FORCE OTP? 
-                // Or we just allow simple signature?
-                // The previous code called onSign directly in handleCanvasSubmit.
-                // So the default behavior was "Draw -> Valid".
-                // OTP tab was an alternative.
-                // So I will just restore the direct call for now, but respect hideOtp if I want to enforce something?
-                // Actually, `hideOtp` was to SKIP OTP. If OTP is not skipped, does canvas require it?
-                // Current UI allows EITHER.
-                // So `handleSignatureSave` is just a wrapper.
-                onSign('canvas', signature);
-            }
-        }
+    const handleSignatureSave = async (signature: string) => {
+        // We pass the isDualSignChecked state to the onSign callback
+        await onSign('canvas', signature, undefined, isDualSignChecked);
     };
 
-    const handleCanvasSubmit = () => {
+    const handleCanvasSubmit = async () => {
         if (sigCanvas.current.isEmpty()) {
             alert("Veuillez signer avant de valider.");
             return;
         }
-        const dataUrl = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
-        handleSignatureSave(dataUrl);
+        setLoading(true);
+        try {
+            const dataUrl = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
+            await handleSignatureSave(dataUrl);
+        } catch (e: any) {
+            console.error(e);
+            alert(e.message || "Erreur lors de la signature");
+        } finally {
+            setLoading(false);
+        }
     };
 
     const handleSendOtp = async () => {
         setLoading(true);
         try {
+            const token = await auth.currentUser?.getIdToken();
             const res = await fetch('/api/otp/send', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token || ''}`
+                },
                 body: JSON.stringify({ email: signeeEmail, conventionId })
             });
-            if (!res.ok) throw new Error("Erreur envoi");
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || "Erreur lors de l'envoi");
+            }
             setOtpSent(true);
-        } catch (error) {
-            alert("Impossible d'envoyer le code. Vérifiez votre connexion.");
+        } catch (error: any) {
+            alert(error.message || "Impossible d'envoyer le code. Vérifiez votre connexion.");
         } finally {
             setLoading(false);
         }
+    };
+
+    const handleOtpOnSign = async (dataUrl: string, auditLog: any) => {
+        await onSign('otp', dataUrl, auditLog, isDualSignChecked);
     };
 
     const handleOtpSubmit = async () => {
@@ -114,9 +108,13 @@ export function SignatureModal({ isOpen, onClose, onSign, title = "Signer la con
         }
         setLoading(true);
         try {
+            const token = await auth.currentUser?.getIdToken();
             const res = await fetch('/api/otp/verify', {
                 method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token || ''}`
+                },
                 body: JSON.stringify({ email: signeeEmail, code: otpCode })
             });
 
@@ -150,7 +148,7 @@ export function SignatureModal({ isOpen, onClose, onSign, title = "Signer la con
 
                 // Pass the audit log from the API response
                 const { auditLog } = await res.json();
-                onSign('otp', dataUrl, auditLog);
+                await handleOtpOnSign(dataUrl, auditLog);
             } else {
                 alert("Code incorrect ou expiré.");
             }
@@ -185,14 +183,16 @@ export function SignatureModal({ isOpen, onClose, onSign, title = "Signer la con
                         <PenTool className="w-4 h-4" />
                         <span>Dessiner</span>
                     </button>
-                    <button
-                        onClick={() => setActiveTab('otp')}
-                        className={`flex-1 py-3 text-sm font-medium flex items-center justify-center space-x-2 transition-colors ${activeTab === 'otp' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'
-                            }`}
-                    >
-                        <Mail className="w-4 h-4" />
-                        <span>Code OTP</span>
-                    </button>
+                    {!hideOtp && (
+                        <button
+                            onClick={() => setActiveTab('otp')}
+                            className={`flex-1 py-3 text-sm font-medium flex items-center justify-center space-x-2 transition-colors ${activeTab === 'otp' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'
+                                }`}
+                        >
+                            <Mail className="w-4 h-4" />
+                            <span>Code OTP</span>
+                        </button>
+                    )}
                 </div>
 
                 {/* Content */}
@@ -211,12 +211,30 @@ export function SignatureModal({ isOpen, onClose, onSign, title = "Signer la con
                                 <span>Certifié conforme</span>
                                 <button onClick={handleClear} className="text-red-500 hover:underline">Effacer</button>
                             </div>
+
+                            {/* Dual Sign Checkbox for Canvas */}
+                            {canSignDual && (
+                                <div className="flex items-start space-x-2 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                    <input
+                                        type="checkbox"
+                                        id="dualSignCanvas"
+                                        checked={isDualSignChecked}
+                                        onChange={(e) => setIsDualSignChecked(e.target.checked)}
+                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-0.5"
+                                    />
+                                    <label htmlFor="dualSignCanvas" className="text-sm font-medium text-blue-900 cursor-pointer select-none text-justify">
+                                        {dualRoleLabel}
+                                    </label>
+                                </div>
+                            )}
+
                             <button
                                 onClick={handleCanvasSubmit}
-                                className="w-full mt-4 py-2.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-lg shadow-sm transition-colors flex items-center justify-center space-x-2"
+                                disabled={loading}
+                                className="w-full mt-4 py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold rounded-lg shadow-sm transition-colors flex items-center justify-center space-x-2"
                             >
-                                <PenTool className="w-4 h-4" />
-                                <span>Signer et Valider</span>
+                                {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <PenTool className="w-4 h-4" />}
+                                <span>{loading ? 'Validation en cours...' : 'Signer et Valider'}</span>
                             </button>
                         </div>
                     ) : (
@@ -258,6 +276,23 @@ export function SignatureModal({ isOpen, onClose, onSign, title = "Signer la con
                                             maxLength={4}
                                         />
                                     </div>
+
+                                    {/* Dual Sign Checkbox for OTP */}
+                                    {canSignDual && (
+                                        <div className="flex items-start space-x-2 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                            <input
+                                                type="checkbox"
+                                                id="dualSignOtp"
+                                                checked={isDualSignChecked}
+                                                onChange={(e) => setIsDualSignChecked(e.target.checked)}
+                                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-0.5"
+                                            />
+                                            <label htmlFor="dualSignOtp" className="text-sm font-medium text-blue-900 cursor-pointer select-none text-justify">
+                                                {dualRoleLabel}
+                                            </label>
+                                        </div>
+                                    )}
+
                                     <button
                                         onClick={handleOtpSubmit}
                                         disabled={loading}

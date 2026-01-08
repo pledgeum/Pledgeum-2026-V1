@@ -7,6 +7,7 @@ import { SignatureModal } from './SignatureModal';
 import dynamic from 'next/dynamic';
 import { AttestationPdf } from '../pdf/AttestationPdf';
 import { calculateEffectiveInternshipDays } from '@/lib/calculations';
+import { isPublicHoliday } from '@/lib/holidays';
 import QRCode from 'qrcode';
 import { generateVerificationUrl } from '@/app/actions/sign';
 
@@ -47,7 +48,9 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
         activites: convention.activites || convention.stage_activites || '',
         competences: convention.attestation_competences || '',
         gratification: convention.attestation_gratification || '0',
-        faitA: convention.attestation_fait_a || convention.ent_adresse?.split(',').pop()?.trim() || 'Paris'
+        faitA: convention.attestation_fait_a || convention.ent_adresse?.split(',').pop()?.trim() || 'Paris',
+        holidaysEncountered: [] as string[], // New field for display
+        absencesCount: 0 // New field for display
     });
 
     // Local state for new absence
@@ -60,14 +63,77 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
     // Auto-calculate days when absences or schedule change
     useEffect(() => {
         if (!isReadOnly && !convention.attestation_total_jours) {
-            // Use the precise calculation based on schedule and dates
-            const days = calculateEffectiveInternshipDays(
-                convention.stage_date_debut,
-                convention.stage_date_fin,
-                convention.stage_horaires,
-                absences
-            );
-            setDocData(prev => ({ ...prev, totalJours: days }));
+            // Precise Calculation based on:
+            // 1. Weekly Schedule (Grille Horaire)
+            // 2. Public Holidays (Excluded)
+            // 3. Absences (Excluded)
+
+            const start = new Date(convention.stage_date_debut);
+            const end = new Date(convention.stage_date_fin);
+            let totalDays = 0;
+            let holidaysFound: string[] = [];
+
+            // Clone to avoid infinite loop
+            const current = new Date(start);
+
+            // Map absences to simple date strings YYYY-MM-DD for fast lookup
+            // Note: Absences in store have ISO string in .date
+            const absenceDates = new Set(absences.map(a => new Date(a.date).toISOString().split('T')[0]));
+            let absenceDaysCount = 0;
+
+            while (current <= end) {
+                const dayOfWeek = current.getDay(); // 0 = Sun, 1 = Mon ...
+                // Check Schedule
+                // Map JS getDay() to our Schedule keys: 1->lundi, 2->mardi...
+                // Only count if convention says it's a workday
+                let isWorkDay = false;
+
+                // Helper to check schedule hours
+                const checkDay = (dayName: string) => {
+                    const hours = convention.stage_horaires?.[dayName as keyof typeof convention.stage_horaires];
+                    // If hours are defined and not "Repos" and duration > 0
+                    if (hours && hours.matin_debut && hours.matin_fin) return true; // simplified check
+                    // Or check total hours per day if available?
+                    // Let's assume valid presence if any time slot is filled
+                    if (hours && (hours.matin_debut !== '' || hours.apres_midi_debut !== '')) return true;
+                    return false;
+                };
+
+                switch (dayOfWeek) {
+                    case 1: if (checkDay('lundi')) isWorkDay = true; break;
+                    case 2: if (checkDay('mardi')) isWorkDay = true; break;
+                    case 3: if (checkDay('mercredi')) isWorkDay = true; break;
+                    case 4: if (checkDay('jeudi')) isWorkDay = true; break;
+                    case 5: if (checkDay('vendredi')) isWorkDay = true; break;
+                    case 6: if (checkDay('samedi')) isWorkDay = true; break;
+                    case 0: if (checkDay('dimanche')) isWorkDay = true; break;
+                }
+
+                if (isWorkDay) {
+                    // Check exclusion: Public Holiday
+                    if (isPublicHoliday(current)) {
+                        holidaysFound.push(current.toLocaleDateString());
+                    } else {
+                        // Check exclusion: Absence
+                        const dateStr = current.toISOString().split('T')[0];
+                        if (absenceDates.has(dateStr)) {
+                            absenceDaysCount++;
+                        } else {
+                            totalDays++;
+                        }
+                    }
+                }
+
+                // Next day
+                current.setDate(current.getDate() + 1);
+            }
+
+            setDocData(prev => ({
+                ...prev,
+                totalJours: totalDays,
+                holidaysEncountered: holidaysFound,
+                absencesCount: absenceDaysCount
+            }));
         }
     }, [absences, convention.stage_date_debut, convention.stage_date_fin, convention.stage_horaires, isReadOnly, convention.attestation_total_jours]);
 
@@ -151,6 +217,8 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
     };
 
     // Prepare data for PDF
+    const plannedHours = convention.stage_duree_heures || 0;
+    const effectiveHours = Math.max(0, plannedHours - totalAbsenceHours);
     const pdfConvention = { ...convention, ...docData };
 
     return (
@@ -179,67 +247,82 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
                     {view === 'document' ? (
                         <div className="space-y-6 text-sm leading-relaxed text-gray-800 font-serif">
                             {/* Header Text */}
-                            <div className="text-center font-bold text-lg border-b-2 border-black pb-4 mb-6">
-                                ANNEXE 3 : ATTESTATION DE STAGE TYPE
+                            <div className="text-center font-bold text-xl text-blue-800 mb-6 uppercase">
+                                ANNEXE 3 : ATTESTATION DE STAGE
                             </div>
 
-                            <p className="italic text-gray-600 mb-4">
-                                Conformément à l’article D. 124-9 du code de l’éducation, une attestation de stage est délivrée par l’organisme d’accueil à tout élève.<br />
-                                Ce document doit être complété et signé le dernier jour du stage par un responsable autorisé de l’entreprise d’accueil.<br />
+                            <p className="text-justify text-gray-800 mb-6">
+                                Conformément à l’article D. 124-9 du code de l’éducation, une attestation de stage est délivrée par l’organisme d’accueil à tout élève.
+                                Ce document doit être complété et signé le dernier jour du stage par un responsable autorisé de l’entreprise d’accueil.
                                 Elle est remise au lycéen stagiaire, et également remise à l’établissement scolaire.
                             </p>
 
                             {/* Body */}
-                            <div className="space-y-4">
+                            <div className="space-y-6">
                                 {/* Company Info */}
-                                <div className="bg-gray-50 p-4 border border-gray-200 rounded">
-                                    <p><strong>L’entreprise (ou l’organisme d’accueil) :</strong></p>
-                                    <div className="grid grid-cols-2 gap-4 mt-2">
-                                        <div>Nom : <strong>{convention.ent_nom}</strong></div>
-                                        <div>Adresse : {convention.ent_adresse}</div>
-                                        <div>N° d’immatriculation : {convention.ent_siret}</div>
+                                <div>
+                                    <h4 className="font-bold text-blue-800 uppercase border-b border-blue-800 mb-2 pb-1">L’entreprise (ou l’organisme d’accueil)</h4>
+                                    <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+                                        <div className="flex"><span className="font-bold w-1/3">Nom :</span> <span>{convention.ent_nom}</span></div>
+                                        <div className="flex"><span className="font-bold w-1/3">N° Siret :</span> <span>{convention.ent_siret}</span></div>
+                                        <div className="flex col-span-2"><span className="font-bold w-[16.5%]">Adresse :</span> <span>{convention.ent_adresse}</span></div>
                                     </div>
-                                    <div className="mt-2 text-blue-800">
-                                        Représenté(e) par : <strong>{convention.ent_rep_nom}</strong> <span className="mx-2">|</span> Fonction : {convention.ent_rep_fonction}
+                                    <div className="grid grid-cols-2 gap-x-8 gap-y-2 mt-2">
+                                        <div className="flex"><span className="font-bold w-1/3">Représenté(e) par :</span> <span>{convention.ent_rep_nom}</span></div>
+                                        <div className="flex"><span className="font-bold w-1/3">Fonction :</span> <span>{convention.ent_rep_fonction}</span></div>
                                     </div>
                                 </div>
 
                                 {/* Student Info */}
-                                <div className="mt-6">
-                                    <p className="font-bold mb-2">Atteste que l’élève désigné ci-dessous :</p>
-                                    <div className="grid grid-cols-2 gap-4 ml-4">
-                                        <div>Prénom : <strong>{convention.eleve_prenom}</strong></div>
-                                        <div>Nom : <strong>{convention.eleve_nom}</strong></div>
-                                        <div>Classe : {convention.eleve_classe}</div>
-                                        <div>Date de naissance : {new Date(convention.eleve_date_naissance).toLocaleDateString()}</div>
+                                <div>
+                                    <h4 className="font-bold text-blue-800 uppercase border-b border-blue-800 mb-2 pb-1">Atteste que l’élève</h4>
+                                    <div className="grid grid-cols-2 gap-x-8 gap-y-2">
+                                        <div className="flex"><span className="font-bold w-1/3">Prénom :</span> <span>{convention.eleve_prenom}</span></div>
+                                        <div className="flex"><span className="font-bold w-1/3">Nom :</span> <span>{convention.eleve_nom}</span></div>
+                                        <div className="flex"><span className="font-bold w-1/3">Classe :</span> <span>{convention.eleve_classe}</span></div>
+                                        <div className="flex"><span className="font-bold w-1/3">Né(e) le :</span> <span>{new Date(convention.eleve_date_naissance).toLocaleDateString()}</span></div>
                                     </div>
                                 </div>
 
                                 {/* School Info */}
-                                <div className="mt-4 ml-4">
-                                    <p className="underline mb-1">Scolarisé dans l’établissement ci-après :</p>
-                                    <div>Nom : {convention.ecole_nom}</div>
-                                    <div>Adresse : {convention.ecole_adresse}</div>
-                                    <div>Représenté par : <strong>{convention.ecole_chef_nom}</strong> en qualité de chef d’établissement</div>
+                                <div>
+                                    <h4 className="font-bold text-blue-800 uppercase border-b border-blue-800 mb-2 pb-1">Scolarisé dans l’établissement</h4>
+                                    <div className="space-y-2">
+                                        <div className="flex"><span className="font-bold w-[16.5%]">Nom :</span> <span>{convention.ecole_nom}</span></div>
+                                        <div className="flex"><span className="font-bold w-[16.5%]">Adresse :</span> <span>{convention.ecole_adresse}</span></div>
+                                        <div className="flex"><span className="font-bold w-[16.5%]">Chef d'étab. :</span> <span>{convention.ecole_chef_nom}</span></div>
+                                    </div>
                                 </div>
 
                                 {/* Internship Details */}
-                                <div className="mt-6 bg-blue-50 p-4 border border-blue-100 rounded">
-                                    <p>
-                                        a effectué un stage dans notre entreprise ou organisme <br />
-                                        du <strong>{new Date(convention.stage_date_debut).toLocaleDateString()}</strong> au <strong>{new Date(convention.stage_date_fin || '').toLocaleDateString()}</strong>
-                                    </p>
-                                    <div className="mt-4 flex items-center gap-2">
-                                        <span>Soit une durée effective totale de :</span>
-                                        <input
-                                            type="number"
-                                            disabled={isReadOnly}
-                                            className="w-20 p-1 border rounded font-bold text-center disabled:bg-gray-100"
-                                            value={docData.totalJours}
-                                            onChange={e => setDocData({ ...docData, totalJours: Number(e.target.value) })}
-                                        />
-                                        <span>jours</span>
-                                        <span className="text-xs text-gray-500 ml-2">(Calculé d'après planning et absences)</span>
+                                <div>
+                                    <h4 className="font-bold text-blue-800 uppercase border-b border-blue-800 mb-2 pb-1">Période de formation</h4>
+                                    <div>
+                                        <div className="flex items-baseline mb-2">
+                                            <span className="font-bold w-[16.5%]">Dates :</span>
+                                            <span>Du <strong>{new Date(convention.stage_date_debut).toLocaleDateString()}</strong> au <strong>{new Date(convention.stage_date_fin || '').toLocaleDateString()}</strong></span>
+                                        </div>
+                                        <div className="flex items-center">
+                                            <div className="flex flex-col items-start">
+                                                <div className="flex items-center">
+                                                    <span className="font-bold w-[150px]">Durée effective :</span>
+                                                    <input
+                                                        type="number"
+                                                        disabled={isReadOnly}
+                                                        className="w-16 p-0.5 border rounded font-bold text-center disabled:bg-gray-100 mx-2"
+                                                        value={docData.totalJours}
+                                                        onChange={e => setDocData({ ...docData, totalJours: Number(e.target.value) })}
+                                                    />
+                                                    <span>jours de présence</span>
+                                                </div>
+                                                {(docData.absencesCount > 0 || docData.holidaysEncountered.length > 0) && (
+                                                    <div className="ml-[158px] text-xs text-gray-500 mt-1">
+                                                        {docData.absencesCount > 0 && <div>• Dont {docData.absencesCount} jour(s) d'absence</div>}
+                                                        {docData.holidaysEncountered.length > 0 && <div>• Jours fériés : {docData.holidaysEncountered.join(', ')}</div>}
+                                                    </div>
+                                                )}
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -415,6 +498,6 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
                     conventionId={convention.id}
                 />
             </div>
-        </div> // Final closing tag fixed (was missing closing div in previous snippet? No, it was there.)
+        </div > // Final closing tag fixed (was missing closing div in previous snippet? No, it was there.)
     ); // Return close
 } // Component close

@@ -32,4 +32,8 @@ try {
     console.error("Firebase initialization failed:", error);
 }
 
-export { db, auth };
+// Initialize Storage
+import { getStorage } from "firebase/storage";
+const storage = app ? getStorage(app) : null;
+
+export { db, auth, storage };

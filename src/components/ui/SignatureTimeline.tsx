@@ -189,12 +189,17 @@ function getStepStatus(step: string, c: Convention): 'completed' | 'current' | '
             }
 
         case 'company':
-            if (s === 'VALIDATED_TEACHER') return 'current';
-            if (['SIGNED_COMPANY', 'SIGNED_TUTOR', 'VALIDATED_HEAD'].includes(s)) return 'completed';
+            if (c.signatures?.companyAt) return 'completed';
+            // Open for signing if Teacher validated, regardless of Tutor status (unless fully done)
+            if (['VALIDATED_TEACHER', 'SIGNED_COMPANY'].includes(s)) return 'current';
+            // Fallback for completion states if signature check missed (unlikely)
+            if (['SIGNED_TUTOR', 'VALIDATED_HEAD'].includes(s)) return 'completed';
             return 'pending';
 
         case 'tutor':
-            if (s === 'SIGNED_COMPANY') return 'current';
+            if (c.signatures?.tutorAt) return 'completed';
+            // Open for signing if Teacher validated, regardless of Company status
+            if (['VALIDATED_TEACHER', 'SIGNED_COMPANY'].includes(s)) return 'current';
             if (['SIGNED_TUTOR', 'VALIDATED_HEAD'].includes(s)) return 'completed';
             return 'pending';
 
