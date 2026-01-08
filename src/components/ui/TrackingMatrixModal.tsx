@@ -197,7 +197,7 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
                                             return (
                                                 <td
                                                     key={t.id}
-                                                    onClick={() => handleAssign(conv.id, t.id, t.email)}
+                                                    onClick={() => handleAssign(conv.id, t.id, t.email || '')}
                                                     className={`
                                                 relative p-0 border border-gray-200 cursor-pointer transition-all
                                                 ${isAssigned ? 'bg-green-100 hover:bg-green-200 ring-2 ring-inset ring-green-500' : 'hover:bg-blue-50'}
