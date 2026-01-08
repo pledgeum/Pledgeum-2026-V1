@@ -64,15 +64,11 @@ export async function POST(request: Request) {
             },
         });
 
-        // TEST MODE: Redirect all emails to pledgeum@gmail.com
-        const testEmail = 'pledgeum@gmail.com';
-        const updatedText = `[TEST MODE - Intended for: ${to}]\n\n${text} `;
-
         await transporter.sendMail({
             from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-            to: testEmail,
-            subject: `[TEST] ${subject} `,
-            text: updatedText,
+            to: to,
+            subject: subject,
+            text: text,
             attachments: attachments.length > 0 ? attachments : undefined,
         });
 
