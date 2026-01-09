@@ -89,8 +89,8 @@ export default function LoginPage() {
                 });
                 setFoundClassId(data.schoolId || 'global-school'); // Use dummy or real ID
 
-                // For students, we want the field to be empty so they enter their personal email
-                if (data.user.role === 'student') {
+                // For students (or implicit role), we want the field to be empty
+                if (data.user.role === 'student' || !data.user.role) {
                     setNewEmail('');
                 } else {
                     setNewEmail(data.user.email || ''); // Pre-fill for collaborators
@@ -117,6 +117,8 @@ export default function LoginPage() {
                 if (student && classId) {
                     setFoundStudent(student);
                     setFoundClassId(classId);
+                    // Ensure email is cleared for local fallback too
+                    setNewEmail('');
                     setActivationStep(2);
                 } else {
                     setError(data.error || "Identifiants invalides.");
@@ -347,6 +349,7 @@ export default function LoginPage() {
                                     <input
                                         type="email"
                                         required
+                                        autoComplete="off"
                                         className="appearance-none block w-full px-3 py-2 border border-blue-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm bg-blue-50"
                                         placeholder="votre.email@exemple.com"
                                         value={newEmail}
