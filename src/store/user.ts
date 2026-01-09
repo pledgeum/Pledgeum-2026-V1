@@ -49,7 +49,7 @@ export const useUserStore = create<UserState>((set, get) => ({
     notifications: [],
     unreadCount: 0,
     hasAcceptedTos: null,
-    isLoadingProfile: true, // Start as loading by default
+    isLoadingProfile: false,
     setUser: (name, role, email) => set({ name, role, email }),
     setRole: (role) => set({ role }),
     addNotification: (notif) => set((state) => {
