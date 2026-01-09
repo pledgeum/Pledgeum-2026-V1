@@ -13,6 +13,7 @@ const EXCLUDED_PATHS = [
     '/complete-profile',
     '/onboarding',
     '/api',
+    '/auth', // Exclude auth routes (like update-password) from global profile guard
     '/_next',
     '/favicon.ico'
 ];
