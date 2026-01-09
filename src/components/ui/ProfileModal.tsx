@@ -31,8 +31,14 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
     const [isSearchingSiret, setIsSearchingSiret] = useState(false);
 
     // Initialize form data
+    const initializedRef = React.useRef(false); // Track if we've initialized for this open session
+
     useEffect(() => {
         if (isOpen) {
+            if (initializedRef.current) return; // Already initialized, don't overwrite user edits
+
+            initializedRef.current = true; // Mark as initialized
+
             const initialData: Record<string, string> = { ...profileData };
 
             // Helper to set default if empty
@@ -147,6 +153,9 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
             }
 
             setFormData(initialData);
+        } else {
+            // Reset initialization flag when closed
+            initializedRef.current = false;
         }
     }, [isOpen, profileData, conventionDefaults, role, user]); // Added user dependency
 
