@@ -33,7 +33,7 @@ export const useProfileStatus = (): ProfileStatus => {
             if (!data.city) missing.push('city');
             if (!data.zipCode) missing.push('zipCode');
             // Class ID often mandatory for students to be assigned
-            if (!data.classId && !data.classe) missing.push('classId');
+            if (!data.classId && !data.classe && !data.class) missing.push('classId');
         }
         else if (role === 'company_head' || role === 'tutor' || role === 'company_head_tutor') {
             if (!data.companyName) missing.push('companyName');
