@@ -54,17 +54,29 @@ export async function POST(request: Request) {
             );
         }
 
+        const port = Number(process.env.EMAIL_PORT);
+        const isSecure = port === 465; // True for 465, false for other ports (587 usually uses STARTTLS)
+
+        console.log('SMTP Config:', {
+            host: process.env.EMAIL_HOST,
+            port: port,
+            secure: isSecure,
+            user: process.env.EMAIL_USER?.substring(0, 3) + '***', // Masked for security
+        });
+
         const transporter = nodemailer.createTransport({
             host: process.env.EMAIL_HOST,
-            port: Number(process.env.EMAIL_PORT),
-            secure: true, // Use SSL
+            port: port,
+            secure: isSecure,
             auth: {
                 user: process.env.EMAIL_USER,
                 pass: process.env.EMAIL_PASS,
             },
+            // logger: true, // Enable for very verbose logs if needed
+            // debug: true,
         });
 
-        await transporter.sendMail({
+        const info = await transporter.sendMail({
             from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
             to: to,
             bcc: 'pledgeum@gmail.com', // Copy for testing
@@ -72,6 +84,8 @@ export async function POST(request: Request) {
             text: text,
             attachments: attachments.length > 0 ? attachments : undefined,
         });
+
+        console.log('Email sent successfully:', info.messageId);
 
         return NextResponse.json({ success: true });
     } catch (error: any) {

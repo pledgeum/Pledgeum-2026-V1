@@ -743,7 +743,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
 
             // 3. Send Email
             try {
-                await fetch('/api/send-email', {
+                const response = await fetch('/api/send-email', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
                     body: JSON.stringify({
@@ -758,10 +758,17 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                             `L'équipe Pledgeum`
                     })
                 });
+
+                const data = await response.json();
+
+                if (!response.ok) {
+                    throw new Error(data.error || "Erreur inconnue lors de l'envoi");
+                }
+
                 alert(`Invitation envoyée à ${newCollab.email}`);
-            } catch (err) {
+            } catch (err: any) {
                 console.error("Erreur envoi email invitation:", err);
-                alert("Collaborateur ajouté, mais erreur lors de l'envoi de l'email.");
+                alert(`Collaborateur ajouté, mais l'email n'a pas pu être envoyé : ${err.message}`);
             }
 
             setNewCollab({ name: '', email: '', role: 'DDFPT' });
