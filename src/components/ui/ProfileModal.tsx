@@ -222,7 +222,15 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
 
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!user) return;
+        console.log("handleSave called");
+        if (!user) {
+            console.error("No user found");
+            return;
+        }
+
+        console.log("Role:", role);
+        console.log("Is Minor?", isMinor());
+        console.log("Form Data:", formData);
 
         // Validation for Minors
         if (role === 'student') {
