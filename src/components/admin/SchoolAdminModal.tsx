@@ -296,6 +296,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                             birthDate: dateNaiss
                             // email is optional/missing
                         };
+                        console.log("Parsed student:", student); // DEBUG log
 
                         if (!map.has(className)) {
                             map.set(className, []);
@@ -1695,21 +1696,25 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                     {/* Students List */}
                                                     <div className="max-h-40 overflow-y-auto space-y-1">
                                                         {cls.studentsList && cls.studentsList.length > 0 ? (
-                                                            cls.studentsList.map(student => (
-                                                                <div key={student.id} className="flex justify-between items-center bg-gray-50 px-2 py-1 rounded text-xs group/student">
-                                                                    <div className="flex flex-col overflow-hidden">
-                                                                        <span className="truncate">{student.firstName} {student.lastName}</span>
-                                                                        {student.birthDate && <span className="text-[10px] text-gray-500">Né(e) le {student.birthDate}</span>}
+                                                            cls.studentsList.map(student => {
+                                                                console.log("Rendering student:", student.firstName, student.dateNaiss, student.birthDate); // DEBUG
+                                                                return (
+                                                                    <div key={student.id} className="flex justify-between items-center bg-gray-50 px-2 py-1 rounded text-xs group/student">
+                                                                        <div className="flex flex-col overflow-hidden">
+                                                                            <span className="truncate">{student.firstName} {student.lastName}</span>
+                                                                            {student.birthDate && <span className="text-[10px] text-gray-500">Né(e) le {student.birthDate}</span>}
+                                                                            {/* Fallback check for debugging */}
+                                                                            {!student.birthDate && <span className="text-[10px] text-red-500">Date manquante</span>}
+                                                                        </div>
+                                                                        <span className="text-gray-400 truncate flex-1 mx-2">{student.email}</span>
+                                                                        <button
+                                                                            onClick={() => removeStudentFromClass(cls.id, student.id)}
+                                                                            className="text-gray-400 hover:text-red-500 opacity-0 group-hover/student:opacity-100"
+                                                                        >
+                                                                            <X className="w-3 h-3" />
+                                                                        </button>
                                                                     </div>
-                                                                    <span className="text-gray-400 truncate flex-1 mx-2">{student.email}</span>
-                                                                    <button
-                                                                        onClick={() => removeStudentFromClass(cls.id, student.id)}
-                                                                        className="text-gray-400 hover:text-red-500 opacity-0 group-hover/student:opacity-100"
-                                                                    >
-                                                                        <X className="w-3 h-3" />
-                                                                    </button>
-                                                                </div>
-                                                            ))
+                                                                ))
                                                         ) : (
                                                             <p className="text-xs text-center text-gray-400 italic">Aucun élève assigné.</p>
                                                         )}
