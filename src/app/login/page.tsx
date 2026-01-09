@@ -75,7 +75,10 @@ export default function LoginPage() {
             const response = await fetch('/api/verify-invitation', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ tempId, tempCode })
+                body: JSON.stringify({
+                    tempId: tempId.trim().toUpperCase(),
+                    tempCode: tempCode.trim()
+                })
             });
 
             const data = await response.json();
@@ -309,9 +312,9 @@ export default function LoginPage() {
                                             type="text"
                                             required
                                             className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                                            placeholder="Ex: dupont.jean.1"
+                                            placeholder="Ex: DUPOJEAN123"
                                             value={tempId}
-                                            onChange={(e) => setTempId(e.target.value)}
+                                            onChange={(e) => setTempId(e.target.value.toUpperCase())}
                                         />
                                     </div>
                                     <div>
