@@ -9,6 +9,7 @@ import { TeacherImportReviewModal } from './TeacherImportReviewModal';
 import { useUserStore } from '@/store/user';
 import Papa from 'papaparse';
 import { useConventionStore } from '@/store/convention'; // Imported for class cross-referencing
+import { auth } from '@/lib/firebase';
 
 // --- Checkable Dropdown Component ---
 interface CheckableDropdownProps {
@@ -743,9 +744,17 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
 
             // 3. Send Email
             try {
+                // Get Token
+                const currentUser = auth.currentUser;
+                if (!currentUser) throw new Error("Utilisateur non connecté");
+                const token = await currentUser.getIdToken();
+
                 const response = await fetch('/api/send-email', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
                     body: JSON.stringify({
                         to: newCollab.email,
                         subject: "Invitation à rejoindre Pledgeum",
