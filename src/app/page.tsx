@@ -186,14 +186,16 @@ export default function Home() {
   // Dual Role Logic
   const [dualRoleView, setDualRoleView] = useState<'company_head' | 'tutor'>('company_head');
 
+  const [hasDismissedProfileModal, setHasDismissedProfileModal] = useState(false);
+
   useEffect(() => {
     // Enforce Profile Completion
-    if (user && role && !loading && Object.keys(profileData || {}).length > 0) {
+    if (user && role && !loading && Object.keys(profileData || {}).length > 0 && !hasDismissedProfileModal) {
       if (!isProfileComplete()) {
         setIsProfileModalOpen(true);
       }
     }
-  }, [user, role, profileData, loading]);
+  }, [user, role, profileData, loading, hasDismissedProfileModal]);
 
   useEffect(() => {
     async function checkProfile() {
@@ -799,9 +801,12 @@ export default function Home() {
         )}
         <ProfileModal
           isOpen={isProfileModalOpen}
-          onClose={() => setIsProfileModalOpen(false)}
+          onClose={() => {
+            setIsProfileModalOpen(false);
+            setHasDismissedProfileModal(true);
+          }}
           conventionDefaults={getConventionsByRole(role, user.email || '', user.uid)[0]}
-          blocking={!isProfileComplete()}
+          blocking={!isProfileComplete()} // Visual indication mainly now
         />
 
         {/* Helper to find the class managed by this teacher */}
