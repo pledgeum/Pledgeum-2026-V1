@@ -307,7 +307,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
     };
 
 
-    if (!isOpen) return null;
+
 
     const renderField = (name: string, label: string, icon: React.ReactNode, type: string = "text", placeholder: string = "", disabled: boolean = false) => (
         <div className="space-y-1">
