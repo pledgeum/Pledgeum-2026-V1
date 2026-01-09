@@ -1714,7 +1714,8 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                                             <X className="w-3 h-3" />
                                                                         </button>
                                                                     </div>
-                                                                ))
+                                                                );
+                                                            })
                                                         ) : (
                                                             <p className="text-xs text-center text-gray-400 italic">Aucun élève assigné.</p>
                                                         )}
