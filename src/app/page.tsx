@@ -145,6 +145,17 @@ export default function Home() {
         return age < 18;
       })();
 
+      // Debug Profile Completion
+      const missingBasic = ['firstName', 'lastName', 'email', 'birthDate', 'schoolName'].filter(f => !profileData?.[f]);
+      if (missingBasic.length > 0) console.log("Profile Incomplete - Missing Basic:", missingBasic);
+
+      if (!basic) console.log("Profile Incomplete - Basic Failed");
+      if (!hasContact) console.log("Profile Incomplete - Contact Failed", { phone: profileData?.phone, address: profileData?.address, zip: profileData?.zipCode, city: profileData?.city });
+      if (isMinor && !hasParent) console.log("Profile Incomplete - Minor Missing Parent", { isMinor, hasParent });
+
+      const debugResult = basic && hasContact && (!isMinor || hasParent);
+      if (!debugResult) console.log("isProfileComplete RETURN FALSE");
+
       const hasParent = (
         (profileData?.legalRepresentatives && Array.isArray(profileData.legalRepresentatives) && profileData.legalRepresentatives.length > 0) ||
         (profileData?.parentName && profileData?.parentEmail && profileData?.parentPhone)

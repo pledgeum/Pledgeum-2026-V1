@@ -404,8 +404,8 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
 
                     {/* Common Fields */}
                     <div className="grid grid-cols-2 gap-4">
-                        {renderField("lastName", "Nom", <User className="w-4 h-4" />, "text", "", ["student", "teacher", "teacher_tracker"].includes(role) && !!formData.lastName)}
-                        {renderField("firstName", "Prénom", <User className="w-4 h-4" />, "text", "", ["student", "teacher", "teacher_tracker"].includes(role) && !!formData.firstName)}
+                        {renderField("lastName", "Nom", <User className="w-4 h-4" />, "text", "", ["student", "teacher", "teacher_tracker"].includes(role) && !!profileData.lastName)}
+                        {renderField("firstName", "Prénom", <User className="w-4 h-4" />, "text", "", ["student", "teacher", "teacher_tracker"].includes(role) && !!profileData.firstName)}
                     </div>
                     {renderField("email", "Email (Identifiant)", <Mail className="w-4 h-4" />, "email", "", true)}
                     {renderField("phone", "Téléphone", <Phone className="w-4 h-4" />, "tel")}
@@ -414,7 +414,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
 
                     {role === 'student' && (
                         <>
-                            {renderField("birthDate", "Date de Naissance", <Calendar className="w-4 h-4" />, "date", "", !!formData.birthDate)}
+                            {renderField("birthDate", "Date de Naissance", <Calendar className="w-4 h-4" />, "date", "", !!profileData.birthDate)}
                             {renderField("address", "Adresse Personnelle", <MapPin className="w-4 h-4" />)}
                             <div className="grid grid-cols-2 gap-4">
                                 {renderField("zipCode", "Code Postal", <MapPin className="w-4 h-4" />)}
