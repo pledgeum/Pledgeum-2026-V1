@@ -147,6 +147,12 @@ export default function LoginPage() {
                 email: email,
                 role: foundStudent.role || 'student', // Use verified role (collaborator) or fallback to student
                 name: `${foundStudent.firstName} ${foundStudent.lastName}`,
+                // Save split name for profile completion forms
+                profileData: {
+                    firstName: foundStudent.firstName,
+                    lastName: foundStudent.lastName,
+                    email: email
+                }
             });
 
             // 3. Update School Store with correct email (Linking)

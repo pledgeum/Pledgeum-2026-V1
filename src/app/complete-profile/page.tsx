@@ -60,9 +60,23 @@ const ROLE_FIELDS: Partial<Record<UserRole, FieldDef[]>> = {
     ]
 };
 
+const adminFields: FieldDef[] = [
+    { name: 'lastName', label: 'Nom', disabled: true },
+    { name: 'firstName', label: 'Prénom', disabled: true },
+    { name: 'email', label: 'Email', disabled: true },
+    { name: 'phone', label: 'Téléphone Professionnel (Optionnel)' },
+];
+
+ROLE_FIELDS['school_head'] = adminFields;
+ROLE_FIELDS['ddfpt'] = adminFields;
+ROLE_FIELDS['business_manager'] = adminFields;
+ROLE_FIELDS['assistant_manager'] = adminFields;
+ROLE_FIELDS['stewardship_secretary'] = adminFields;
+ROLE_FIELDS['at_ddfpt'] = adminFields;
+
 // Fallback for other roles
 ROLE_FIELDS['teacher_tracker'] = ROLE_FIELDS['teacher'];
-ROLE_FIELDS['company_head_tutor'] = ROLE_FIELDS['company_head']; // Superserset?
+ROLE_FIELDS['company_head_tutor'] = ROLE_FIELDS['company_head'];
 
 export default function CompleteProfilePage() {
     const { user } = useAuth();
