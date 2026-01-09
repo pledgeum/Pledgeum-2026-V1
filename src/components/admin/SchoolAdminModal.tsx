@@ -629,6 +629,62 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                 return;
             }
 
+            // 2.5 Sync with Firestore 'invitations' collection (Batch Write)
+            try {
+                const { writeBatch, doc: firestoreDoc, collection } = await import("firebase/firestore");
+                const { db } = await import("@/lib/firebase");
+
+                const batch = writeBatch(db);
+                const invitationsRef = collection(db, "invitations");
+                const currentUser = auth.currentUser;
+
+                console.log("Syncing invitations to Firestore...");
+
+                let operationCount = 0;
+                // Generate a new batch for every 500 ops if needed, but classes are usually < 35
+
+                cls.studentsList.forEach(student => {
+                    if (student.tempId && student.tempCode) {
+                        // Use tempId as Document ID for easy lookup/deduplication? 
+                        // Or just addDoc? addDoc is safer but lookups need query.
+                        // Let's use custom ID if possible to avoid duplicates, OR just addDoc.
+                        // User verification queries by tempId. 
+                        // If we re-generate, we might duplicate.
+                        // Best practice: Query existing? Too expensive.
+                        // For now: Just create new entries. The query limits to 1.
+
+                        const newInvRef = firestoreDoc(invitationsRef); // Auto-ID
+                        batch.set(newInvRef, {
+                            tempId: student.tempId,
+                            tempCode: student.tempCode,
+                            email: student.email || "", // Can be empty for students
+                            name: `${student.firstName} ${student.lastName}`,
+                            role: 'student',
+                            birthDate: student.birthDate || null, // Important for account activation
+                            schoolId: schoolName, // Using name as ID/Ref for now
+                            createdAt: new Date().toISOString(),
+                            createdBy: currentUser?.uid || "system",
+                            status: 'pending',
+                            classId: cls.id,
+                            className: cls.name
+                        });
+                        operationCount++;
+                    }
+                });
+
+                if (operationCount > 0) {
+                    await batch.commit();
+                    console.log(`Successfully synced ${operationCount} invitations to Firestore.`);
+                } else {
+                    console.warn("No students with credentials to sync.");
+                }
+
+            } catch (fsError) {
+                console.error("Firestore Sync Error:", fsError);
+                // Don't block PDF generation, but warn user?
+                alert("Attention : Impossible de synchroniser les identifiants en ligne. La connexion pourra échouer. Vérifiez votre connexion internet.");
+            }
+
             // 3. Generate PDF Blob
             console.log("Generating PDF blob...");
             const blob = await pdf(
