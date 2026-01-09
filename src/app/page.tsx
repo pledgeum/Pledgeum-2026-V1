@@ -132,13 +132,26 @@ export default function Home() {
         (profileData.address && profileData.zipCode && profileData.city)
       );
 
-      // Check Parent
+      // Check Parent (Only mandatory for minors)
+      const isMinor = (() => {
+        if (!profileData?.birthDate) return true; // Assume minor if no birth date to be safe/force completion
+        const birth = new Date(profileData.birthDate);
+        const today = new Date();
+        let age = today.getFullYear() - birth.getFullYear();
+        const m = today.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+          age--;
+        }
+        return age < 18;
+      })();
+
       const hasParent = (
         (profileData?.legalRepresentatives && Array.isArray(profileData.legalRepresentatives) && profileData.legalRepresentatives.length > 0) ||
         (profileData?.parentName && profileData?.parentEmail && profileData?.parentPhone)
       );
 
-      return basic && hasContact && hasParent;
+      // If minor, parent is required. If major, it's optional.
+      return basic && hasContact && (!isMinor || hasParent);
     }
 
     switch (role) {
