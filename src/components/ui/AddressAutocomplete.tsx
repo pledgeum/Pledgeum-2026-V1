@@ -25,7 +25,7 @@ interface BanFeature {
 }
 
 export function AddressAutocomplete({ label, value, onChange, onValidityChange, disabled, error }: AddressAutocompleteProps) {
-    const [query, setQuery] = useState(value.street ? `${value.street}, ${value.postalCode} ${value.city}` : '');
+    const [query, setQuery] = useState(value.street || '');
     const [suggestions, setSuggestions] = useState<BanFeature[]>([]);
     const [isLoading, setIsLoading] = useState(false);
     const [showSuggestions, setShowSuggestions] = useState(false);
@@ -35,7 +35,7 @@ export function AddressAutocomplete({ label, value, onChange, onValidityChange, 
     // Initial sync with value prop
     useEffect(() => {
         if (value.street && !query) {
-            setQuery(`${value.street}, ${value.postalCode} ${value.city}`);
+            setQuery(value.street);
             setIsValid(true);
             onValidityChange?.(true);
         }
@@ -84,7 +84,7 @@ export function AddressAutocomplete({ label, value, onChange, onValidityChange, 
             postalCode: postcode,
             city: city
         });
-        setQuery(`${name}, ${postcode} ${city}`);
+        setQuery(name);
         setSuggestions([]);
         setShowSuggestions(false);
         setIsValid(true);
