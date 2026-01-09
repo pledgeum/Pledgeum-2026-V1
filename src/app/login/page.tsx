@@ -85,7 +85,8 @@ export default function LoginPage() {
                 setFoundStudent({
                     firstName: data.user.name?.split(' ')[0] || 'Utilisateur',
                     lastName: data.user.name?.split(' ').slice(1).join(' ') || '',
-                    role: data.user.role // Store role for later use if needed
+                    role: data.user.role, // Store role for later use if needed
+                    birthDate: data.user.birthDate
                 });
                 setFoundClassId(data.schoolId || 'global-school'); // Use dummy or real ID
 
@@ -155,6 +156,7 @@ export default function LoginPage() {
                 email: email,
                 role: foundStudent.role || 'student', // Use verified role (collaborator) or fallback to student
                 name: `${foundStudent.firstName} ${foundStudent.lastName}`,
+                birthDate: foundStudent.birthDate, // Pass validated birth date
                 // Save split name for profile completion forms
                 profileData: {
                     firstName: foundStudent.firstName,

@@ -47,7 +47,8 @@ export async function POST(request: Request) {
                 email: data.email,
                 name: data.name,
                 role: data.role,
-                schoolId: data.schoolId || null // If we store school linkage
+                schoolId: data.schoolId || null,
+                birthDate: data.birthDate || null
             }
         });
 
