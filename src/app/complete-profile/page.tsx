@@ -162,7 +162,19 @@ export default function CompleteProfilePage() {
                     </form>
                 </div>
             </div>
-        </div>
+
+            <div className="mt-6 text-center">
+                <button
+                    onClick={() => {
+                        const { signOut } = require('firebase/auth');
+                        const { auth } = require('@/lib/firebase');
+                        signOut(auth).then(() => router.push('/login'));
+                    }}
+                    className="text-sm text-gray-500 hover:text-gray-700 underline"
+                >
+                    Se déconnecter (ce n'est pas mon compte)
+                </button>
+            </div>
+        </div >
     );
 }
-
