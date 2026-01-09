@@ -97,6 +97,7 @@ export default function Home() {
   const [verificationConvention, setVerificationConvention] = useState<Convention | null>(null);
   const [isVerificationPdfOpen, setIsVerificationPdfOpen] = useState(false);
   const [isVerificationAttestationOpen, setIsVerificationAttestationOpen] = useState(false);
+  const [allConventions, setAllConventions] = useState<Convention[]>([]); // For search functionality
   const { fetchAllConventions } = useConventionStore();
 
   // DEBUG: Track Mount/Unmount
