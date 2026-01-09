@@ -1697,7 +1697,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                     <div className="max-h-40 overflow-y-auto space-y-1">
                                                         {cls.studentsList && cls.studentsList.length > 0 ? (
                                                             cls.studentsList.map(student => {
-                                                                console.log("Rendering student:", student.firstName, student.dateNaiss, student.birthDate); // DEBUG
+                                                                console.log("Rendering student:", student.firstName, student.birthDate); // DEBUG
                                                                 return (
                                                                     <div key={student.id} className="flex justify-between items-center bg-gray-50 px-2 py-1 rounded text-xs group/student">
                                                                         <div className="flex flex-col overflow-hidden">
