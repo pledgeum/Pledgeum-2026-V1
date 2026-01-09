@@ -41,15 +41,15 @@ interface UserState {
 }
 
 export const useUserStore = create<UserState>((set, get) => ({
-    name: 'Thomas Dubois',
-    role: 'student',
-    email: 'thomas.dubois@email.com',
+    name: '',
+    role: null as unknown as UserRole, // Initialize as null to prevent premature role assumption
+    email: '',
     profileData: {}, // NEW
     monitoringTeacher: undefined,
     notifications: [],
     unreadCount: 0,
     hasAcceptedTos: null,
-    isLoadingProfile: false,
+    isLoadingProfile: true, // Start as loading by default
     setUser: (name, role, email) => set({ name, role, email }),
     setRole: (role) => set({ role }),
     addNotification: (notif) => set((state) => {

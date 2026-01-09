@@ -46,15 +46,26 @@ export async function POST(request: Request) {
             text = body.text;
         }
 
-        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS) {
-            console.error('API Error: EMAIL_USER or EMAIL_PASS variables are missing in .env.local');
+        if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !process.env.EMAIL_HOST || !process.env.EMAIL_PORT) {
+            const missing = [];
+            if (!process.env.EMAIL_USER) missing.push('EMAIL_USER');
+            if (!process.env.EMAIL_PASS) missing.push('EMAIL_PASS');
+            if (!process.env.EMAIL_HOST) missing.push('EMAIL_HOST');
+            if (!process.env.EMAIL_PORT) missing.push('EMAIL_PORT');
+
+            console.error('API Error: Missing Email Config:', missing.join(', '));
             return NextResponse.json(
-                { error: 'Email configuration missing' },
+                { error: `Configuration email manquante: ${missing.join(', ')}` },
                 { status: 500 }
             );
         }
 
         const port = Number(process.env.EMAIL_PORT);
+        if (isNaN(port)) {
+            console.error('API Error: EMAIL_PORT is not a number:', process.env.EMAIL_PORT);
+            return NextResponse.json({ error: 'Configuration email invalide (PORT)' }, { status: 500 });
+        }
+
         const isSecure = port === 465; // True for 465, false for other ports (587 usually uses STARTTLS)
 
         console.log('SMTP Config:', {

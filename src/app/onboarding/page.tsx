@@ -61,7 +61,7 @@ export default function OnboardingPage() {
 
     // Pre-fill Data
     useEffect(() => {
-        if (currentRole) {
+        if (!isLoading && currentRole) {
             setSelectedRole(currentRole);
             if (currentRole === 'student') {
                 setShowStudentForm(true);
@@ -97,9 +97,12 @@ export default function OnboardingPage() {
                         }
                     }
                 }
+            } else {
+                // For non-student roles (e.g. DDFPT), ensure we DON'T show the student form
+                setShowStudentForm(false);
             }
         }
-    }, [currentRole, user, classes, profileData]);
+    }, [currentRole, user, classes, profileData, isLoading]);
 
     const handleRoleClick = (roleId: UserRole, roleLabel: string) => {
         if (!user) return;
