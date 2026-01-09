@@ -279,24 +279,38 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
             complete: (results) => {
                 const map = new Map<string, Omit<Student, 'id'>[]>();
 
+                // Normalize keys function
+                const normalizeKey = (key: string) => key.trim().toUpperCase().replace(/[^A-Z]/g, '');
+
+                // Debug first row headers
+                if (results.data.length > 0) {
+                    console.log("Detected raw headers:", Object.keys(results.data[0]));
+                }
+
                 results.data.forEach((row: any) => {
+                    // Create normalized row map
+                    const normalizedRow: any = {};
+                    Object.keys(row).forEach(k => {
+                        normalizedRow[normalizeKey(k)] = row[k];
+                    });
+
                     // Columns: NOM;PRENOM;DATE NAISS;CLASSES
-                    const nom = row['NOM'] || row['Nom'];
-                    const prenom = row['PRENOM'] || row['Prénom'];
-                    const dateNaiss = row['DATE NAISS'] || row['Date Naiss'] || row['Né(e) le'];
-                    const classeRaw = row['CLASSES'] || row['Classe'] || row['Division'];
+                    // Normalized: NOM, PRENOM, DATENAISS, CLASSES (or NEELE)
+
+                    const nom = normalizedRow['NOM'];
+                    const prenom = normalizedRow['PRENOM'];
+                    const dateNaiss = normalizedRow['DATENAISS'] || normalizedRow['NEELE'] || normalizedRow['DATENAISSANCE'];
+                    const classeRaw = normalizedRow['CLASSES'] || normalizedRow['CLASSE'] || normalizedRow['DIVISION'];
 
                     if (nom && prenom && classeRaw) {
-                        // Handle multiple classes? Typically "2NDE1". 
+                        // ... (rest is same)
                         const className = classeRaw.split(',')[0].trim();
 
                         const student: Omit<Student, 'id'> = {
                             firstName: prenom,
                             lastName: nom,
                             birthDate: dateNaiss
-                            // email is optional/missing
                         };
-                        console.log("Parsed student:", student); // DEBUG log
 
                         if (!map.has(className)) {
                             map.set(className, []);
@@ -311,9 +325,17 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                 }));
 
                 if (structure.length > 0) {
+                    // Check if at least one student has a birth date
+                    const hasBirthDate = structure.some(c => c.students.some(s => !!s.birthDate));
+                    if (!hasBirthDate) {
+                        const detectedHeaders = results.data.length > 0 ? Object.keys(results.data[0]).join(", ") : "Vide";
+                        alert(`Attention: Aucune date de naissance trouvée. \nColonnes détectées : ${detectedHeaders}\n\nAttendu: "DATE NAISS" ou "Né(e) le"`);
+                    }
+
                     setImportReviewData(structure);
                 } else {
-                    alert("Aucune donnée valide trouvée. Vérifiez les colonnes : NOM, PRENOM, DATE NAISS, CLASSES");
+                    const headers = results.data.length > 0 ? Object.keys(results.data[0]).join(", ") : "Vide";
+                    alert(`Aucune donnée valide trouvée.\nColonnes détectées : ${headers}\n\nVérifiez les colonnes : NOM, PRENOM, DATE NAISS, CLASSES.`);
                 }
 
                 if (globalFileInputRef.current) globalFileInputRef.current.value = '';
@@ -1697,14 +1719,11 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                     <div className="max-h-40 overflow-y-auto space-y-1">
                                                         {cls.studentsList && cls.studentsList.length > 0 ? (
                                                             cls.studentsList.map(student => {
-                                                                console.log("Rendering student:", student.firstName, student.birthDate); // DEBUG
                                                                 return (
                                                                     <div key={student.id} className="flex justify-between items-center bg-gray-50 px-2 py-1 rounded text-xs group/student">
-                                                                        <div className="flex flex-col">
+                                                                        <div className="flex flex-col overflow-hidden">
                                                                             <span className="truncate">{student.firstName} {student.lastName}</span>
-                                                                            <span className="text-[10px] text-blue-600 font-bold">
-                                                                                DEBUG: {student.birthDate ? `"${student.birthDate}"` : "UNDEFINED"}
-                                                                            </span>
+                                                                            {student.birthDate && <span className="text-[10px] text-gray-500">Né(e) le {student.birthDate}</span>}
                                                                         </div>
                                                                         <span className="text-gray-400 truncate flex-1 mx-2">{student.email}</span>
                                                                         <button
