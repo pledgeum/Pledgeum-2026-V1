@@ -243,7 +243,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
     const [expandedClassId, setExpandedClassId] = useState<string | null>(null);
     const [expandedStudentClassId, setExpandedStudentClassId] = useState<string | null>(null); // New state for student drawer
     const [newTeacher, setNewTeacher] = useState({ firstName: '', lastName: '', email: '' });
-    const [newStudent, setNewStudent] = useState({ firstName: '', lastName: '', email: '' }); // New Student State
+    const [newStudent, setNewStudent] = useState({ firstName: '', lastName: '', email: '', birthDate: '' }); // New Student State
     const [newClass, setNewClass] = useState({
         name: '',
         mef: '',
@@ -803,9 +803,9 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
 
     const handleAddStudent = (e: React.FormEvent, classId: string) => {
         e.preventDefault();
-        if (newStudent.firstName && newStudent.lastName && newStudent.email) {
+        if (newStudent.firstName && newStudent.lastName && newStudent.birthDate) {
             addStudentToClass(classId, newStudent);
-            setNewStudent({ firstName: '', lastName: '', email: '' });
+            setNewStudent({ firstName: '', lastName: '', email: '', birthDate: '' });
         }
     };
 
@@ -1759,12 +1759,12 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                             required
                                                         />
                                                         <input
-                                                            placeholder="Email"
-                                                            type="email"
-                                                            value={newStudent.email}
-                                                            onChange={e => setNewStudent({ ...newStudent, email: e.target.value })}
+                                                            placeholder="DD/MM/YYYY"
+                                                            value={newStudent.birthDate || ''}
+                                                            onChange={e => setNewStudent({ ...newStudent, birthDate: e.target.value })}
                                                             className="col-span-2 text-xs border border-gray-300 rounded px-2 py-1"
                                                             required
+                                                            maxLength={10}
                                                         />
                                                         <button type="submit" className="col-span-1 bg-orange-600 text-white rounded flex items-center justify-center hover:bg-orange-700">
                                                             <UserPlus className="w-3 h-3" />
