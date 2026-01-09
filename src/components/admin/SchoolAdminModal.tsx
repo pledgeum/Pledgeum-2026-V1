@@ -2017,7 +2017,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                     <p className="font-bold text-blue-700">NOM, PRENOM, DATE NAISS, CLASSES (ex: 2NDE1, 2NDE2,...)</p>
                                     <br />
                                     <p className="font-bold text-gray-700 mb-1">Exemple :</p>
-                                    <p>NOM, PRENOM, DATE NAISS, CLASSES</p>
+                                    <p>NOM, PRENOM, DATE NAISS, CLASSES (ex: 2NDE1, 2NDE2,...)</p>
                                     <p className="text-gray-500">ADAM, JULIEN BRUNO, 09/09/1982, -1STI2D1, -1STI2D2, -2D1, -2D10</p>
                                 </div>
                             ) : (
