@@ -760,19 +760,27 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
 
                 // ... Actually let's do it inside the try block
 
-                const { collection, addDoc } = await import("firebase/firestore");
-                const { db } = await import("@/lib/firebase");
+                try {
+                    const { collection, addDoc } = await import("firebase/firestore");
+                    const { db } = await import("@/lib/firebase");
 
-                await addDoc(collection(db, "invitations"), {
-                    tempId,
-                    tempCode,
-                    email: newCollab.email,
-                    name: newCollab.name,
-                    role: newCollab.role,
-                    createdAt: new Date().toISOString(),
-                    createdBy: currentUser.uid,
-                    status: 'pending'
-                });
+                    await addDoc(collection(db, "invitations"), {
+                        tempId,
+                        tempCode,
+                        email: newCollab.email,
+                        name: newCollab.name,
+                        role: newCollab.role,
+                        createdAt: new Date().toISOString(),
+                        createdBy: currentUser.uid,
+                        status: 'pending'
+                    });
+                    console.log("[ModalDebug] Invitation saved to Firestore.");
+                } catch (err) {
+                    console.error("[ModalDebug] Firestore save failed (non-blocking):", err);
+                }
+
+                console.log("[ModalDebug] Token for email:", token ? `Generated (${token.length} chars)` : "NULL/EMPTY");
+                console.log("[ModalDebug] Sending email to:", newCollab.email);
 
                 const response = await fetch('/api/send-email', {
                     method: 'POST',
