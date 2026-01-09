@@ -49,7 +49,8 @@ export const useProfileStatus = (): ProfileStatus => {
         }
         else if (role === 'school_head' || role === 'ddfpt' || role === 'business_manager') {
             // Admin roles usually just need contact info
-            if (!data.phone) missing.push('phone');
+            // Phone is optional for internal collaborators as data comes from invite
+            // if (!data.phone) missing.push('phone');
         }
         else if (role === 'parent') {
             if (!data.phone) missing.push('phone');

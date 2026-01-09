@@ -111,7 +111,8 @@ export default function OnboardingPage() {
                 }
             } else {
                 // For non-student roles (e.g. DDFPT), ensure we DON'T show the student form
-                setShowStudentForm(false);
+                // Redirect to dashboard immediately
+                router.push('/');
             }
         }
     }, [currentRole, user, classes, profileData, isLoading]);

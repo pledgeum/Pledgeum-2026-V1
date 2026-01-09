@@ -57,7 +57,7 @@ export default function LoginPage() {
                 return;
             }
 
-            router.push('/onboarding');
+            router.push('/');
         } catch (err: any) {
             console.error(err);
             setError("Échec de la connexion. Vérifiez vos identifiants ou créez un compte.");
@@ -161,7 +161,7 @@ export default function LoginPage() {
             }
 
             // 4. Success -> Redirect
-            router.push('/onboarding');
+            router.push('/');
         };
 
         try {
