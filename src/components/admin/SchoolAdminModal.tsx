@@ -822,12 +822,20 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
         };
 
         if (newStudent.firstName && newStudent.lastName && newStudent.birthDate) {
-            if (!isValidDate(newStudent.birthDate)) {
-                alert("Format de date invalide. Veuillez utiliser le format JJ/MM/AAAA (ex: 15/05/2005).");
+
+            // Conversion Helper: YYYY-MM-DD (Input) -> DD/MM/YYYY (Storage)
+            let dateToStore = newStudent.birthDate;
+            if (/^\d{4}-\d{2}-\d{2}$/.test(newStudent.birthDate)) {
+                const [year, month, day] = newStudent.birthDate.split('-');
+                dateToStore = `${day}/${month}/${year}`;
+            }
+
+            if (!isValidDate(dateToStore)) {
+                alert("Format de date invalide. Veuillez utiliser le sélecteur de date ou le format JJ/MM/AAAA.");
                 return;
             }
 
-            addStudentToClass(classId, newStudent);
+            addStudentToClass(classId, { ...newStudent, birthDate: dateToStore });
             setNewStudent({ firstName: '', lastName: '', email: '', birthDate: '' });
         }
     };
