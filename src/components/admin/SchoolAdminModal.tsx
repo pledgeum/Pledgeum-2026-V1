@@ -565,14 +565,23 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                     const lastName = row['Nom'] || row['nom'];
                     const firstName = row['Prénom'] || row['prenom'] || row['Prenom'];
                     const email = row['Email'] || row['email'] || row['Courriel'] || row['courriel'];
-                    if (lastName && firstName && email) students.push({ firstName, lastName, email });
+                    const birthDate = row['DATE NAISS'] || row['Date Naiss'] || row['Né(e) le'] || row['Date de naissance'];
+
+                    if (lastName && firstName && email) {
+                        students.push({
+                            firstName,
+                            lastName,
+                            email,
+                            birthDate // Add birthDate to the student object
+                        });
+                    }
                 });
 
                 if (students.length > 0) {
                     importStudents(classId, students);
                     alert(`${students.length} élèves importés avec succès.`);
                 } else {
-                    alert("Aucun élève valide trouvé dans le CSV. Vérifiez les colonnes (Nom, Prénom, Email).");
+                    alert("Aucun élève valide trouvé dans le CSV. Vérifiez les colonnes (Nom, Prénom, Email). La colonne 'DATE NAISS' est optionnelle pour afficher la date de naissance.");
                 }
                 if (studentFileInputRef.current) studentFileInputRef.current.value = '';
             },
@@ -2006,7 +2015,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                 <ul className="list-disc pl-4 space-y-1">
                                     <li>NOM</li>
                                     <li>PRENOM</li>
-                                    <li>DATE NAISS <span className="text-gray-400">(JJ/MM/AAAA)</span></li>
+                                    <li>DATE NAISS <span className="text-gray-400">(JJ/MM/AAAA) - Requis pour l'affichage</span></li>
                                     <li>CLASSES <span className="text-gray-400">(ex: 2NDE1)</span></li>
                                 </ul>
                             </div>
