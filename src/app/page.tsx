@@ -872,7 +872,7 @@ export default function Home() {
           />
         )}
         <TosModal
-          isOpen={isTosModalOpen}
+          isOpen={false} // HARDCODED FORCE CLOSE FOR DEBUG
           onClose={() => setIsTosModalOpen(false)}
         />
         <SignatureVerificationModal
