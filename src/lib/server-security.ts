@@ -5,15 +5,19 @@ import { adminAuth, adminDb } from '@/lib/firebase-admin';
 
 export async function verifyUserSession(request: Request) {
     const authHeader = request.headers.get('Authorization');
+    // console.log("[AuthDebug] Header:", authHeader ? "Present" : "Missing"); // Do not log full token for security
+
     if (!authHeader || !authHeader.startsWith('Bearer ')) {
+        console.error("[AuthDebug] Missing or invalid Authorization header");
         return null;
     }
     const token = authHeader.split('Bearer ')[1];
     try {
         const decodedToken = await adminAuth.verifyIdToken(token);
+        // console.log("[AuthDebug] Token verified for UID:", decodedToken.uid);
         return decodedToken;
-    } catch (error) {
-        console.error("Token verification failed:", error);
+    } catch (error: any) {
+        console.error("[AuthDebug] Token verification failed:", error.code, error.message);
         return null;
     }
 }
