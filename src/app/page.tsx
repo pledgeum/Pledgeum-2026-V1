@@ -803,7 +803,7 @@ export default function Home() {
           </div>
         )}
         <ProfileModal
-          isOpen={isProfileModalOpen}
+          isOpen={false} // HARDCODED FORCE CLOSE FOR DEBUG
           onClose={() => {
             console.log("Home: onClose triggered from ProfileModal");
             setIsProfileModalOpen(false);
