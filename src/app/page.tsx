@@ -802,8 +802,10 @@ export default function Home() {
         <ProfileModal
           isOpen={isProfileModalOpen}
           onClose={() => {
+            console.log("Home: onClose triggered from ProfileModal");
             setIsProfileModalOpen(false);
             setHasDismissedProfileModal(true);
+            console.log("Home: Modal closed and dismissed set to true");
           }}
           conventionDefaults={getConventionsByRole(role, user.email || '', user.uid)[0]}
           blocking={!isProfileComplete()} // Visual indication mainly now
