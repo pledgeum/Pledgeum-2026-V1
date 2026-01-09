@@ -1714,7 +1714,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                             <button
                                                                 onClick={() => studentFileInputRef.current?.click()}
                                                                 className="text-xs bg-gray-100 hover:bg-gray-200 text-gray-700 px-2 py-1 rounded flex items-center"
-                                                                title="Import CSV (Nom, Prénom, Email)"
+                                                                title="Import CSV (Nom, Prénom, Date de naissance)"
                                                             >
                                                                 <FileUp className="w-3 h-3 mr-1" /> Import CSV
                                                             </button>
@@ -1759,12 +1759,13 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                             required
                                                         />
                                                         <input
-                                                            placeholder="DD/MM/YYYY"
+                                                            placeholder="Date de naissance (JJ/MM/AAAA)"
                                                             value={newStudent.birthDate || ''}
                                                             onChange={e => setNewStudent({ ...newStudent, birthDate: e.target.value })}
                                                             className="col-span-2 text-xs border border-gray-300 rounded px-2 py-1"
                                                             required
                                                             maxLength={10}
+                                                            autoComplete="off"
                                                         />
                                                         <button type="submit" className="col-span-1 bg-orange-600 text-white rounded flex items-center justify-center hover:bg-orange-700">
                                                             <UserPlus className="w-3 h-3" />
