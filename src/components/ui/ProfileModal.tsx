@@ -6,6 +6,7 @@ import { useUserStore, UserRole } from '@/store/user';
 import { Convention } from '@/store/convention';
 import { useAuth } from '@/context/AuthContext';
 import { CitySearchResults } from './CitySearchResults';
+import { AddressAutocomplete } from './AddressAutocomplete';
 
 interface ProfileModalProps {
     isOpen: boolean;
@@ -76,9 +77,12 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                         if (rep1.phone) initialData['parentPhone'] = rep1.phone;
 
                         // Parse rep1 address (object to string)
+                        // Parse rep1 address (object to string)
                         if (rep1.address && typeof rep1.address === 'object') {
                             const a = rep1.address;
-                            initialData['parentAddress'] = `${a.street || ''} ${a.postalCode || ''} ${a.city || ''}`.trim();
+                            initialData['parentAddress'] = a.street || '';
+                            initialData['parentZip'] = a.postalCode || '';
+                            initialData['parentCity'] = a.city || '';
                         }
 
                         if (reps.length > 1) {
@@ -210,6 +214,16 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
     const handleSave = async (e: React.FormEvent) => {
         e.preventDefault();
         if (!user) return;
+
+        // Validation for Minors
+        if (role === 'student' && isMinor()) {
+            if (!formData.parentName || !formData.parentEmail || !formData.parentPhone || !formData.parentAddress || !formData.parentZip || !formData.parentCity) {
+                alert("En tant qu'élève mineur, vous devez obligatoirement renseigner les coordonnées complètes d'un responsable légal.");
+                setShowParent(true);
+                return;
+            }
+        }
+
         setLoading(true);
         try {
             const updates: Record<string, any> = { ...formData };
@@ -243,11 +257,17 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                 rep1.email = updates.parentEmail || '';
                 rep1.phone = updates.parentPhone || '';
 
-                // Address: If flat string differs from reconstructed object, update object with flat string in 'street'
-                const oldAddrStr = rep1.address ? `${rep1.address.street || ''} ${rep1.address.postalCode || ''} ${rep1.address.city || ''}`.trim() : '';
-                if (updates.parentAddress && updates.parentAddress !== oldAddrStr) {
-                    // User edited the string. Save as unstructured in street for now.
-                    rep1.address = { street: updates.parentAddress, postalCode: '', city: '' };
+                // Address: Reconstruct from split fields
+                // Logic: If user checked "Same Address", these fields should have been populated in UI state
+                if (updates.parentAddress || updates.parentZip || updates.parentCity) {
+                    rep1.address = {
+                        street: updates.parentAddress || '',
+                        postalCode: updates.parentZip || '',
+                        city: updates.parentCity || ''
+                    };
+                } else if (updates.parentAddressStr) {
+                    // Fallback if legacy string used (shouldn't happen with new UI)
+                    rep1.address = { street: updates.parentAddressStr, postalCode: '', city: '' };
                 }
 
                 const newReps = [rep1];
@@ -306,6 +326,28 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
             />
         </div>
     );
+
+    // Minor Calculation
+    const isMinor = () => {
+        if (!formData.birthDate) return false;
+        const birth = new Date(formData.birthDate);
+        const today = new Date();
+        let age = today.getFullYear() - birth.getFullYear();
+        const m = today.getMonth() - birth.getMonth();
+        if (m < 0 || (m === 0 && today.getDate() < birth.getDate())) {
+            age--;
+        }
+        return age < 18;
+    };
+
+    const isStudentMinor = role === 'student' && isMinor();
+
+    // Auto-Show Parent if Minor
+    useEffect(() => {
+        if (isStudentMinor && !showParent) {
+            setShowParent(true);
+        }
+    }, [isStudentMinor]); // Run when minor status determined
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
@@ -461,7 +503,49 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                                         {renderField("parentName", "Nom Prénom", <User className="w-4 h-4" />)}
                                         {renderField("parentEmail", "Email Parent", <Mail className="w-4 h-4" />, "email")}
                                         {renderField("parentPhone", "Téléphone Parent", <Phone className="w-4 h-4" />, "tel")}
-                                        {renderField("parentAddress", "Adresse Parent", <MapPin className="w-4 h-4" />)}
+                                        {renderField("parentPhone", "Téléphone Parent", <Phone className="w-4 h-4" />, "tel")}
+
+                                        <div className="pt-2 border-t border-blue-100 mt-2">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <input
+                                                    type="checkbox"
+                                                    id="sameAddress"
+                                                    onChange={(e) => {
+                                                        if (e.target.checked) {
+                                                            setFormData(prev => ({
+                                                                ...prev,
+                                                                parentAddress: prev.address || '',
+                                                                parentZip: prev.zipCode || '',
+                                                                parentCity: prev.city || ''
+                                                            }));
+                                                        }
+                                                    }}
+                                                    className="w-4 h-4 text-blue-600 rounded border-gray-300 focus:ring-blue-500"
+                                                />
+                                                <label htmlFor="sameAddress" className="text-sm text-gray-600">Même adresse que l'élève</label>
+                                            </div>
+
+                                            <AddressAutocomplete
+                                                label="Adresse Parent"
+                                                value={{
+                                                    street: formData.parentAddress || '',
+                                                    postalCode: formData.parentZip || '',
+                                                    city: formData.parentCity || ''
+                                                }}
+                                                onChange={(addr) => {
+                                                    setFormData(prev => ({
+                                                        ...prev,
+                                                        parentAddress: addr.street,
+                                                        parentZip: addr.postalCode,
+                                                        parentCity: addr.city
+                                                    }));
+                                                }}
+                                            />
+                                            <div className="grid grid-cols-2 gap-4 mt-2">
+                                                {renderField("parentZip", "Code Postal", <MapPin className="w-4 h-4" />)}
+                                                {renderField("parentCity", "Ville", <MapPin className="w-4 h-4" />)}
+                                            </div>
+                                        </div>
                                     </div>
                                 )}
                             </div>
