@@ -145,6 +145,11 @@ export default function Home() {
         return age < 18;
       })();
 
+      const hasParent = (
+        (profileData?.legalRepresentatives && Array.isArray(profileData.legalRepresentatives) && profileData.legalRepresentatives.length > 0) ||
+        (profileData?.parentName && profileData?.parentEmail && profileData?.parentPhone)
+      );
+
       // Debug Profile Completion
       const missingBasic = ['firstName', 'lastName', 'email', 'birthDate', 'schoolName'].filter(f => !profileData?.[f]);
       if (missingBasic.length > 0) console.log("Profile Incomplete - Missing Basic:", missingBasic);
@@ -155,11 +160,6 @@ export default function Home() {
 
       const debugResult = basic && hasContact && (!isMinor || hasParent);
       if (!debugResult) console.log("isProfileComplete RETURN FALSE");
-
-      const hasParent = (
-        (profileData?.legalRepresentatives && Array.isArray(profileData.legalRepresentatives) && profileData.legalRepresentatives.length > 0) ||
-        (profileData?.parentName && profileData?.parentEmail && profileData?.parentPhone)
-      );
 
       // If minor, parent is required. If major, it's optional.
       return basic && hasContact && (!isMinor || hasParent);
