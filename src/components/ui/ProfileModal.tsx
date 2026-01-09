@@ -394,7 +394,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                                         role === 'tutor' ? 'Tuteur' : role
                         }</p>
                     </div>
-                    <button onClick={onClose} className={`text-white/80 hover:text-white transition-colors ${blocking ? 'hidden' : ''}`}>
+                    <button onClick={onClose} className={`text-white/80 hover:text-white transition-colors`}>
                         <X className="h-6 w-6" />
                     </button>
                 </div>
@@ -722,7 +722,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                         <button
                             type="button"
                             onClick={onClose}
-                            className={`px-4 py-2 text-gray-700 font-medium hover:bg-gray-100 rounded-lg transition-colors ${blocking ? 'hidden' : ''}`}
+                            className={`px-4 py-2 text-gray-700 font-medium hover:bg-gray-100 rounded-lg transition-colors`}
                         >
                             Annuler
                         </button>
