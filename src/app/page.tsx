@@ -127,7 +127,7 @@ export default function Home() {
       // New: phone, address (object), legalRepresentatives (array)
       // Old: phone, address (string), zipCode, city, parentName...
 
-      const hasContact = (profileData?.phone) && (
+      const hasContact = (
         (profileData.address && typeof profileData.address === 'object') ||
         (profileData.address && profileData.zipCode && profileData.city)
       );
