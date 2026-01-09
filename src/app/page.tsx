@@ -197,16 +197,8 @@ export default function Home() {
 
   const [hasDismissedProfileModal, setHasDismissedProfileModal] = useState(false);
 
-  useEffect(() => {
-    // Enforce Profile Completion
-    if (user && role && !loading && Object.keys(profileData || {}).length > 0 && !hasDismissedProfileModal) {
-      if (!isProfileComplete()) {
-        // PERMANENT FIX ATTEMPT: Temporarily disable auto-open to unblock user
-        console.log("Profile incomplete but auto-open disabled for debug.");
-        // setIsProfileModalOpen(true); 
-      }
-    }
-  }, [user, role, profileData, loading, hasDismissedProfileModal]);
+  // Profile Enforcement Disabled as per user request
+  // The modal will no longer auto-open.
 
   useEffect(() => {
     async function checkProfile() {
@@ -819,7 +811,7 @@ export default function Home() {
             console.log("Home: Modal closed and dismissed set to true");
           }}
           conventionDefaults={getConventionsByRole(role, user.email || '', user.uid)[0]}
-          blocking={!isProfileComplete()} // Visual indication mainly now
+          blocking={false} // NEVER BLOCK
         />
 
         {/* Helper to find the class managed by this teacher */}
