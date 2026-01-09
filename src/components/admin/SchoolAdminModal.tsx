@@ -1700,11 +1700,11 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                                 console.log("Rendering student:", student.firstName, student.birthDate); // DEBUG
                                                                 return (
                                                                     <div key={student.id} className="flex justify-between items-center bg-gray-50 px-2 py-1 rounded text-xs group/student">
-                                                                        <div className="flex flex-col overflow-hidden">
+                                                                        <div className="flex flex-col">
                                                                             <span className="truncate">{student.firstName} {student.lastName}</span>
-                                                                            {student.birthDate && <span className="text-[10px] text-gray-500">Né(e) le {student.birthDate}</span>}
-                                                                            {/* Fallback check for debugging */}
-                                                                            {!student.birthDate && <span className="text-[10px] text-red-500">Date manquante</span>}
+                                                                            <span className="text-[10px] text-blue-600 font-bold">
+                                                                                DEBUG: {student.birthDate ? `"${student.birthDate}"` : "UNDEFINED"}
+                                                                            </span>
                                                                         </div>
                                                                         <span className="text-gray-400 truncate flex-1 mx-2">{student.email}</span>
                                                                         <button
