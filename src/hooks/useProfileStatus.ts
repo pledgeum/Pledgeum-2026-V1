@@ -12,6 +12,11 @@ export const useProfileStatus = (): ProfileStatus => {
     const { role, profileData, birthDate, name, email } = useUserStore();
 
     return useMemo(() => {
+        // BYPASS FOR SUPER ADMIN / TEST ACCOUNT
+        if (email === 'pledgeum@gmail.com') {
+            return { isComplete: true, missingFields: [] };
+        }
+
         const missing: string[] = [];
 
         // Common checks?

@@ -96,6 +96,20 @@ export default function CompleteProfilePage() {
         if (birthDate) setValue('birthDate', birthDate);
     }, [profileData, birthDate, setValue]);
 
+    // AUTOMATIC FIX FOR TEST ACCOUNT (If landing here by mistake or bad role)
+    useEffect(() => {
+        if (user?.email === 'pledgeum@gmail.com' && role === 'student') {
+            const { createUserProfile } = useUserStore.getState(); // Access store action directly
+            createUserProfile(user.uid, {
+                email: user.email,
+                role: 'school_head',
+                name: user.displayName || 'Compte Test Admin'
+            }).then(() => {
+                window.location.href = '/';
+            });
+        }
+    }, [user, role]);
+
     const onSubmit = async (data: any) => {
         if (!user?.uid) return;
         setIsSubmitting(true);
