@@ -274,8 +274,8 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
         Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
-            delimiter: ";", // As requested by user
-            encoding: "ISO-8859-1", // Common for French windows exports, though UTF-8 is standard.
+            // delimiter: ";", // Removed to allow auto-detection
+            // encoding: "ISO-8859-1", // Removed to allow auto-detection (most modern exports are UTF-8)
             complete: (results) => {
                 const map = new Map<string, Omit<Student, 'id'>[]>();
 

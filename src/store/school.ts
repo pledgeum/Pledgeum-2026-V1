@@ -392,15 +392,37 @@ export const useSchoolStore = create<SchoolState>()(
                 classes: state.classes.map((c) => {
                     if (c.id !== classId) return c;
 
-                    // Deduplicate by email only if email is present
-                    const existingEmails = new Set(c.studentsList.filter(s => s.email).map(s => s.email!.toLowerCase()));
-                    const newStudents = students
-                        .filter(s => !s.email || !existingEmails.has(s.email.toLowerCase()))
-                        .map(s => ({ ...s, id: Math.random().toString(36).substr(2, 9) }));
+                    const updatedStudentsList = [...c.studentsList];
+
+                    students.forEach(importedStudent => {
+                        const existingIndex = updatedStudentsList.findIndex(s =>
+                            (importedStudent.email && s.email && s.email.toLowerCase() === importedStudent.email.toLowerCase()) ||
+                            (s.lastName.toLowerCase() === importedStudent.lastName.toLowerCase() && s.firstName.toLowerCase() === importedStudent.firstName.toLowerCase())
+                        );
+
+                        if (existingIndex >= 0) {
+                            // Update existing student
+                            updatedStudentsList[existingIndex] = {
+                                ...updatedStudentsList[existingIndex],
+                                ...importedStudent,
+                                // Preserve existing ID
+                                id: updatedStudentsList[existingIndex].id,
+                                // Prefer imported data but keep existing if imported is empty (optional)
+                                email: importedStudent.email || updatedStudentsList[existingIndex].email,
+                                birthDate: importedStudent.birthDate || updatedStudentsList[existingIndex].birthDate
+                            };
+                        } else {
+                            // Add new student
+                            updatedStudentsList.push({
+                                ...importedStudent,
+                                id: Math.random().toString(36).substr(2, 9)
+                            });
+                        }
+                    });
 
                     return {
                         ...c,
-                        studentsList: [...c.studentsList, ...newStudents]
+                        studentsList: updatedStudentsList
                     };
                 })
             })),
@@ -461,40 +483,39 @@ export const useSchoolStore = create<SchoolState>()(
 
                     // 2. Process Students
                     const targetClass = currentClasses[targetClassIndex];
-                    const existingStudents = targetClass.studentsList;
-
+                    const updatedStudentsList = [...targetClass.studentsList];
                     const normalize = (str: string) => str.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
 
-                    const newStudentsToAdd: Student[] = [];
-
                     group.students.forEach((importedStudent) => {
-                        // Duplicate Check Strategy:
-                        // Check Name + First Name
-                        // AND (BirthDate matches OR BirthDate is missing in check)
-
-                        const isDuplicate = existingStudents.some(existing => {
+                        // Duplicate Check Strategy: Name + First Name
+                        const existingIndex = updatedStudentsList.findIndex(existing => {
                             const sameLast = normalize(existing.lastName) === normalize(importedStudent.lastName);
                             const sameFirst = normalize(existing.firstName) === normalize(importedStudent.firstName);
-                            // If DOB exists for both, check it. If not, rely on names (risky but standard fallback).
-                            const sameDob = (existing.birthDate && importedStudent.birthDate)
-                                ? existing.birthDate === importedStudent.birthDate
-                                : true; // If DOB missing, assume match if names match (conservative)
-
-                            return sameLast && sameFirst && sameDob;
+                            return sameLast && sameFirst;
                         });
 
-                        if (!isDuplicate) {
-                            newStudentsToAdd.push({
+                        if (existingIndex >= 0) {
+                            // Update existing student with new info (e.g. birthDate)
+                            updatedStudentsList[existingIndex] = {
+                                ...updatedStudentsList[existingIndex],
+                                ...importedStudent,
+                                id: updatedStudentsList[existingIndex].id,
+                                email: importedStudent.email || updatedStudentsList[existingIndex].email,
+                                birthDate: importedStudent.birthDate || updatedStudentsList[existingIndex].birthDate
+                            };
+                        } else {
+                            // Add new student
+                            updatedStudentsList.push({
                                 ...importedStudent,
                                 id: Math.random().toString(36).substr(2, 9)
                             });
                         }
                     });
 
-                    // Update the class with new students
+                    // Update the class with new/updated students
                     currentClasses[targetClassIndex] = {
                         ...targetClass,
-                        studentsList: [...targetClass.studentsList, ...newStudentsToAdd]
+                        studentsList: updatedStudentsList
                     };
                 });
 
