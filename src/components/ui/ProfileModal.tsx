@@ -394,7 +394,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                                         role === 'tutor' ? 'Tuteur' : role
                         }</p>
                     </div>
-                    <button onClick={() => { console.log("ProfileModal: X Clicked"); onClose(); }} className={`text-white/80 hover:text-white transition-colors`}>
+                    <button onClick={onClose} className={`text-white/80 hover:text-white transition-colors`}>
                         <X className="h-6 w-6" />
                     </button>
                 </div>
@@ -721,7 +721,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                     <div className="flex justify-end gap-3">
                         <button
                             type="button"
-                            onClick={() => { console.log("ProfileModal: Cancel Clicked"); onClose(); }}
+                            onClick={onClose}
                             className={`px-4 py-2 text-gray-700 font-medium hover:bg-gray-100 rounded-lg transition-colors`}
                         >
                             Annuler

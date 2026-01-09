@@ -122,6 +122,9 @@ export default function Home() {
     // Core fields for everyone
     // required.push('firstName', 'lastName', 'email'); // Usually present from auth/creation
 
+    // Super Admin Exemption
+    if (user?.email === 'pledgeum@gmail.com') return true;
+
     if (role === 'student') {
       // Check basic info
       const basic = ['firstName', 'lastName', 'email', 'birthDate', 'schoolName'].every(f => profileData?.[f]);
