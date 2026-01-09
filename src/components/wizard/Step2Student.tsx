@@ -98,7 +98,17 @@ export function Step2Student() {
                         };
                         setIfEmpty('eleve_nom', profileData.lastName);
                         setIfEmpty('eleve_prenom', profileData.firstName);
-                        setIfEmpty('eleve_date_naissance', profileData.birthDate);
+
+                        // Handle Date Format Compatibility (DD/MM/YYYY from Admin -> YYYY-MM-DD for Input)
+                        if (profileData.birthDate) {
+                            let bd = profileData.birthDate;
+                            if (bd.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                                const [d, m, y] = bd.split('/');
+                                bd = `${y}-${m}-${d}`;
+                            }
+                            setIfEmpty('eleve_date_naissance', bd);
+                        }
+
                         setIfEmpty('eleve_email', profileData.email);
                         setIfEmpty('eleve_tel', profileData.phone);
 

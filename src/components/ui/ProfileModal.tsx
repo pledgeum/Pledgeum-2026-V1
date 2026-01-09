@@ -102,7 +102,15 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                     case 'student':
                         setDefault('lastName', conventionDefaults?.eleve_nom);
                         setDefault('firstName', conventionDefaults?.eleve_prenom);
-                        setDefault('birthDate', birthDate || conventionDefaults?.eleve_date_naissance);
+
+                        let bd = birthDate || conventionDefaults?.eleve_date_naissance;
+                        // Convert DD/MM/YYYY to YYYY-MM-DD for input type="date"
+                        if (bd && bd.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                            const [d, m, y] = bd.split('/');
+                            bd = `${y}-${m}-${d}`;
+                        }
+                        setDefault('birthDate', bd);
+
                         setDefault('address', conventionDefaults?.eleve_adresse);
                         setDefault('phone', conventionDefaults?.eleve_tel);
                         setDefault('class', conventionDefaults?.eleve_classe);
