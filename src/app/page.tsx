@@ -97,8 +97,13 @@ export default function Home() {
   const [verificationConvention, setVerificationConvention] = useState<Convention | null>(null);
   const [isVerificationPdfOpen, setIsVerificationPdfOpen] = useState(false);
   const [isVerificationAttestationOpen, setIsVerificationAttestationOpen] = useState(false);
-  const [allConventions, setAllConventions] = useState<Convention[]>([]); // For search functionality
   const { fetchAllConventions } = useConventionStore();
+
+  // DEBUG: Track Mount/Unmount
+  useEffect(() => {
+    console.log("Home Component MOUNTED");
+    return () => console.log("Home Component UNMOUNTED");
+  }, []);
 
 
 
@@ -192,7 +197,9 @@ export default function Home() {
     // Enforce Profile Completion
     if (user && role && !loading && Object.keys(profileData || {}).length > 0 && !hasDismissedProfileModal) {
       if (!isProfileComplete()) {
-        setIsProfileModalOpen(true);
+        // PERMANENT FIX ATTEMPT: Temporarily disable auto-open to unblock user
+        console.log("Profile incomplete but auto-open disabled for debug.");
+        // setIsProfileModalOpen(true); 
       }
     }
   }, [user, role, profileData, loading, hasDismissedProfileModal]);
