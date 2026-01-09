@@ -749,6 +749,31 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                 if (!currentUser) throw new Error("Utilisateur non connecté");
                 const token = await currentUser.getIdToken();
 
+                // Save Invitation to Firestore (for verification later)
+                // Using 'addDoc' or 'setDoc' with auto-ID? 
+                // We don't have db import yet, need to import it or use admin API?
+                // Wait, this is CLIENT side. We should use CLIENT SDK.
+                // Import 'db' from '@/lib/firebase'
+
+                // However, we just protected this call in rules to allow create.
+                // Let's import { collection, addDoc } from "firebase/firestore"; and { db } from "@/lib/firebase";
+
+                // ... Actually let's do it inside the try block
+
+                const { collection, addDoc } = await import("firebase/firestore");
+                const { db } = await import("@/lib/firebase");
+
+                await addDoc(collection(db, "invitations"), {
+                    tempId,
+                    tempCode,
+                    email: newCollab.email,
+                    name: newCollab.name,
+                    role: newCollab.role,
+                    createdAt: new Date().toISOString(),
+                    createdBy: currentUser.uid,
+                    status: 'pending'
+                });
+
                 const response = await fetch('/api/send-email', {
                     method: 'POST',
                     headers: {

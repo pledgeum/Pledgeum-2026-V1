@@ -66,33 +66,61 @@ export default function LoginPage() {
         }
     };
 
-    const handleVerifyCredentials = (e: React.FormEvent) => {
+    const handleVerifyCredentials = async (e: React.FormEvent) => {
         e.preventDefault();
         setError(null);
+        setLoading(true);
 
-        // Find student in store
-        let student = null;
-        let classId = null;
+        try {
+            const response = await fetch('/api/verify-invitation', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ tempId, tempCode })
+            });
 
-        for (const cls of classes) {
-            const s = cls.studentsList?.find(st =>
-                st.tempId === tempId &&
-                st.tempCode === tempCode // Case sensitive? Code is usually generated Uppercase.
-            );
-            if (s) {
-                student = s;
-                classId = cls.id;
-                break;
+            const data = await response.json();
+
+            if (response.ok && data.success) {
+                // Success!
+                setFoundStudent({
+                    firstName: data.user.name?.split(' ')[0] || 'Utilisateur',
+                    lastName: data.user.name?.split(' ').slice(1).join(' ') || '',
+                    role: data.user.role // Store role for later use if needed
+                });
+                setFoundClassId(data.schoolId || 'global-school'); // Use dummy or real ID
+                setNewEmail(data.user.email || ''); // Pre-fill email
+                setActivationStep(2);
+            } else {
+                // Fallback: Check Store (for Students who are still local-only?)
+                // Or just fail. Let's keep store check as fallback for STUDENTS.
+                let student = null;
+                let classId = null;
+
+                for (const cls of classes) {
+                    const s = cls.studentsList?.find(st =>
+                        st.tempId === tempId &&
+                        st.tempCode === tempCode
+                    );
+                    if (s) {
+                        student = s;
+                        classId = cls.id;
+                        break;
+                    }
+                }
+
+                if (student && classId) {
+                    setFoundStudent(student);
+                    setFoundClassId(classId);
+                    setActivationStep(2);
+                } else {
+                    setError(data.error || "Identifiants invalides.");
+                }
             }
-        }
-
-        if (student && classId) {
-            setFoundStudent(student);
-            setFoundClassId(classId);
-            setActivationStep(2);
-
-        } else {
-            setError("Identifiants provisoires invalides. Vérifiez votre fiche PDF.");
+        } catch (err) {
+            console.error(err);
+            setError("Erreur technique lors de la vérification.");
+        } finally {
+            setLoading(false);
         }
     };
 
@@ -115,10 +143,9 @@ export default function LoginPage() {
         }
 
         const finalizeActivation = async (uid: string, email: string) => {
-            // 2. Create User Profile
             await createUserProfile(uid, {
                 email: email,
-                role: 'student', // Force student role
+                role: foundStudent.role || 'student', // Use verified role (collaborator) or fallback to student
                 name: `${foundStudent.firstName} ${foundStudent.lastName}`,
             });
 
