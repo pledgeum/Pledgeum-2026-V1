@@ -25,7 +25,7 @@ const ROLE_FIELDS: Partial<Record<UserRole, FieldDef[]>> = {
         { name: 'address', label: 'Adresse', placeholder: '10 rue de la Paix' },
         { name: 'zipCode', label: 'Code Postal', placeholder: '75001' },
         { name: 'city', label: 'Ville', placeholder: 'Paris' },
-        { name: 'classId', label: 'Classe', placeholder: 'Ex: T.SN', disabled: true }, // Set by Admin
+        { name: 'class', label: 'Classe', placeholder: 'Ex: T.SN', disabled: true }, // Set by Admin
     ],
     company_head: [
         { name: 'companyName', label: 'Raison Sociale', placeholder: 'Ma Société' },
@@ -90,10 +90,25 @@ export default function CompleteProfilePage() {
 
     // Initialize form values
     useEffect(() => {
+        const setDateValue = (key: string, val: any) => {
+            if (typeof val === 'string' && val.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                const [d, m, y] = val.split('/');
+                setValue(key, `${y}-${m}-${d}`);
+            } else {
+                setValue(key, val);
+            }
+        };
+
         if (profileData) {
-            Object.entries(profileData).forEach(([k, v]) => setValue(k, v));
+            Object.entries(profileData).forEach(([k, v]) => {
+                if (k === 'birthDate') {
+                    setDateValue(k, v);
+                } else {
+                    setValue(k, v);
+                }
+            });
         }
-        if (birthDate) setValue('birthDate', birthDate);
+        if (birthDate) setDateValue('birthDate', birthDate);
     }, [profileData, birthDate, setValue]);
 
     // AUTOMATIC FIX FOR TEST ACCOUNT (If landing here by mistake or bad role)

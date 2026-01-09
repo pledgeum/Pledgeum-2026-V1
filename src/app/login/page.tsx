@@ -89,7 +89,9 @@ export default function LoginPage() {
                     firstName: data.user.name?.split(' ')[0] || 'Utilisateur',
                     lastName: data.user.name?.split(' ').slice(1).join(' ') || '',
                     role: data.user.role, // Store role for later use if needed
-                    birthDate: data.user.birthDate
+                    birthDate: data.user.birthDate,
+                    className: data.user.className,
+                    classId: data.user.classId
                 });
                 setFoundClassId(data.schoolId || 'global-school'); // Use dummy or real ID
 
@@ -164,7 +166,8 @@ export default function LoginPage() {
                 profileData: {
                     firstName: foundStudent.firstName,
                     lastName: foundStudent.lastName,
-                    email: email
+                    email: email,
+                    class: foundStudent.className // Save Class Name
                 }
             });
 

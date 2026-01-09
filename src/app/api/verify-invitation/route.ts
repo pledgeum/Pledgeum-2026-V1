@@ -48,7 +48,9 @@ export async function POST(request: Request) {
                 name: data.name,
                 role: data.role,
                 schoolId: data.schoolId || null,
-                birthDate: data.birthDate || null
+                birthDate: data.birthDate || null,
+                classId: data.classId || null,
+                className: data.className || null
             }
         });
 
