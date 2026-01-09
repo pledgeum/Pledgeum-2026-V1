@@ -241,6 +241,16 @@ export default function CompleteProfilePage() {
                     Se déconnecter (ce n'est pas mon compte)
                 </button>
             </div>
+
+            {/* EMERGENCY EXIT BUTTON added for blocking issues */}
+            <div className="mt-4 text-center">
+                <button
+                    onClick={() => window.location.href = '/'}
+                    className="text-sm text-blue-600 hover:text-blue-800 underline font-bold"
+                >
+                    ← Retourner à l'accueil (Sortir de la boucle)
+                </button>
+            </div>
         </div >
     );
 }
