@@ -719,7 +719,7 @@ export default function Home() {
           <h1 className="text-2xl font-bold text-gray-900">
             Tableau de Bord {role === 'company_head_tutor'
               ? (dualRoleView === 'company_head' ? "Chef d'Entreprise" : "Tuteur")
-              : roleLabels[role]}
+              : roleLabels[role]} <span className="text-red-600 text-sm ml-2">(VERSION DEBUG 2.0 - FIX APPLIQUÉ)</span>
           </h1>
           <p className="text-gray-500 mt-1">Gérez vos conventions de stage et signatures.</p>
 
