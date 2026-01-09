@@ -288,7 +288,7 @@ export default function LoginPage() {
                                 Activation Compte Élève
                             </h2>
                             {activationStep === 1 && (
-                                <p className="mt-2 text-sm text-gray-600">Entrez les identifiants reçus (PDF)</p>
+                                <p className="mt-2 text-sm text-gray-600">Entrez les identifiants reçus</p>
                             )}
                             {activationStep === 2 && (
                                 <p className="mt-2 text-sm text-green-600 font-medium flex justify-center items-center">
