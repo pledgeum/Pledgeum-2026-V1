@@ -88,7 +88,13 @@ export default function LoginPage() {
                     role: data.user.role // Store role for later use if needed
                 });
                 setFoundClassId(data.schoolId || 'global-school'); // Use dummy or real ID
-                setNewEmail(data.user.email || ''); // Pre-fill email
+
+                // For students, we want the field to be empty so they enter their personal email
+                if (data.user.role === 'student') {
+                    setNewEmail('');
+                } else {
+                    setNewEmail(data.user.email || ''); // Pre-fill for collaborators
+                }
                 setActivationStep(2);
             } else {
                 // Fallback: Check Store (for Students who are still local-only?)
