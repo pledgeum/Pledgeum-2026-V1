@@ -1647,7 +1647,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                                 <Lock className="w-3 h-3 mr-1" /> Identifiants PDF
                                                             </button>
                                                             <button
-                                                                onClick={() => alert("Format CSV attendu :\n\nUne ligne d'en-tête est requise avec les colonnes suivantes :\nNom, Prénom, Email\n\nExemple :\nNom,Prénom,Email\nDupont,Jean,jean.dupont@email.com")}
+                                                                onClick={() => alert("Format CSV attendu :\n\nUne ligne d'en-tête est requise avec les colonnes suivantes :\nNOM, PRENOM, DATE NAISS, CLASSES\n\nExemple :\nNOM,PRENOM,DATE NAISS,CLASSES\nACHOUD,Ehia,06/05/2011,2D10")}
                                                                 className="text-gray-400 hover:text-blue-600 transition-colors"
                                                                 title="Aide format CSV"
                                                             >
