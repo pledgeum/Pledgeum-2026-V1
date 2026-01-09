@@ -6,6 +6,7 @@ import { useProfileStatus } from '@/hooks/useProfileStatus';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
 import { useAuth } from '@/context/AuthContext';
+import { AddressAutocomplete } from '@/components/ui/AddressAutocomplete';
 
 // Field Configuration
 interface FieldDef {
@@ -21,7 +22,7 @@ const ROLE_FIELDS: Partial<Record<UserRole, FieldDef[]>> = {
         { name: 'lastName', label: 'Nom', disabled: true },
         { name: 'firstName', label: 'Prénom', disabled: true },
         { name: 'birthDate', label: 'Date de naissance', type: 'date', disabled: true },
-        { name: 'phone', label: 'Téléphone', type: 'tel', placeholder: '06 12 34 56 78' },
+        { name: 'phone', label: 'Téléphone (Optionnel)', type: 'tel', placeholder: '06 12 34 56 78' },
         { name: 'address', label: 'Adresse', placeholder: '10 rue de la Paix' },
         { name: 'zipCode', label: 'Code Postal', placeholder: '75001' },
         { name: 'city', label: 'Ville', placeholder: 'Paris' },
@@ -163,6 +164,28 @@ export default function CompleteProfilePage() {
 
                         {fieldsToShow.map((field) => {
                             const isMissing = missingFields.includes(field.name);
+
+                            if (field.name === 'address') {
+                                return (
+                                    <AddressAutocomplete
+                                        key={field.name}
+                                        label={field.label}
+                                        value={{
+                                            street: profileData?.address || '',
+                                            postalCode: profileData?.zipCode || '',
+                                            city: profileData?.city || ''
+                                        }}
+                                        onChange={(addr) => {
+                                            setValue('address', addr.street, { shouldValidate: true });
+                                            setValue('zipCode', addr.postalCode, { shouldValidate: true });
+                                            setValue('city', addr.city, { shouldValidate: true });
+                                        }}
+                                        error={isMissing}
+                                        disabled={field.disabled}
+                                    />
+                                );
+                            }
+
                             return (
                                 <div key={field.name}>
                                     <label htmlFor={field.name} className="block text-sm font-medium text-gray-700">

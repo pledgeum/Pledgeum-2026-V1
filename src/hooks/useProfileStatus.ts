@@ -27,7 +27,8 @@ export const useProfileStatus = (): ProfileStatus => {
 
         if (role === 'student') {
             if (!birthDate) missing.push('birthDate');
-            if (!data.phone) missing.push('phone');
+            // Phone is optional for students as requested
+            // if (!data.phone) missing.push('phone');
             if (!data.address) missing.push('address');
             if (!data.city) missing.push('city');
             if (!data.zipCode) missing.push('zipCode');
