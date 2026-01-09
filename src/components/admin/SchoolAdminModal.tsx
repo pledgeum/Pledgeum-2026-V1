@@ -803,7 +803,30 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
 
     const handleAddStudent = (e: React.FormEvent, classId: string) => {
         e.preventDefault();
+
+        // Strict Date Validation (DD/MM/YYYY)
+        const isValidDate = (dateStr: string) => {
+            const regex = /^(\d{2})\/(\d{2})\/(\d{4})$/;
+            const match = dateStr.match(regex);
+            if (!match) return false;
+
+            const day = parseInt(match[1], 10);
+            const month = parseInt(match[2], 10);
+            const year = parseInt(match[3], 10);
+
+            if (year < 1900 || year > new Date().getFullYear()) return false;
+            if (month < 1 || month > 12) return false;
+
+            const daysInMonth = new Date(year, month, 0).getDate();
+            return day > 0 && day <= daysInMonth;
+        };
+
         if (newStudent.firstName && newStudent.lastName && newStudent.birthDate) {
+            if (!isValidDate(newStudent.birthDate)) {
+                alert("Format de date invalide. Veuillez utiliser le format JJ/MM/AAAA (ex: 15/05/2005).");
+                return;
+            }
+
             addStudentToClass(classId, newStudent);
             setNewStudent({ firstName: '', lastName: '', email: '', birthDate: '' });
         }
@@ -1766,6 +1789,8 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                             required
                                                             maxLength={10}
                                                             autoComplete="off"
+                                                            pattern="\d{2}/\d{2}/\d{4}"
+                                                            title="Format attendu : JJ/MM/AAAA"
                                                         />
                                                         <button type="submit" className="col-span-1 bg-orange-600 text-white rounded flex items-center justify-center hover:bg-orange-700">
                                                             <UserPlus className="w-3 h-3" />
