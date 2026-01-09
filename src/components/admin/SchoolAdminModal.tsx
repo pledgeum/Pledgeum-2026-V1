@@ -284,7 +284,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
 
                 // Debug first row headers
                 if (results.data.length > 0) {
-                    console.log("Detected raw headers:", Object.keys(results.data[0]));
+                    console.log("Detected raw headers:", Object.keys(results.data[0] as object));
                 }
 
                 results.data.forEach((row: any) => {
@@ -328,13 +328,13 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                     // Check if at least one student has a birth date
                     const hasBirthDate = structure.some(c => c.students.some(s => !!s.birthDate));
                     if (!hasBirthDate) {
-                        const detectedHeaders = results.data.length > 0 ? Object.keys(results.data[0]).join(", ") : "Vide";
+                        const detectedHeaders = results.data.length > 0 ? Object.keys(results.data[0] as object).join(", ") : "Vide";
                         alert(`Attention: Aucune date de naissance trouvée. \nColonnes détectées : ${detectedHeaders}\n\nAttendu: "DATE NAISS" ou "Né(e) le"`);
                     }
 
                     setImportReviewData(structure);
                 } else {
-                    const headers = results.data.length > 0 ? Object.keys(results.data[0]).join(", ") : "Vide";
+                    const headers = results.data.length > 0 ? Object.keys(results.data[0] as object).join(", ") : "Vide";
                     alert(`Aucune donnée valide trouvée.\nColonnes détectées : ${headers}\n\nVérifiez les colonnes : NOM, PRENOM, DATE NAISS, CLASSES.`);
                 }
 
