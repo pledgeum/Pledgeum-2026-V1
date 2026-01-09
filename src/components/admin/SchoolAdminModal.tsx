@@ -258,7 +258,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
     // Global Import State
     const [importReviewData, setImportReviewData] = useState<{ className: string; students: Omit<Student, 'id'>[] }[] | null>(null);
     const [teacherImportReviewData, setTeacherImportReviewData] = useState<{ teacher: Omit<Teacher, 'id'>; classes: string[] }[] | null>(null);
-    const [showImportHelp, setShowImportHelp] = useState(false);
+    const [importHelpType, setImportHelpType] = useState<'structure' | 'teacher' | null>(null);
     const globalFileInputRef = useRef<HTMLInputElement>(null);
     const teacherFileInputRef = useRef<HTMLInputElement>(null);
     const [showTeacherImportReview, setShowTeacherImportReview] = useState(false);
@@ -1111,7 +1111,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                 Importer
                                             </button>
                                             <button
-                                                onClick={() => setShowImportHelp(true)}
+                                                onClick={() => setImportHelpType('structure')}
                                                 className="text-green-600 hover:text-green-800 transition-colors"
                                                 title="Format attendu ?"
                                             >
@@ -1145,7 +1145,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                 Importer
                                             </button>
                                             <button
-                                                onClick={() => setShowImportHelp(true)}
+                                                onClick={() => setImportHelpType('teacher')}
                                                 className="text-indigo-600 hover:text-indigo-800 transition-colors"
                                                 title="Format attendu ?"
                                             >
@@ -1994,15 +1994,15 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                     )}
                 </div>
             </div >
-            {showImportHelp && (
+            {importHelpType && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                     <div className="bg-white rounded-xl shadow-2xl max-w-md w-full flex flex-col p-6 animate-in fade-in zoom-in duration-200">
                         <div className="flex justify-between items-start mb-4">
                             <h3 className="text-lg font-bold text-gray-900 flex items-center">
                                 <FileSpreadsheet className="w-5 h-5 mr-2 text-green-600" />
-                                Format d'import CSV
+                                Format d'import CSV {importHelpType === 'teacher' ? '(Enseignants)' : '(Structure)'}
                             </h3>
-                            <button onClick={() => setShowImportHelp(false)} className="text-gray-400 hover:text-gray-600">
+                            <button onClick={() => setImportHelpType(null)} className="text-gray-400 hover:text-gray-600">
                                 <X className="w-5 h-5" />
                             </button>
                         </div>
@@ -2010,22 +2010,35 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                             <p>
                                 Le fichier doit être un <strong>export CSV Pronote</strong> standard (encodage ISO-8859-1 ou UTF-8).
                             </p>
-                            <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 font-mono text-xs">
-                                <p className="font-bold text-gray-700 mb-1">Colonnes obligatoires (séparateur point-virgule ';') :</p>
-                                <ul className="list-disc pl-4 space-y-1">
-                                    <li>NOM</li>
-                                    <li>PRENOM</li>
-                                    <li>DATE NAISS <span className="text-gray-400">(JJ/MM/AAAA) - Requis pour l'affichage</span></li>
-                                    <li>CLASSES <span className="text-gray-400">(ex: 2NDE1)</span></li>
-                                </ul>
-                            </div>
+                            {importHelpType === 'teacher' ? (
+                                <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 font-mono text-xs">
+                                    <p className="font-bold text-gray-700 mb-1">Format CSV attendu :</p>
+                                    <p className="mb-2">Une ligne d'en-tête est requise avec les colonnes suivantes :</p>
+                                    <p className="font-bold text-blue-700">NOM, PRENOM, DATE NAISS, CLASSES</p>
+                                    <br />
+                                    <p className="font-bold text-gray-700 mb-1">Exemple :</p>
+                                    <p>NOM, PRENOM, DATE NAISS, CLASSES</p>
+                                    <p className="text-gray-500">ADAM, JULIEN BRUNO, 09/09/1982, -1STI2D1, -1STI2D2, -2D1, -2D10</p>
+                                </div>
+                            ) : (
+                                <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 font-mono text-xs">
+                                    <p className="font-bold text-gray-700 mb-1">Colonnes obligatoires (séparateur point-virgule ';') :</p>
+                                    <ul className="list-disc pl-4 space-y-1">
+                                        <li>NOM</li>
+                                        <li>PRENOM</li>
+                                        <li>DATE NAISS <span className="text-gray-400">(JJ/MM/AAAA) - Requis pour l'affichage</span></li>
+                                        <li>CLASSES <span className="text-gray-400">(ex: 2NDE1)</span></li>
+                                    </ul>
+                                </div>
+                            )}
+
                             <p className="text-xs text-gray-500 italic">
-                                * Les doublons sont détectés automatiquement (Nom + Prénom + Date de naissance).
+                                * Les doublons sont détectés automatiquement.
                             </p>
                         </div>
                         <div className="mt-6 flex justify-end">
                             <button
-                                onClick={() => setShowImportHelp(false)}
+                                onClick={() => setImportHelpType(null)}
                                 className="px-4 py-2 bg-gray-100 text-gray-700 rounded-lg hover:bg-gray-200 text-sm font-medium"
                             >
                                 Compris
