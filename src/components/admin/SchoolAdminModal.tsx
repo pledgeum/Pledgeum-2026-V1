@@ -2014,7 +2014,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                 <div className="bg-gray-50 p-3 rounded-lg border border-gray-200 font-mono text-xs">
                                     <p className="font-bold text-gray-700 mb-1">Format CSV attendu :</p>
                                     <p className="mb-2">Une ligne d'en-tête est requise avec les colonnes suivantes :</p>
-                                    <p className="font-bold text-blue-700">NOM, PRENOM, DATE NAISS, CLASSES</p>
+                                    <p className="font-bold text-blue-700">NOM, PRENOM, DATE NAISS, CLASSES (ex: 2NDE1, 2NDE2,...)</p>
                                     <br />
                                     <p className="font-bold text-gray-700 mb-1">Exemple :</p>
                                     <p>NOM, PRENOM, DATE NAISS, CLASSES</p>
