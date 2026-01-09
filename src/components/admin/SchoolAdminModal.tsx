@@ -1782,15 +1782,12 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                             required
                                                         />
                                                         <input
-                                                            placeholder="Date de naissance (JJ/MM/AAAA)"
+                                                            type="date"
                                                             value={newStudent.birthDate || ''}
                                                             onChange={e => setNewStudent({ ...newStudent, birthDate: e.target.value })}
                                                             className="col-span-2 text-xs border border-gray-300 rounded px-2 py-1"
                                                             required
-                                                            maxLength={10}
-                                                            autoComplete="off"
-                                                            pattern="\d{2}/\d{2}/\d{4}"
-                                                            title="Format attendu : JJ/MM/AAAA"
+                                                            max={new Date().toISOString().split('T')[0]} // Optimize: Prevent future dates
                                                         />
                                                         <button type="submit" className="col-span-1 bg-orange-600 text-white rounded flex items-center justify-center hover:bg-orange-700">
                                                             <UserPlus className="w-3 h-3" />
