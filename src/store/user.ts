@@ -285,7 +285,7 @@ export const useUserStore = create<UserState>((set, get) => ({
 
     reset: () => set({
         name: '',
-        role: 'student', // Default or null? Student is safer for type
+        role: null as unknown as UserRole, // Reset to null instead of 'student' to prevent false role assumption
         email: '',
         profileData: {},
         notifications: [],
