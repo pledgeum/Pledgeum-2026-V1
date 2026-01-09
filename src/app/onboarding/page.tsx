@@ -62,6 +62,18 @@ export default function OnboardingPage() {
     // Pre-fill Data
     useEffect(() => {
         if (!isLoading && currentRole) {
+            // AUTOMATIC FIX FOR TEST ACCOUNT
+            if (user?.email === 'pledgeum@gmail.com' && currentRole === 'student') {
+                createUserProfile(user.uid, {
+                    email: user.email,
+                    role: 'school_head',
+                    name: user.displayName || 'Compte Test Admin'
+                }).then(() => {
+                    window.location.href = '/'; // Hard redirect to force refresh
+                });
+                return;
+            }
+
             setSelectedRole(currentRole);
             if (currentRole === 'student') {
                 setShowStudentForm(true);
