@@ -62,7 +62,8 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
 
             // Profile loaded. Now check completeness.
             if (!isComplete) {
-                router.push('/complete-profile');
+                // DISABLED PERMANENTLY: Stop forcing redirection to complete-profile
+                // router.push('/complete-profile');
             } else {
                 setIsChecking(false);
             }
