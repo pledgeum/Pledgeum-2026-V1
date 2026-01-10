@@ -27,7 +27,9 @@ const RATE_LIMITS = {
     'send-email': { max: 10, window: 60 * 1000 }, // 10 emails per minute per IP
     'reset-password': { max: 5, window: 60 * 1000 }, // 5 resets per minute
     'otp-send': { max: 5, window: 60 * 1000 }, // 5 OTPs per minute per IP
-    'otp-verify': { max: 5, window: 15 * 60 * 1000 } // 5 attempts per 15 mins per IP
+    'otp-verify': { max: 5, window: 15 * 60 * 1000 }, // 5 attempts per 15 mins per IP
+    'otp-activation-send': { max: 5, window: 60 * 1000 }, // 5 Activation OTPs per minute per IP
+    'otp-activation-verify': { max: 5, window: 15 * 60 * 1000 } // 5 Activation confirm attempts per 15 mins
 };
 
 export async function checkRateLimit(request: Request, type: keyof typeof RATE_LIMITS) {
