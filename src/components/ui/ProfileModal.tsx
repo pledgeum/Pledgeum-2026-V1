@@ -16,6 +16,8 @@ interface ProfileModalProps {
 }
 
 export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = false }: ProfileModalProps) {
+    if (!isOpen) return null;
+
     const { user, logout } = useAuth();
     const { role, profileData, updateProfileData, name, birthDate } = useUserStore();
     const [formData, setFormData] = useState<Record<string, string>>({});
@@ -327,8 +329,9 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
 
             await updateProfileData(user.uid, updates);
             onClose();
-        } catch (error) {
+        } catch (error: any) {
             console.error("Failed to save profile", error);
+            alert(`Erreur lors de la sauvegarde : ${error.message || "Erreur inconnue"}`);
         } finally {
             setLoading(false);
         }

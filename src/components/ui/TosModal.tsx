@@ -20,6 +20,9 @@ export function TosModal({ isOpen = false, onClose }: TosModalProps) {
     const isBlocking = hasAcceptedTos === false;
     const isVisible = isBlocking || isOpen;
 
+    // EMERGENCY BYPASS FOR ADMIN
+    if (user?.email === 'pledgeum@gmail.com') return null;
+
     if (!user || !isVisible) return null;
 
     const handleAccept = async () => {
