@@ -279,12 +279,55 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
 
             // 2. Referenced by email (if email is provided)
             if (userEmail) {
+                // Determine User Role / School Name for broader query
+                // We need access to the User Store state here? 
+                // We can't easily access another store inside a store without circular dependency or passing it in.
+                // Assuming 'role' is not passed, but we can guess or rely on userEmail queries.
+
+                // CRITICAL: We need to know who the user IS to run the right query (School Name vs Email).
+                // Ideally, fetchConventions should take a 'context' object or we look up the user first.
+                // BUT: We can just fetch user profile inside here? No, 'fetchConventions' is called AFTER user load.
+                // Let's rely on reading the user profile from local storage or passing it in?
+                // The signature only has userId/userEmail.
+
+                // WORKAROUND: We query for conventions where 'ecole_chef_email' matches (Old way)
+                // AND we also query 'ecole_nom' if we could...
+                // SINCE WE CAN'T CHANGE SIGNATURE EASILY:
+                // We will add specific queries for ALL standard roles.
+
+                // Standard Roles
                 queries.push(query(collection(db, "conventions"), where("studentId", "==", userEmail)));
                 queries.push(query(collection(db, "conventions"), where("prof_email", "==", userEmail)));
                 queries.push(query(collection(db, "conventions"), where("rep_legal_email", "==", userEmail)));
                 queries.push(query(collection(db, "conventions"), where("tuteur_email", "==", userEmail)));
-                queries.push(query(collection(db, "conventions"), where("ecole_chef_email", "==", userEmail)));
                 queries.push(query(collection(db, "conventions"), where("ent_rep_email", "==", userEmail)));
+
+                // For School Head (legacy)
+                queries.push(query(collection(db, "conventions"), where("ecole_chef_email", "==", userEmail)));
+
+                // --- NEW: Broader Query for School Staff ---
+                // If the user is DDFPT/Secretary etc, their EMAIL is likely NOT in the convention fields directly.
+                // We need to fetch based on their SCHOOL.
+                // We must read the user's school name.
+                try {
+                    const userDoc = await getDocs(query(collection(db, "users"), where("email", "==", userEmail)));
+                    if (!userDoc.empty) {
+                        const userData = userDoc.docs[0].data();
+                        // Check if role is admin
+                        const r = userData.role as UserRole;
+                        const adminRoles = ['school_head', 'ddfpt', 'business_manager', 'assistant_manager', 'stewardship_secretary', 'at_ddfpt'];
+
+                        if (adminRoles.includes(r)) {
+                            const schoolName = userData.profileData?.ecole_nom || userData.schoolName; // normalize field
+                            if (schoolName) {
+                                console.log(`[ConventionStore] Fetching school-wide for ${schoolName} (Role: ${r})`);
+                                queries.push(query(collection(db, "conventions"), where("ecole_nom", "==", schoolName)));
+                            }
+                        }
+                    }
+                } catch (e) {
+                    console.error("Error fetching user context for convention query", e);
+                }
             }
 
             // Execute all queries
@@ -635,7 +678,20 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
         }
         if (role === 'teacher') return conventions.filter(c => c.prof_email === userEmail); // In reality, match by ID
         if (role === 'teacher_tracker') return conventions.filter(c => c.prof_suivi_email === userEmail);
-        if (role === 'school_head') return conventions.filter(c => c.ecole_chef_email === userEmail);
+
+        // --- School Admin Roles: View ALL for their school ---
+        const schoolAdminRoles = ['school_head', 'ddfpt', 'business_manager', 'assistant_manager', 'stewardship_secretary', 'at_ddfpt'];
+        if (schoolAdminRoles.includes(role)) {
+            // For now, we assume conventions are already filtered by fetchConventions to the user's school.
+            // But if we have multiple schools in cache (unlikely), we should filter by school name from profile?
+            // Simplest: Return all loaded conventions because fetchConventions should have done the job.
+            // OR: Logic to filter by ecole_chef_email if it's strictly head?
+            // REVISED: If fetchConventions did its job, we just return the list.
+            // BUT: 'school_head' was previously filtering by email. Let's keep that for specific head assignment?
+            // No, Head should see all.
+            return conventions;
+        }
+
         if (role === 'company_head') return conventions.filter(c => c.ent_rep_email === userEmail);
         if (role === 'tutor') return conventions.filter(c => c.tuteur_email === userEmail);
         if (role === 'parent') return conventions.filter(c => c.rep_legal_email === userEmail);

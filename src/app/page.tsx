@@ -434,7 +434,7 @@ export default function Home() {
               </button>
             )}
 
-            {isSchoolAdminRole(role) && (
+            {(role === 'school_head' || role === 'ddfpt' || role === 'at_ddfpt' || role === 'business_manager') && (
               <div className="flex items-center gap-2">
                 {/* Alumni Button - Conditioned on authorization */}
                 {(isSchoolAuthorized(profileData?.ecole_nom || getConventionsByRole('school_head', user.email || '', user.uid)[0]?.ecole_nom || '') || user.email === 'pledgeum@gmail.com') && (
@@ -1449,7 +1449,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
                   )}
 
                   {/* Pedagogical Tracking Assignment - Live Dropdown for Teacher */}
-                  {role === 'teacher' && (
+                  {(role === 'teacher' || role === 'ddfpt' || role === 'at_ddfpt') && (
                     <div className="mt-3 bg-indigo-50 p-2 rounded-md border border-indigo-100 inline-block min-w-[250px]">
                       <label className="block text-xs font-bold text-indigo-800 mb-1 flex items-center">
                         <UserPlus className="w-3 h-3 mr-1" />

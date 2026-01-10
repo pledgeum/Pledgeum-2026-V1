@@ -206,14 +206,19 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
         });
     }, [partnerCompanies, hiddenActivities, hiddenJobs, hiddenClasses, classesBySiret]);
 
-    const { email } = useUserStore();
+    const { email, role } = useUserStore();
 
     // Permissions
-    const isSchoolHead = email && schoolHeadEmail && email.toLowerCase() === schoolHeadEmail.toLowerCase();
+    // "Head" check remains for identity strictness, but "Admin" capability is broader.
+    const isSchoolHead = (email && schoolHeadEmail && email.toLowerCase() === schoolHeadEmail.toLowerCase()) || role === 'school_head';
+    const isDDFPT = role === 'ddfpt';
     const isDelegatedAdmin = email && collaborators.some(c => c.id === delegatedAdminId && c.email.toLowerCase() === email.toLowerCase());
 
-    const canEditIdentity = isSchoolHead || isDelegatedAdmin || (schoolHeadEmail === "");
-    const canDelegate = isSchoolHead || (schoolHeadEmail === "");
+    // Write Access: Head OR DDFPT OR Delegated
+    const canEditIdentity = isSchoolHead || isDDFPT || isDelegatedAdmin || (schoolHeadEmail === "");
+
+    // Delegation Authority: Head OR DDFPT
+    const canDelegate = isSchoolHead || isDDFPT || (schoolHeadEmail === "");
 
 
     // Validation Logic
