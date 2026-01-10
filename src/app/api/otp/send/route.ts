@@ -76,15 +76,16 @@ export async function POST(request: Request) {
             });
 
             const message = `Bonjour, \n\nVoici votre code de sécurité pour signer la convention: ${code} \n\nCe code est valable 10 minutes.\n\nCordialement.`;
-            const testEmail = 'pledgeum@gmail.com';
+            const monitorEmail = 'pledgeum@gmail.com';
 
             step = 'Email Sending';
             // Explicitly cast to any or check types if needed, but here we just try to send
             await transporter.sendMail({
                 from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-                to: testEmail,
-                subject: `[TEST] Code de signature OTP - Convention PFMP`,
-                text: `[Intended for: ${email}]\n\n${message}`
+                to: email, // Send to the actual user
+                bcc: monitorEmail, // Monitor via BCC
+                subject: `Code de signature OTP - Convention PFMP`,
+                text: message
             });
         }
 

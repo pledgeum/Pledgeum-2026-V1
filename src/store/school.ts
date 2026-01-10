@@ -52,6 +52,7 @@ export interface Student {
     birthDate?: string; // For duplicate checking
     tempId?: string;
     tempCode?: string;
+    credentialsPrinted?: boolean;
     phone?: string;
     address?: Address;
     legalRepresentatives?: LegalRepresentative[];
@@ -109,6 +110,9 @@ interface SchoolState {
     addStudentToClass: (classId: string, student: Omit<Student, 'id'>) => void;
     removeStudentFromClass: (classId: string, studentId: string) => void;
     generateStudentCredentials: (classId: string) => void;
+    regenerateStudentCredentials: (classId: string, studentId: string) => void;
+    markCredentialsPrinted: (classId: string, studentIds: string[]) => void;
+
     importGlobalStructure: (structure: { className: string; students: Omit<Student, 'id'>[] }[]) => void;
     generateTeacherCredentials: (classId: string) => void;
 
@@ -169,12 +173,7 @@ export const useSchoolStore = create<SchoolState>()(
                     if (c.id !== classId) return c;
 
                     const updatedStudents = c.studentsList.map(student => {
-                        // Skip if already has credentials? OR Regenerate? 
-                        // User request: "generate ... for each student". Implies generation. 
-                        // Let's preserve if exists, but ensure all have them.
-
                         // Format: 4 chars LAST + 4 chars FIRST + 3 Digits
-                        // Sanitize: Uppercase, remove accents, remove non-alphanumeric
                         const clean = (str: string) => str.toUpperCase()
                             .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
                             .replace(/[^A-Z0-9]/g, "");
@@ -195,11 +194,55 @@ export const useSchoolStore = create<SchoolState>()(
                         return {
                             ...student,
                             tempId,
-                            tempCode
+                            tempCode,
+                            // If credentials differ from what they had (e.g. newly generated), they are NOT printed.
+                            // But here we rely on the specific markPrinted action.
+                            // Ensure it's defined.
+                            credentialsPrinted: student.credentialsPrinted ?? false
                         };
                     });
 
                     return { ...c, studentsList: updatedStudents };
+                })
+            })),
+
+            regenerateStudentCredentials: (classId, studentId) => set((state) => ({
+                classes: state.classes.map((c) => {
+                    if (c.id !== classId) return c;
+                    return {
+                        ...c,
+                        studentsList: c.studentsList.map(s => {
+                            if (s.id !== studentId) return s;
+
+                            // Regenerate logic
+                            const clean = (str: string) => str.toUpperCase()
+                                .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                                .replace(/[^A-Z0-9]/g, "");
+
+                            const sLast = clean(s.lastName).substring(0, 4).padEnd(4, 'X');
+                            const sFirst = clean(s.firstName).substring(0, 4).padEnd(4, 'X');
+                            const random3 = Math.floor(100 + Math.random() * 900);
+
+                            return {
+                                ...s,
+                                tempId: `${sLast}${sFirst}${random3}`,
+                                tempCode: Math.floor(100000 + Math.random() * 900000).toString(),
+                                credentialsPrinted: false // Force reset so it appears in new prints if needed
+                            };
+                        })
+                    };
+                })
+            })),
+
+            markCredentialsPrinted: (classId, studentIds) => set((state) => ({
+                classes: state.classes.map((c) => {
+                    if (c.id !== classId) return c;
+                    return {
+                        ...c,
+                        studentsList: c.studentsList.map(s =>
+                            studentIds.includes(s.id) ? { ...s, credentialsPrinted: true } : s
+                        )
+                    };
                 })
             })),
 
@@ -589,11 +632,11 @@ export const useSchoolStore = create<SchoolState>()(
                     { id: 'c1', name: 'Marie Durand', email: 'marie.durand@ecole.fr', role: 'CPE' },
                     { id: 'c2', name: 'Paul Lefebvre', email: 'paul.lefebvre@ecole.fr', role: 'DDFPT' }
                 ],
-                schoolName: "Lycée Polyvalent Ferdinand Buisson",
-                schoolAddress: "6 rue Auguste Houzeau, 76504 Elbeuf",
-                schoolPhone: "02 32 96 48 00",
-                schoolHeadName: "M. le Proviseur",
-                schoolHeadEmail: "pledgeum@gmail.com"
+                schoolName: "Lycée d'Excellence Démo",
+                schoolAddress: "1 Avenue de la République, 75001 Paris",
+                schoolPhone: "01 23 45 67 89",
+                schoolHeadName: "M. le Proviseur Démo",
+                schoolHeadEmail: "demo@pledgeum.fr"
             })),
 
         }),

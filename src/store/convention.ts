@@ -7,6 +7,7 @@ import { sendNotification } from '@/lib/notification';
 import { generateVerificationUrl } from '@/app/actions/sign';
 import { sha256 } from 'js-sha256';
 import { UserRole } from './user';
+import { useDemoStore } from './demo';
 
 export type ConventionStatus =
     | 'DRAFT'
@@ -247,6 +248,17 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
     fetchConventions: async (userId: string, userEmail?: string) => {
         try {
             // Super Admin Bypass
+            // --- DEMO MODE SIMULATION ---
+            if (userEmail === 'demo@pledgeum.fr') {
+                console.log("[DEMO] Fetching Simulated Conventions");
+                // Ensure simulated conventions exist in STATE, no need to query DB.
+                // We'll return the MOCK_CONVENTION + MOCK_CONVENTION_READY
+                const demoConvs = [MOCK_CONVENTION, MOCK_CONVENTION_READY];
+                set({ conventions: demoConvs });
+                return;
+            }
+
+            // Super Admin Bypass
             if (userEmail === 'pledgeum@gmail.com') {
                 const q = query(collection(db, "conventions"));
                 const snapshot = await getDocs(q);
@@ -254,7 +266,6 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 snapshot.forEach(doc => {
                     results.push({ id: doc.id, ...doc.data() } as Convention);
                 });
-                // Ensure Mock Data Exists in DB (Persistence)
                 // Ensure Mock Data Exists in DB (Persistence)
                 // Conv Ready: Only create if missing to preserve edits
                 if (!results.find(r => r.id === MOCK_CONVENTION_READY.id)) {
@@ -541,25 +552,29 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
 
             const { hashDisplay } = await generateVerificationUrl(tempConvention, 'convention');
 
-            // Persist to Firestore
-            const convRef = doc(db, "conventions", id);
-            await updateDoc(convRef, {
-                status: newStatus,
-                signatures: newSigs,
-                certificateHash: hashDisplay,
-                updatedAt: now,
-                auditLogs: arrayUnion({
-                    date: now,
-                    action: 'SIGNED',
-                    actorEmail: role === 'student' ? convention.eleve_email :
-                        role === 'parent' ? convention.rep_legal_email :
-                            role === 'teacher' ? convention.prof_email :
-                                role === 'tutor' ? convention.tuteur_email :
-                                    role === 'company_head' ? convention.ent_rep_email :
-                                        role === 'school_head' ? convention.ecole_chef_email : 'unknown',
-                    details: `Signature par ${role} `
-                })
-            });
+            // Persist to Firestore (SKIP IN DEMO MODE)
+            if (!useDemoStore.getState().isDemoMode) {
+                const convRef = doc(db, "conventions", id);
+                await updateDoc(convRef, {
+                    status: newStatus,
+                    signatures: newSigs,
+                    certificateHash: hashDisplay,
+                    updatedAt: now,
+                    auditLogs: arrayUnion({
+                        date: now,
+                        action: 'SIGNED',
+                        actorEmail: role === 'student' ? convention.eleve_email :
+                            role === 'parent' ? convention.rep_legal_email :
+                                role === 'teacher' ? convention.prof_email :
+                                    role === 'tutor' ? convention.tuteur_email :
+                                        role === 'company_head' ? convention.ent_rep_email :
+                                            role === 'school_head' ? convention.ecole_chef_email : 'unknown',
+                        details: `Signature par ${role} `
+                    })
+                });
+            } else {
+                console.log("[DEMO] Skipped Firestore write for SIGNED");
+            }
 
             // Update Local State
             set((state) => ({
@@ -716,13 +731,20 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 feedbacks: []
             };
 
-            // Firestore add
-            const docRef = await addDoc(collection(db, "conventions"), newConvention);
-            console.log("Document written with ID: ", docRef.id);
+            // Firestore add (With Demo Bypass)
+            let newId = "";
+            if (!useDemoStore.getState().isDemoMode) {
+                const docRef = await addDoc(collection(db, "conventions"), newConvention);
+                newId = docRef.id;
+                console.log("Document written with ID: ", newId);
+            } else {
+                newId = "demo_conv_" + Math.random().toString(36).substr(2, 9);
+                console.log("[DEMO] Generated fake ID: ", newId);
+            }
 
             // Update local state with the real ID
             set((state) => ({
-                conventions: [...state.conventions, { ...newConvention, id: docRef.id }]
+                conventions: [...state.conventions, { ...newConvention, id: newId }]
             }));
             // Send Email Notification
             // Send Email Notification to Student (Confirmation)
@@ -759,10 +781,14 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
     },
     updateConvention: async (id, data) => {
         try {
-            await updateDoc(doc(db, "conventions", id), {
-                ...data,
-                updatedAt: new Date().toISOString()
-            });
+            if (!useDemoStore.getState().isDemoMode) {
+                await updateDoc(doc(db, "conventions", id), {
+                    ...data,
+                    updatedAt: new Date().toISOString()
+                });
+            } else {
+                console.log("[DEMO] Skipped Firestore update");
+            }
 
             set((state) => ({
                 conventions: state.conventions.map(c =>
@@ -852,9 +878,11 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
 
             // Update lastReminderAt in DB and State
             const reminderTimestamp = new Date().toISOString();
-            await updateDoc(doc(db, "conventions", id), {
-                lastReminderAt: reminderTimestamp
-            });
+            if (!useDemoStore.getState().isDemoMode) {
+                await updateDoc(doc(db, "conventions", id), {
+                    lastReminderAt: reminderTimestamp
+                });
+            }
 
             set((state) => ({
                 conventions: state.conventions.map(c =>
@@ -895,9 +923,11 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
 
             const updatedAbsences = [...(convention.absences || []), newAbsence];
 
-            await updateDoc(doc(db, "conventions", conventionId), {
-                absences: updatedAbsences
-            });
+            if (!useDemoStore.getState().isDemoMode) {
+                await updateDoc(doc(db, "conventions", conventionId), {
+                    absences: updatedAbsences
+                });
+            }
 
             // Notifications
             const subject = `[PFMP] Signalement d'absence - ${convention.eleve_prenom} ${convention.eleve_nom}`;
@@ -973,16 +1003,18 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             const tempConv = { ...convention, ...attestationData } as Convention;
             const { hashDisplay } = await generateVerificationUrl(tempConv, 'attestation');
 
-            await updateDoc(doc(db, "conventions", conventionId), {
-                ...attestationData,
-                attestationHash: hashDisplay,
-                auditLogs: arrayUnion({
-                    date: new Date().toISOString(),
-                    action: 'ATTESTATION_SIGNED' as const,
-                    actorEmail: convention.ent_rep_email, // Assuming signed by company rep usually
-                    details: `Signature de l'attestation par ${signerName} (${signerFunction})`
-                })
-            });
+            if (!useDemoStore.getState().isDemoMode) {
+                await updateDoc(doc(db, "conventions", conventionId), {
+                    ...attestationData,
+                    attestationHash: hashDisplay,
+                    auditLogs: arrayUnion({
+                        date: new Date().toISOString(),
+                        action: 'ATTESTATION_SIGNED' as const,
+                        actorEmail: convention.ent_rep_email, // Assuming signed by company rep usually
+                        details: `Signature de l'attestation par ${signerName} (${signerFunction})`
+                    })
+                });
+            }
 
             const newLog: AuditLog = {
                 date: new Date().toISOString(),
@@ -1009,9 +1041,11 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
 
     assignTrackingTeacher: async (conventionId, trackingTeacherEmail) => {
         try {
-            await updateDoc(doc(db, "conventions", conventionId), {
-                prof_suivi_email: trackingTeacherEmail
-            });
+            if (!useDemoStore.getState().isDemoMode) {
+                await updateDoc(doc(db, "conventions", conventionId), {
+                    prof_suivi_email: trackingTeacherEmail
+                });
+            }
             set((state) => ({
                 conventions: state.conventions.map(c =>
                     c.id === conventionId ? { ...c, prof_suivi_email: trackingTeacherEmail } : c

@@ -2,6 +2,7 @@ import { useState, useRef, useEffect } from 'react';
 import { X, PenTool, Mail, CheckCircle, Loader2 } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { auth } from '@/lib/firebase';
+import { useDemoStore } from '@/store/demo';
 
 interface SignatureModalProps {
     isOpen: boolean;
@@ -34,6 +35,7 @@ export function SignatureModal({
     const [loading, setLoading] = useState(false);
     const [isDualSignChecked, setIsDualSignChecked] = useState(false);
     const sigCanvas = useRef<any>({});
+    const { isDemoMode, openEmailModal } = useDemoStore();
 
     useEffect(() => {
         if (isOpen) {
@@ -75,6 +77,23 @@ export function SignatureModal({
 
     const handleSendOtp = async () => {
         setLoading(true);
+
+        if (isDemoMode) {
+            // Fake Send - Open Interceptor Modal
+            // Simulate "Sent"
+            setTimeout(() => {
+                setLoading(false);
+                setOtpSent(true);
+                // Open the "Email Simulator" modal to show the user the code
+                openEmailModal({
+                    to: signeeEmail,
+                    subject: `[DEMO] Code de vérification : 1234`,
+                    text: `Bonjour,\n\nVotre code de vérification pour la signature est : 1234\n\n(Ceci est une simulation).\n\nCordialement,\nL'équipe Pledgeum`
+                });
+            }, 800);
+            return;
+        }
+
         try {
             const token = await auth.currentUser?.getIdToken();
             const res = await fetch('/api/otp/send', {
@@ -107,6 +126,51 @@ export function SignatureModal({
             return;
         }
         setLoading(true);
+
+        if (isDemoMode) {
+            // Fake Verification
+            setTimeout(async () => {
+                if (otpCode === '1234') {
+                    // Success
+                    const canvas = document.createElement('canvas');
+                    canvas.width = 400;
+                    canvas.height = 150;
+                    const ctx = canvas.getContext('2d');
+                    if (ctx) {
+                        ctx.fillStyle = '#fff7ed'; // Orange-ish background for demo
+                        ctx.fillRect(0, 0, 400, 150);
+                        ctx.strokeStyle = '#ea580c';
+                        ctx.lineWidth = 2;
+                        ctx.strokeRect(5, 5, 390, 140);
+
+                        ctx.font = 'bold 20px Arial';
+                        ctx.fillStyle = '#c2410c';
+                        ctx.fillText('Signature Numérique DÉMO', 30, 40);
+
+                        ctx.font = '16px Arial';
+                        ctx.fillStyle = '#334155';
+                        ctx.fillText(`Signé par OTP (Simulé) : ${signeeName}`, 30, 80);
+                        ctx.fillText(`Date : ${new Date().toLocaleDateString()}`, 30, 110);
+                    }
+                    const dataUrl = canvas.toDataURL('image/png');
+
+                    // Fake Audit Log
+                    const fakeAuditLog = {
+                        timestamp: new Date().toISOString(),
+                        verified: true,
+                        method: 'otp_demo',
+                        email: signeeEmail
+                    };
+
+                    await handleOtpOnSign(dataUrl, fakeAuditLog);
+                } else {
+                    alert("Code incorrect (Le code de démo est 1234)");
+                }
+                setLoading(false);
+            }, 800);
+            return;
+        }
+
         try {
             const token = await auth.currentUser?.getIdToken();
             const res = await fetch('/api/otp/verify', {

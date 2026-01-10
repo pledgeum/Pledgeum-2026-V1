@@ -19,6 +19,7 @@ export const metadata: Metadata = {
 
 import { AuthProvider } from "@/context/AuthContext";
 import { ProfileGuard } from "@/components/auth/ProfileGuard";
+import { DemoUI } from "@/components/demo/DemoUI";
 
 export default function RootLayout({
   children,
@@ -32,6 +33,7 @@ export default function RootLayout({
       >
         <AuthProvider>
           <ProfileGuard>
+            <DemoUI />
             {children}
           </ProfileGuard>
         </AuthProvider>

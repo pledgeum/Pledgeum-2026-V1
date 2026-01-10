@@ -15,9 +15,9 @@ interface ClassDocumentModalProps {
 
 export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps) {
     const { classes } = useSchoolStore();
-    const { documents, fetchDocuments, fetchUserDocuments, uploadDocument, assignDocumentToClasses, deleteDocument, loading, error } = useDocumentStore();
+    const { documents, fetchDocuments, fetchUserDocuments, uploadDocument, assignDocumentToClasses, deleteDocument, toggleSharing, loading, error } = useDocumentStore();
     const { user } = useAuth();
-    const { role } = useUserStore();
+    const { role, profileData, name } = useUserStore();
 
     const [activeTab, setActiveTab] = useState<'upload' | 'library'>('upload');
     const [editingDocId, setEditingDocId] = useState<string | null>(null);
@@ -25,16 +25,17 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
     const [file, setFile] = useState<File | null>(null);
     const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
     const [uploading, setUploading] = useState(false);
+    const [sharedWithSchool, setSharedWithSchool] = useState(false);
 
     useEffect(() => {
         if (isOpen) {
             if (activeTab === 'library' && user) {
-                fetchUserDocuments(user.uid);
+                fetchUserDocuments(user.uid, profileData?.ecole_nom || '');
             } else {
                 fetchDocuments();
             }
         }
-    }, [isOpen, activeTab, fetchDocuments, fetchUserDocuments, user]);
+    }, [isOpen, activeTab, fetchDocuments, fetchUserDocuments, user, profileData]);
 
     if (!isOpen) return null;
 
@@ -43,6 +44,10 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
             const selected = e.target.files[0];
             if (selected.type !== 'application/pdf') {
                 alert("Seuls les fichiers PDF sont acceptés.");
+                return;
+            }
+            if (selected.size > 500 * 1024) {
+                alert("Le fichier est trop volumineux. La taille maximum autorisée est de 500 Ko.");
                 return;
             }
             setFile(selected);
@@ -65,12 +70,18 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
             formData.append('classIds', JSON.stringify(selectedClassIds));
             formData.append('uploadedBy', user.uid);
             formData.append('type', 'OTHER');
+            formData.append('sharingData', JSON.stringify({
+                sharedWithSchool,
+                sharedBy: name || user.email || 'Enseignant',
+                schoolName: profileData?.ecole_nom
+            }));
 
             const result = await uploadClassDocument(formData);
 
             if (result.success) {
                 setFile(null);
                 setSelectedClassIds([]);
+                setSharedWithSchool(false);
                 alert("Document ajouté avec succès !");
                 fetchDocuments(); // Refresh list associated effectively
             } else {
@@ -112,7 +123,7 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                 Gestion des Documents de Classe
                             </h3>
                             <p className="text-sm text-gray-500 mt-1">
-                                Ajoutez des recommandations, cours ou évaluations pour vos classes.
+                                Ajoutez des recommandations, cours ou évaluations pour vos classes. (Max 500 Ko par fichier)
                             </p>
                         </div>
                     </div>
@@ -161,7 +172,7 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
 
                                 <div className="space-y-4">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Fichier (PDF uniquement)</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Fichier (PDF uniquement, max 500 Ko)</label>
                                         <input
                                             type="file"
                                             accept="application/pdf"
@@ -188,6 +199,21 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                                 <p className="text-xs text-gray-500 italic col-span-2">Aucune classe disponible.</p>
                                             )}
                                         </div>
+                                    </div>
+
+                                    <div>
+                                        <label className="flex items-center space-x-2 text-sm text-gray-700 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={sharedWithSchool}
+                                                onChange={(e) => setSharedWithSchool(e.target.checked)}
+                                                className="rounded text-blue-600 focus:ring-blue-500"
+                                            />
+                                            <span>Partagé avec les autres enseignants de mon établissement</span>
+                                        </label>
+                                        <p className="text-xs text-gray-500 mt-1 ml-6">
+                                            Si coché, ce document sera visible et utilisable par vos collègues.
+                                        </p>
                                     </div>
 
                                     <button
@@ -219,7 +245,31 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                                     <FileText className="h-5 w-5 text-gray-400 mr-3 flex-shrink-0" />
                                                     <div className="truncate">
                                                         <p className="text-sm font-medium text-gray-900 truncate" title={doc.name}>{doc.name}</p>
-                                                        <p className="text-xs text-gray-500 truncate">
+                                                        {doc.uploadedBy === user?.uid && (
+                                                            <div className="flex items-center mt-1">
+                                                                <label className="flex items-center space-x-2 cursor-pointer">
+                                                                    <div className="relative inline-block w-6 h-3 align-middle select-none transition duration-200 ease-in">
+                                                                        <input
+                                                                            type="checkbox"
+                                                                            checked={doc.sharedWithSchool || false}
+                                                                            onChange={async (e) => {
+                                                                                const isShared = e.target.checked;
+                                                                                await toggleSharing(doc.id, isShared, {
+                                                                                    schoolName: profileData?.ecole_nom || '',
+                                                                                    sharedBy: name || user.email || 'Enseignant'
+                                                                                });
+                                                                            }}
+                                                                            className="sr-only peer"
+                                                                        />
+                                                                        <div className="w-6 h-3 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[0px] after:left-[0px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-blue-600"></div>
+                                                                    </div>
+                                                                    <span className="text-[10px] text-gray-500">
+                                                                        {doc.sharedWithSchool ? 'Partagé avec les autres enseignants de mon établissement' : 'Privé'}
+                                                                    </span>
+                                                                </label>
+                                                            </div>
+                                                        )}
+                                                        <p className="text-xs text-gray-500 truncate mt-1">
                                                             Pour : {(classes || []).filter(c => doc.classIds && doc.classIds.includes(c.id)).map(c => c.name).join(', ') || 'Classes inconnues'}
                                                             {/* • {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : 'Date inconnue'} */}
                                                         </p>
@@ -259,8 +309,15 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                                     <div className="bg-gray-100 p-2 rounded mr-3">
                                                         <FileText className="w-5 h-5 text-gray-600" />
                                                     </div>
-                                                    <div>
-                                                        <p className="font-semibold text-gray-900 text-sm">{doc.name}</p>
+                                                    <div className="flex flex-col">
+                                                        <div className="flex items-center gap-2">
+                                                            <p className="font-semibold text-gray-900 text-sm">{doc.name}</p>
+                                                            {doc.uploadedBy !== user?.uid && (
+                                                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800" title={`Mis en ligne par ${doc.uploadedBy}`}>
+                                                                    Partagé par {doc.sharedBy || 'Un collègue'}
+                                                                </span>
+                                                            )}
+                                                        </div>
                                                         <p className="text-xs text-gray-500">Ajouté le {new Date(doc.createdAt).toLocaleDateString()}</p>
                                                     </div>
                                                 </div>
@@ -269,14 +326,48 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                                     <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 p-1">
                                                         <Download className="w-4 h-4" />
                                                     </a>
-                                                    <button onClick={() => handleDelete(doc)} className="text-gray-400 hover:text-red-500 p-1" title="Supprimer ce document">
-                                                        <Trash2 className="w-4 h-4" />
-                                                    </button>
+                                                    {doc.uploadedBy === user?.uid && (
+                                                        <button onClick={() => handleDelete(doc)} className="text-gray-400 hover:text-red-500 p-1" title="Supprimer ce document">
+                                                            <Trash2 className="w-4 h-4" />
+                                                        </button>
+                                                    )}
                                                 </div>
                                             </div>
 
                                             <div className="mt-3">
                                                 <div className="flex justify-between items-center mb-1">
+                                                    {/* Sharing Toggle for Owner */}
+                                                    {doc.uploadedBy === user?.uid && (
+                                                        <label className="flex items-center space-x-2 cursor-pointer mb-2">
+                                                            <div className="relative inline-block w-8 h-4 align-middle select-none transition duration-200 ease-in">
+                                                                <input
+                                                                    type="checkbox"
+                                                                    checked={doc.sharedWithSchool || false}
+                                                                    onChange={async (e) => {
+                                                                        const isShared = e.target.checked;
+                                                                        // Optimistic update handled by store or we just wait
+                                                                        // We also need to make sure schoolName is set if it wasn't before?
+                                                                        // Actually toggleSharing just toggles the boolean. 
+                                                                        // If the doc was uploaded BEFORE sharing was implemented, it might lack 'schoolName' and 'sharedBy'.
+                                                                        // We might need a more robust 'updateSharing' function that sets these if missing.
+                                                                        // FOR NOW: Let's assume toggle only works well if we also patch metadata. 
+                                                                        // But toggleSharing in store ONLY updates 'sharedWithSchool'.
+                                                                        // I should update the store's toggleSharing to also set schoolName/sharedBy if enabling.
+                                                                        // Let's stick to the UI first.
+                                                                        await toggleSharing(doc.id, isShared, {
+                                                                            schoolName: profileData?.ecole_nom || '',
+                                                                            sharedBy: name || user.email || 'Enseignant'
+                                                                        });
+                                                                    }}
+                                                                    className="sr-only peer"
+                                                                />
+                                                                <div className="w-8 h-4 bg-gray-200 peer-focus:outline-none peer-focus:ring-2 peer-focus:ring-blue-300 rounded-full peer dark:bg-gray-700 peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[0px] after:left-[0px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-blue-600"></div>
+                                                            </div>
+                                                            <span className="text-xs text-gray-500">
+                                                                {doc.sharedWithSchool ? 'Partagé avec les autres enseignants de mon établissement' : 'Privé'}
+                                                            </span>
+                                                        </label>
+                                                    )}
                                                     <label className="text-xs font-bold text-gray-700 uppercase">Attribué aux classes :</label>
                                                     {editingDocId !== doc.id && (
                                                         <button

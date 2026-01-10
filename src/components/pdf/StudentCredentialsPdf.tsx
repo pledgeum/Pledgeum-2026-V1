@@ -14,7 +14,7 @@ const styles = StyleSheet.create({
     },
     card: {
         width: '48%', // Two cards per row with gap
-        height: 180, // Approx 4-5 rows per page
+        height: 200, // Increased from 180 to fit birth date
         border: '1pt solid #e2e8f0',
         borderRadius: 8,
         padding: 15,
@@ -23,7 +23,7 @@ const styles = StyleSheet.create({
     },
     header: {
         flexDirection: 'row',
-        marginBottom: 10,
+        marginBottom: 8, // Reduced from 10
         borderBottom: '1pt solid #cbd5e1',
         paddingBottom: 5,
         alignItems: 'center',
@@ -52,7 +52,7 @@ const styles = StyleSheet.create({
         fontSize: 12,
         fontWeight: 'bold',
         color: '#0f172a',
-        marginBottom: 10
+        marginBottom: 4 // Reduced from 10 to keep date close
     },
     credentialsBox: {
         backgroundColor: '#ffffff',
@@ -89,6 +89,20 @@ interface StudentCredentialsPdfProps {
     schoolName: string;
 }
 
+// Helper to format date consistent with UI
+const formatDate = (dateString?: string) => {
+    if (!dateString) return '';
+    try {
+        // If already DD/MM/YYYY
+        if (dateString.includes('/')) return dateString;
+        // If YYYY-MM-DD
+        const date = new Date(dateString);
+        return new Intl.DateTimeFormat('fr-FR').format(date);
+    } catch (e) {
+        return dateString;
+    }
+};
+
 export function StudentCredentialsPdf({ students, classInfo, schoolName }: StudentCredentialsPdfProps) {
     return (
         <Document>
@@ -106,6 +120,11 @@ export function StudentCredentialsPdf({ students, classInfo, schoolName }: Stude
                         <View style={styles.body}>
                             <Text style={styles.label}>Élève Assigné</Text>
                             <Text style={styles.studentName}>{student.firstName} {student.lastName}</Text>
+                            {student.birthDate && (
+                                <Text style={{ fontSize: 9, color: '#64748b', marginBottom: 8 }}>
+                                    Né(e) le : {formatDate(student.birthDate)}
+                                </Text>
+                            )}
 
                             <View style={styles.credentialsBox}>
                                 <View style={styles.credentialItem}>

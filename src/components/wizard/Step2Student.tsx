@@ -171,11 +171,14 @@ export function Step2Student() {
                             <label className="block text-sm font-medium text-gray-700">Nom</label>
                             <input
                                 {...form.register('eleve_nom')}
+                                disabled={!!profileData?.lastName}
+                                readOnly={!!profileData?.lastName}
                                 className={cn(
                                     "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
                                     form.formState.errors.eleve_nom
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
+                                    profileData?.lastName && "bg-gray-200 text-gray-500 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_nom && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_nom.message}</p>}
@@ -184,11 +187,14 @@ export function Step2Student() {
                             <label className="block text-sm font-medium text-gray-700">Prénom</label>
                             <input
                                 {...form.register('eleve_prenom')}
+                                disabled={!!profileData?.firstName}
+                                readOnly={!!profileData?.firstName}
                                 className={cn(
                                     "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
                                     form.formState.errors.eleve_prenom
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
+                                    profileData?.firstName && "bg-gray-200 text-gray-500 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_prenom && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_prenom.message}</p>}
@@ -199,11 +205,14 @@ export function Step2Student() {
                             <input
                                 {...form.register('eleve_date_naissance')}
                                 type="date"
+                                disabled={!!profileData?.birthDate}
+                                readOnly={!!profileData?.birthDate}
                                 className={cn(
                                     "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
                                     form.formState.errors.eleve_date_naissance
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
+                                    profileData?.birthDate && "bg-gray-200 text-gray-500 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_date_naissance && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_date_naissance.message}</p>}
@@ -214,11 +223,14 @@ export function Step2Student() {
                             <input
                                 {...form.register('eleve_email')}
                                 type="email"
+                                disabled={!!profileData?.email}
+                                readOnly={!!profileData?.email}
                                 className={cn(
                                     "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
                                     form.formState.errors.eleve_email
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
+                                    profileData?.email && "bg-gray-200 text-gray-500 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_email && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_email.message}</p>}
@@ -229,11 +241,14 @@ export function Step2Student() {
                             <input
                                 {...form.register('eleve_tel')}
                                 type="tel"
+                                disabled={!!profileData?.phone}
+                                readOnly={!!profileData?.phone}
                                 className={cn(
                                     "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
                                     form.formState.errors.eleve_tel
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
+                                    profileData?.phone && "bg-gray-200 text-gray-500 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_tel && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_tel.message}</p>}
@@ -245,12 +260,13 @@ export function Step2Student() {
                                 <input
                                     {...form.register('eleve_classe')}
                                     disabled={!!profileData?.class} // Lock if coming from profile
+                                    readOnly={!!profileData?.class}
                                     className={cn(
                                         "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
                                         form.formState.errors.eleve_classe
                                             ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                             : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                        profileData?.class ? "bg-gray-100 text-gray-500 cursor-not-allowed" : ""
+                                        profileData?.class ? "bg-gray-200 text-gray-500 cursor-not-allowed" : ""
                                     )}
                                 />
                                 {profileData?.class && (
@@ -267,11 +283,14 @@ export function Step2Student() {
                             <input
                                 {...form.register('diplome_intitule')}
                                 placeholder="Ex: Bac Pro Systèmes Numériques"
+                                disabled={!!profileData?.diploma}
+                                readOnly={!!profileData?.diploma}
                                 className={cn(
                                     "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
                                     form.formState.errors.diplome_intitule
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
+                                    profileData?.diploma && "bg-gray-200 text-gray-500 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.diplome_intitule && <p className="text-red-500 text-xs mt-1">{form.formState.errors.diplome_intitule.message}</p>}
@@ -282,11 +301,14 @@ export function Step2Student() {
                             <textarea
                                 {...form.register('eleve_adresse')}
                                 rows={2}
+                                disabled={!!profileData?.address}
+                                readOnly={!!profileData?.address}
                                 className={cn(
                                     "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
                                     form.formState.errors.eleve_adresse
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
+                                    profileData?.address && "bg-gray-200 text-gray-500 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_adresse && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_adresse.message}</p>}
@@ -296,11 +318,14 @@ export function Step2Student() {
                             <label className="block text-sm font-medium text-gray-700">Code Postal</label>
                             <input
                                 {...form.register('eleve_cp')}
+                                disabled={!!profileData?.zipCode || !!profileData?.postalCode}
+                                readOnly={!!profileData?.zipCode || !!profileData?.postalCode}
                                 className={cn(
                                     "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
                                     form.formState.errors.eleve_cp
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
+                                    (profileData?.zipCode || profileData?.postalCode) && "bg-gray-200 text-gray-500 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_cp && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_cp.message}</p>}
@@ -310,11 +335,14 @@ export function Step2Student() {
                             <label className="block text-sm font-medium text-gray-700">Ville</label>
                             <input
                                 {...form.register('eleve_ville')}
+                                disabled={!!profileData?.city}
+                                readOnly={!!profileData?.city}
                                 className={cn(
                                     "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
                                     form.formState.errors.eleve_ville
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500"
+                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
+                                    profileData?.city && "bg-gray-200 text-gray-500 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_ville && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_ville.message}</p>}

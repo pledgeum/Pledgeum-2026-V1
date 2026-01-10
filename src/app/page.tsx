@@ -154,9 +154,27 @@ export default function Home() {
         return age < 18;
       })();
 
+      // Parent Check (Mandatory for ALL students)
+      // We must check if the representative INSIDE the array actually has data.
+      // Merely having an entry (which might be {role: '...'}) is not enough.
       const hasParent = (
-        (profileData?.legalRepresentatives && Array.isArray(profileData.legalRepresentatives) && profileData.legalRepresentatives.length > 0) ||
-        (profileData?.parentName && profileData?.parentEmail && profileData?.parentPhone)
+        (
+          profileData?.legalRepresentatives &&
+          Array.isArray(profileData.legalRepresentatives) &&
+          profileData.legalRepresentatives.length > 0 &&
+          (profileData.legalRepresentatives[0].lastName || profileData.legalRepresentatives[0].firstName) &&
+          (
+            // Check address - typically stored as object in rep
+            (profileData.legalRepresentatives[0].address && profileData.legalRepresentatives[0].address.street && profileData.legalRepresentatives[0].address.postalCode && profileData.legalRepresentatives[0].address.city)
+          )
+        ) ||
+        (
+          // Legacy flat fields check
+          profileData?.parentName &&
+          profileData?.parentAddress &&
+          profileData?.parentZip &&
+          profileData?.parentCity
+        )
       );
 
       // Debug Profile Completion
@@ -165,13 +183,10 @@ export default function Home() {
 
       if (!basic) console.log("Profile Incomplete - Basic Failed");
       if (!hasContact) console.log("Profile Incomplete - Contact Failed", { phone: profileData?.phone, address: profileData?.address, zip: profileData?.zipCode, city: profileData?.city });
-      if (isMinor && !hasParent) console.log("Profile Incomplete - Minor Missing Parent", { isMinor, hasParent });
+      if (!hasParent) console.log("Profile Incomplete - Missing Parent", { hasParent, legalReps: profileData?.legalRepresentatives });
 
-      const debugResult = basic && hasContact && (!isMinor || hasParent);
-      if (!debugResult) console.log("isProfileComplete RETURN FALSE");
-
-      // If minor, parent is required. If major, it's optional.
-      return basic && hasContact && (!isMinor || hasParent);
+      // Parent is required for ALL students
+      return basic && hasContact && hasParent;
     }
 
     switch (role) {
@@ -184,6 +199,41 @@ export default function Home() {
       default: return true;
     }
     return required.every(field => profileData?.[field] && String(profileData[field]).trim() !== '');
+  };
+
+  // Helper to get specific missing fields for feedback
+  const getMissingProfileFields = () => {
+    if (!role) return [];
+    if (user?.email === 'pledgeum@gmail.com') return [];
+
+    const missing: string[] = [];
+    const data = profileData || {};
+
+    if (role === 'student') {
+      if (!data.firstName) missing.push("Prénom");
+      if (!data.lastName) missing.push("Nom");
+      if (!data.birthDate) missing.push("Date de naissance");
+
+      // Address check
+      if (!data.address || (typeof data.address === 'object' && !data.address.street) || (!data.zipCode) || (!data.city)) {
+        missing.push("Adresse complète (Rue, Ville, CP)");
+      }
+
+      // Parent Check (Mandatory for ALL students)
+      const hasParent = (
+        (
+          data.legalRepresentatives?.length > 0 &&
+          (data.legalRepresentatives[0].lastName || data.legalRepresentatives[0].firstName) &&
+          (data.legalRepresentatives[0].address?.street && data.legalRepresentatives[0].address?.postalCode && data.legalRepresentatives[0].address?.city)
+        ) ||
+        (
+          data.parentName && data.parentAddress && data.parentZip && data.parentCity
+        )
+      );
+      if (!hasParent) missing.push("Responsable Légal (Nom et Adresse complète requis)");
+    }
+    // Add other roles if needed later
+    return missing;
   };
 
   useEffect(() => {
@@ -261,6 +311,17 @@ export default function Home() {
   }
 
   const handleNewConvention = () => {
+    const missing = getMissingProfileFields();
+    if (!isProfileComplete()) {
+      // Use the missing list if available (mostly implemented for student for now)
+      if (missing.length > 0) {
+        alert(`Veuillez compléter les informations suivantes dans votre profil :\n\n- ${missing.join('\n- ')}`);
+      } else {
+        alert("Veuillez compléter votre profil pour créer une convention.");
+      }
+      setIsProfileModalOpen(true);
+      return;
+    }
     resetWizard();
     setShowWizard(true);
   };
@@ -476,7 +537,7 @@ export default function Home() {
                 <div className="flex items-center space-x-2 bg-purple-100 p-1 rounded-lg border border-purple-200">
                   <span className="text-xs font-bold text-purple-700 ml-2">DEV MODE:</span>
                   <select
-                    value={role}
+                    value={role || ''}
                     onChange={(e) => useUserStore.getState().setRole(e.target.value as UserRole)}
                     className="bg-purple-50 text-xs font-medium text-purple-900 border-none rounded focus:ring-purple-500 py-1"
                   >
@@ -719,7 +780,7 @@ export default function Home() {
           <h1 className="text-2xl font-bold text-gray-900">
             Tableau de Bord {role === 'company_head_tutor'
               ? (dualRoleView === 'company_head' ? "Chef d'Entreprise" : "Tuteur")
-              : roleLabels[role]} <span className="text-red-600 text-sm ml-2">(VERSION DEBUG 2.0 - FIX APPLIQUÉ)</span>
+              : roleLabels[role]} <span className="text-orange-600 text-sm ml-2 font-medium">version beta</span>
           </h1>
           <p className="text-gray-500 mt-1">Gérez vos conventions de stage et signatures.</p>
 
@@ -734,13 +795,26 @@ export default function Home() {
 
               <div
                 onClick={handleNewConvention}
-                className="group bg-white rounded-xl border-2 border-dashed border-gray-300 hover:border-blue-500 p-8 flex flex-col items-center justify-center cursor-pointer transition-colors h-full"
+                className={`group bg-white rounded-xl border-2 border-dashed p-8 flex flex-col items-center justify-center cursor-pointer transition-colors h-full relative ${!isProfileComplete()
+                  ? 'border-orange-300 hover:border-orange-500 bg-orange-50/50'
+                  : 'border-gray-300 hover:border-blue-500'
+                  }`}
               >
-                <div className="bg-blue-50 p-4 rounded-full group-hover:bg-blue-100 transition-colors">
-                  <FileText className="w-8 h-8 text-blue-600" />
+                {!isProfileComplete() && (
+                  <div className="absolute top-4 right-4 text-orange-500">
+                    <AlertCircle className="w-5 h-5" />
+                  </div>
+                )}
+                <div className={`p-4 rounded-full transition-colors ${!isProfileComplete() ? 'bg-orange-100 text-orange-600' : 'bg-blue-50 group-hover:bg-blue-100 text-blue-600'
+                  }`}>
+                  {!isProfileComplete() ? <UserCircle className="w-8 h-8" /> : <FileText className="w-8 h-8" />}
                 </div>
                 <h3 className="mt-4 text-lg font-medium text-gray-900">Nouvelle Convention</h3>
-                <p className="text-center text-sm text-gray-500 mt-2">Remplir une demande de convention PFMP pour un nouveau stage.</p>
+                <p className="text-center text-sm text-gray-500 mt-2">
+                  {!isProfileComplete()
+                    ? "Veuillez compléter votre profil pour commencer."
+                    : "Remplir une demande de convention PFMP pour un nouveau stage."}
+                </p>
               </div>
 
 

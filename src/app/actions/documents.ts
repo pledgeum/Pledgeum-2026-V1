@@ -59,7 +59,8 @@ export async function uploadClassDocument(formData: FormData) {
             uploadedBy,
             uploadedByEmail: "system", // Optional, if needed
             createdAt: new Date().toISOString(),
-            type
+            type,
+            ...(formData.get('sharingData') ? JSON.parse(formData.get('sharingData') as string) : {})
         };
 
         const docRef = await adminDb.collection('class_documents').add(docData);

@@ -1,3 +1,5 @@
+"use client";
+
 import React, { useState, useEffect } from 'react';
 import { X, Save, User, Building2, MapPin, Phone, Briefcase, GraduationCap, Calendar, Mail, Users, ChevronDown, ChevronUp, School, Search, Loader2, CheckCircle } from 'lucide-react';
 import { searchSchools, SchoolResult } from '@/lib/educationApi';
@@ -21,6 +23,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
     const { user, logout } = useAuth();
     const { role, profileData, updateProfileData, name, birthDate } = useUserStore();
     const [formData, setFormData] = useState<Record<string, string>>({});
+
     const [loading, setLoading] = useState(false);
     const [showParent, setShowParent] = useState(false);
     const [showParent2, setShowParent2] = useState(false);
@@ -243,14 +246,13 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
         console.log("Is Minor?", isMinor());
         console.log("Form Data:", formData);
 
-        // Validation for Minors
+        // Validation for Students (Mandatory Parent Info)
         if (role === 'student') {
-            if (isMinor()) {
-                if (!formData.parentName || !formData.parentEmail || !formData.parentPhone || !formData.parentAddress || !formData.parentZip || !formData.parentCity) {
-                    alert("En tant qu'élève mineur, vous devez obligatoirement renseigner les coordonnées complètes d'un responsable légal.");
-                    setShowParent(true);
-                    return;
-                }
+            // Removed isMinor() check - Mandatory for ALL
+            if (!formData.parentName || !formData.parentEmail || !formData.parentPhone || !formData.parentAddress || !formData.parentZip || !formData.parentCity) {
+                alert("Vous devez obligatoirement renseigner les coordonnées complètes d'un responsable légal pour valider votre profil.");
+                setShowParent(true);
+                return;
             }
         }
 
@@ -371,14 +373,13 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
         return age < 18;
     };
 
-    const isStudentMinor = role === 'student' && isMinor();
-
-    // Auto-Show Parent if Minor
+    // Auto-Show Parent if Student (implied mandatory)
     useEffect(() => {
-        if (isStudentMinor && !showParent) {
+        if (role === 'student' && !showParent && !formData.parentName) {
+            // Only auto-open if likely empty to encourage fill
             setShowParent(true);
         }
-    }, [isStudentMinor]); // Run when minor status determined
+    }, [role, showParent, formData.parentName]); // Run when minor status determined
 
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
@@ -390,12 +391,17 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                             <User className="h-6 w-6" />
                             Mon Profil
                         </h2>
-                        <p className="text-white font-medium mt-1">{name} - {
-                            role === 'student' ? 'Élève' :
-                                role === 'teacher' ? 'Enseignant' :
-                                    role === 'company_head' ? "Chef d'Entreprise" :
-                                        role === 'tutor' ? 'Tuteur' : role
-                        }</p>
+                        <p className="text-white font-medium mt-1">
+                            {name && name !== 'Compte Test Admin' ? `${name} - ` : ''}
+                            {
+                                role === 'student' ? 'Élève' :
+                                    role === 'teacher' ? 'Enseignant' :
+                                        role === 'company_head' ? "Chef d'Entreprise" :
+                                            role === 'school_head' ? "Chef d'établissement scolaire" :
+                                                role === 'ddfpt' ? "Directeur délégué à la formation professionnelle et technologique" :
+                                                    role === 'tutor' ? 'Tuteur' : role
+                            }
+                        </p>
                     </div>
                     <button onClick={onClose} className={`text-white/80 hover:text-white transition-colors`}>
                         <X className="h-6 w-6" />
@@ -417,8 +423,23 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
 
                     {role === 'student' && (
                         <>
-                            {renderField("birthDate", "Date de Naissance", <Calendar className="w-4 h-4" />, "date", "", !!profileData.birthDate)}
-                            {renderField("address", "Adresse Personnelle", <MapPin className="w-4 h-4" />)}
+                            {renderField("birthDate", "Date de Naissance (Non modifiable, contactez l'administration)", <Calendar className="w-4 h-4" />, "date", "", true)}
+                            <AddressAutocomplete
+                                label="Adresse Personnelle"
+                                value={{
+                                    street: formData.address || '',
+                                    postalCode: formData.zipCode || '',
+                                    city: formData.city || ''
+                                }}
+                                onChange={(addr) => {
+                                    setFormData(prev => ({
+                                        ...prev,
+                                        address: addr.street,
+                                        zipCode: addr.postalCode,
+                                        city: addr.city
+                                    }));
+                                }}
+                            />
                             <div className="grid grid-cols-2 gap-4">
                                 {renderField("zipCode", "Code Postal", <MapPin className="w-4 h-4" />)}
                                 {renderField("city", "Ville", <MapPin className="w-4 h-4" />)}

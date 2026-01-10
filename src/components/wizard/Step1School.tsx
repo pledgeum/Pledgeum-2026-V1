@@ -31,7 +31,7 @@ type Step1Data = z.infer<typeof stepSchema>;
 
 export function Step1School() {
     const { setData, nextStep } = useWizardStore();
-    const { profileData, email } = useUserStore();
+    const { profileData, role, email } = useUserStore();
     const { allowedConventionTypes } = useSchoolStore();
     const [cityQuery, setCityQuery] = useState('');
     const [schoolQuery, setSchoolQuery] = useState('');
@@ -76,20 +76,34 @@ export function Step1School() {
             onNext={handleNext}
         >
             {(form) => {
+                // Compute derived state for Teacher Locking
+                const studentClass = role === 'student' ? (profileData.class || profileData.classe) : null;
+                const targetClass = studentClass ? useSchoolStore.getState().classes.find(c => c.name === studentClass) : null;
+                const lockedMainTeacher = targetClass?.mainTeacher;
+
+                // Explicit Lock for School Data (Student view OR Demo mode)
+                // We treat 'demo@pledgeum.fr' as a student to demonstrate the UI locking
+                const isSchoolLocked = role === 'student' || email === 'pledgeum@gmail.com' || email === 'demo@pledgeum.fr';
+
                 useEffect(() => {
                     // Pre-fill from School Store (Single Source of Truth)
                     const { schoolName, schoolAddress, schoolPhone, schoolHeadName, schoolHeadEmail } = useSchoolStore.getState();
 
-                    // Always overwrite if locked for students to ensure consistency with admin settings
-                    // Or if empty.
-                    if (useUserStore.getState().role === 'student' || !form.getValues('ecole_nom')) {
+                    // Always overwrite if locked to ensure consistency with admin settings
+                    if (isSchoolLocked || !form.getValues('ecole_nom')) {
                         if (schoolName) form.setValue('ecole_nom', schoolName);
                         if (schoolAddress) form.setValue('ecole_adresse', schoolAddress);
                         if (schoolPhone) form.setValue('ecole_tel', schoolPhone);
                         if (schoolHeadName) form.setValue('ecole_chef_nom', schoolHeadName);
                         if (schoolHeadEmail) form.setValue('ecole_chef_email', schoolHeadEmail);
                     }
-                }, [form, useSchoolStore.getState().schoolName]); // Trigger on mount or name change
+
+                    // Auto-fill Teacher if locked
+                    if (lockedMainTeacher) {
+                        form.setValue('prof_nom', `${lockedMainTeacher.firstName} ${lockedMainTeacher.lastName}`);
+                        form.setValue('prof_email', lockedMainTeacher.email);
+                    }
+                }, [form, useSchoolStore.getState().schoolName, lockedMainTeacher, isSchoolLocked]); // Trigger on mount or name change
 
                 // Auto-reset convention type if current value is not allowed
                 useEffect(() => {
@@ -114,21 +128,23 @@ export function Step1School() {
                                 {...form.register('type')}
                                 className="block w-full rounded-md border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500 text-sm p-2 bg-white"
                             >
-                                {(!allowedConventionTypes || allowedConventionTypes.includes('PFMP_STANDARD')) && (
-                                    <option value="PFMP_STANDARD">PFMP Lycée Professionnel (Standard)</option>
-                                )}
-                                {(!allowedConventionTypes || allowedConventionTypes.includes('STAGE_2NDE')) && (
-                                    <option value="STAGE_2NDE">Stage de Seconde</option>
-                                )}
-                                {(!allowedConventionTypes || allowedConventionTypes.includes('ERASMUS_MOBILITY')) && (
-                                    <option value="ERASMUS_MOBILITY">Mobilité Erasmus+</option>
-                                )}
+                                <option value="PFMP_STANDARD" disabled={allowedConventionTypes && !allowedConventionTypes.includes('PFMP_STANDARD')}>
+                                    PFMP Lycée Professionnel (Standard) {allowedConventionTypes && !allowedConventionTypes.includes('PFMP_STANDARD') && '(Non activé)'}
+                                </option>
+                                <option value="STAGE_2NDE" disabled={allowedConventionTypes && !allowedConventionTypes.includes('STAGE_2NDE')}>
+                                    Stage de Seconde {allowedConventionTypes && !allowedConventionTypes.includes('STAGE_2NDE') && '(En cours de développement)'}
+                                </option>
+                                <option value="ERASMUS_MOBILITY" disabled={allowedConventionTypes && !allowedConventionTypes.includes('ERASMUS_MOBILITY')}>
+                                    Mobilité Erasmus+ {allowedConventionTypes && !allowedConventionTypes.includes('ERASMUS_MOBILITY') && '(En cours de développement)'}
+                                </option>
                             </select>
-                            <p className="text-xs text-indigo-600 mt-1">Le choix du type détermine le format légal de la convention générée.</p>
+                            <p className="text-xs text-indigo-600 mt-1">
+                                Le choix du type détermine le format légal de la convention générée. Les options grisées sont en cours de développement ou désactivées par votre établissement.
+                            </p>
                         </div>
 
-                        {/* Search School - Check if not student AND not debug account */}
-                        {profileData?.role !== 'student' && email !== 'pledgeum@gmail.com' && (
+                        {/* Search School - Check if NOT locked (so not student and not debug account) */}
+                        {!isSchoolLocked && (
                             <div className="md:col-span-2 bg-blue-50 p-4 rounded-xl border border-blue-100 mb-4">
                                 <h4 className="flex items-center text-blue-900 font-semibold mb-3">
                                     <Search className="w-4 h-4 mr-2" />
@@ -190,10 +206,11 @@ export function Step1School() {
                             <input
                                 {...form.register('ecole_nom')}
                                 type="text"
-                                disabled={profileData?.role === 'student' || email === 'pledgeum@gmail.com'}
+                                disabled={isSchoolLocked}
+                                readOnly={isSchoolLocked}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
-                                    (profileData?.role === 'student' || email === 'pledgeum@gmail.com') && "bg-gray-100 text-gray-500 cursor-not-allowed",
+                                    isSchoolLocked && "bg-gray-200 text-gray-500 cursor-not-allowed",
                                     form.formState.errors.ecole_nom && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -205,10 +222,11 @@ export function Step1School() {
                             <textarea
                                 {...form.register('ecole_adresse')}
                                 rows={2}
-                                disabled={profileData?.role === 'student' || email === 'pledgeum@gmail.com'}
+                                disabled={isSchoolLocked}
+                                readOnly={isSchoolLocked}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
-                                    (profileData?.role === 'student' || email === 'pledgeum@gmail.com') && "bg-gray-100 text-gray-500 cursor-not-allowed",
+                                    isSchoolLocked && "bg-gray-200 text-gray-500 cursor-not-allowed",
                                     form.formState.errors.ecole_adresse && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -220,10 +238,11 @@ export function Step1School() {
                             <input
                                 {...form.register('ecole_tel')}
                                 type="tel"
-                                disabled={profileData?.role === 'student' || email === 'pledgeum@gmail.com'}
+                                disabled={isSchoolLocked}
+                                readOnly={isSchoolLocked}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
-                                    (profileData?.role === 'student' || email === 'pledgeum@gmail.com') && "bg-gray-100 text-gray-500 cursor-not-allowed",
+                                    isSchoolLocked && "bg-gray-200 text-gray-500 cursor-not-allowed",
                                     form.formState.errors.ecole_tel && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -240,10 +259,11 @@ export function Step1School() {
                             <input
                                 {...form.register('ecole_chef_nom')}
                                 type="text"
-                                disabled={profileData?.role === 'student' || email === 'pledgeum@gmail.com'}
+                                disabled={isSchoolLocked}
+                                readOnly={isSchoolLocked}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
-                                    (profileData?.role === 'student' || email === 'pledgeum@gmail.com') && "bg-gray-100 text-gray-500 cursor-not-allowed",
+                                    isSchoolLocked && "bg-gray-200 text-gray-500 cursor-not-allowed",
                                     form.formState.errors.ecole_chef_nom && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -254,10 +274,11 @@ export function Step1School() {
                             <input
                                 {...form.register('ecole_chef_email')}
                                 type="email"
-                                disabled={profileData?.role === 'student' || email === 'pledgeum@gmail.com'}
+                                disabled={isSchoolLocked}
+                                readOnly={isSchoolLocked}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
-                                    (profileData?.role === 'student' || email === 'pledgeum@gmail.com') && "bg-gray-100 text-gray-500 cursor-not-allowed",
+                                    isSchoolLocked && "bg-gray-200 text-gray-500 cursor-not-allowed",
                                     form.formState.errors.ecole_chef_email && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -273,8 +294,10 @@ export function Step1School() {
                             <input
                                 {...form.register('prof_nom')}
                                 type="text"
+                                disabled={!!lockedMainTeacher}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
+                                    !!lockedMainTeacher && "bg-gray-200 text-gray-500 cursor-not-allowed",
                                     form.formState.errors.prof_nom && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -285,8 +308,10 @@ export function Step1School() {
                             <input
                                 {...form.register('prof_email')}
                                 type="email"
+                                disabled={!!lockedMainTeacher}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
+                                    !!lockedMainTeacher && "bg-gray-200 text-gray-500 cursor-not-allowed",
                                     form.formState.errors.prof_email && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />

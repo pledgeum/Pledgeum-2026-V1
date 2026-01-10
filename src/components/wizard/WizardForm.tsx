@@ -82,7 +82,7 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
     const { submitConvention } = useConventionStore();
-    const { addNotification } = useUserStore();
+    const { addNotification, email } = useUserStore();
     const { reset } = useWizardStore();
     const { user } = useAuth();
 
@@ -167,14 +167,16 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
             <div className="w-full max-w-4xl">
                 <div className="flex justify-between items-center mb-8">
                     <h1 className="text-3xl font-extrabold text-blue-900 tracking-tight">Convention PFMP</h1>
-                    <button
-                        onClick={loadDemoData}
-                        className="flex items-center text-sm text-blue-600 hover:text-blue-800 transition-colors"
-                        title="Pré-remplir avec des données de test"
-                    >
-                        <Wand2 className="w-4 h-4 mr-1" />
-                        Mode Démo
-                    </button>
+                    {(email === 'demo@pledgeum.fr' || email === 'pledgeum@gmail.com') && (
+                        <button
+                            onClick={loadDemoData}
+                            className="flex items-center text-sm text-blue-600 hover:text-blue-800 transition-colors"
+                            title="Pré-remplir avec des données de test"
+                        >
+                            <Wand2 className="w-4 h-4 mr-1" />
+                            Mode Démo
+                        </button>
+                    )}
                 </div>
 
                 <Stepper />

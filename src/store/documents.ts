@@ -12,6 +12,9 @@ export interface ClassDocument {
     uploadedBy: string; // User ID
     createdAt: string; // ISO String
     type: 'RECOMMENDATION' | 'EVALUATION' | 'OTHER';
+    sharedWithSchool?: boolean;
+    sharedBy?: string; // Display name of the user who shared it
+    schoolName?: string; // To scope sharing to just their school
 }
 
 interface DocumentState {
@@ -20,8 +23,9 @@ interface DocumentState {
     error: string | null;
 
     fetchDocuments: (classId?: string) => Promise<void>;
-    fetchUserDocuments: (userId: string) => Promise<void>;
-    uploadDocument: (file: File, classIds: string[], uploadedBy: string, type?: ClassDocument['type']) => Promise<boolean>;
+    fetchUserDocuments: (userId: string, schoolName?: string) => Promise<void>;
+    uploadDocument: (file: File, classIds: string[], uploadedBy: string, type?: ClassDocument['type'], sharingData?: { sharedWithSchool: boolean, sharedBy: string, schoolName: string }) => Promise<boolean>;
+    toggleSharing: (docId: string, sharedWithSchool: boolean, metadata?: { schoolName: string, sharedBy: string }) => Promise<boolean>;
     assignDocumentToClasses: (docId: string, classIds: string[]) => Promise<boolean>;
     deleteDocument: (docId: string, fileUrl: string) => Promise<boolean>;
 }
@@ -59,7 +63,7 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         }
     },
 
-    uploadDocument: async (file, classIds, uploadedBy, type = 'OTHER') => {
+    uploadDocument: async (file, classIds, uploadedBy, type = 'OTHER', sharingData) => {
         if (!storage) {
             set({ error: "Storage not configured" });
             return false;
@@ -79,7 +83,8 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
                 classIds,
                 uploadedBy,
                 createdAt: new Date().toISOString(),
-                type
+                type,
+                ...sharingData // sharedWithSchool, sharedBy, schoolName
             };
 
             const docRef = await addDoc(collection(db, 'class_documents'), docData);
@@ -94,6 +99,30 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
             return true;
         } catch (error: any) {
             console.error("Error uploading document:", error);
+            set({ error: error.message, loading: false });
+            return false;
+        }
+    },
+
+    toggleSharing: async (docId, sharedWithSchool, metadata) => {
+        set({ loading: true, error: null });
+        try {
+            const docRef = doc(db, 'class_documents', docId);
+            const updateData: any = { sharedWithSchool };
+            if (sharedWithSchool && metadata) {
+                updateData.schoolName = metadata.schoolName;
+                updateData.sharedBy = metadata.sharedBy;
+            }
+
+            await updateDoc(docRef, updateData);
+
+            set(state => ({
+                documents: state.documents.map(d => d.id === docId ? { ...d, ...updateData } : d),
+                loading: false
+            }));
+            return true;
+        } catch (error: any) {
+            console.error("Error toggling sharing:", error);
             set({ error: error.message, loading: false });
             return false;
         }
@@ -117,23 +146,37 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         }
     },
 
-    fetchUserDocuments: async (userId) => {
+    fetchUserDocuments: async (userId, schoolName) => {
         set({ loading: true, error: null });
         try {
             const docsRef = collection(db, 'class_documents');
-            const q = query(docsRef, where('uploadedBy', '==', userId)); // Index might be needed
+            const queries = [];
 
-            const snapshot = await getDocs(q);
-            const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ClassDocument));
+            // 1. My Documents
+            queries.push(query(docsRef, where('uploadedBy', '==', userId)));
+
+            // 2. Shared Documents (from my school)
+            if (schoolName) {
+                queries.push(query(docsRef,
+                    where('sharedWithSchool', '==', true),
+                    where('schoolName', '==', schoolName)
+                ));
+            }
+
+            const snapshots = await Promise.all(queries.map(q => getDocs(q)));
+
+            // Merge and Deduplicate
+            const docsMap = new Map();
+            snapshots.forEach(snap => {
+                snap.docs.forEach(d => {
+                    docsMap.set(d.id, { id: d.id, ...d.data() } as ClassDocument);
+                });
+            });
+
+            const docs = Array.from(docsMap.values());
 
             // Sort
             docs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-            // We might want to separate "My Docs" from "Class Docs" in state, or just use `documents` and let component filter?
-            // The Plan implies a separate view. If we overwrite `documents`, the "Active Documents" list in the modal might switch context.
-            // But the modal seems to want to switch TABS.
-            // If I overwrite `documents`, the "List Section" in the modal (which currently shows filtered docs) will show these.
-            // Let's stick to using the main `documents` array for simplicity, as the component will govern what to show.
 
             set({ documents: docs, loading: false });
         } catch (error: any) {

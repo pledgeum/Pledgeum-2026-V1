@@ -2,18 +2,40 @@
 import { db, auth } from '@/lib/firebase';
 import { collection, addDoc } from 'firebase/firestore';
 
+// Existing imports...
+import { useDemoStore } from '@/store/demo';
+
 export async function sendNotification(to: string, subject: string, text: string) {
+    // 1. Check Demo Mode
+    const { isDemoMode, openEmailModal } = useDemoStore.getState();
+    if (isDemoMode) {
+        console.log(`[DEMO] Intercepted email to ${to}`);
+        openEmailModal({ to, subject, text });
+
+        // Also create the in-app notification locally for realism
+        try {
+            // In demo mode, we might want to skip Firestore write for notifications too?
+            // Or allow it if we are mocking Firestore? 
+            // Ideally, skip real DB write to avoid pollution.
+            console.log(`[DEMO] Skipped DB notification write for ${to}`);
+        } catch (e) {
+            console.error("Error invoking demo logic", e);
+        }
+
+        return true; // Simulate success
+    }
+
     // Audit: Log the email attempt (optional, or rely on console)
     console.log(`[EMAIL] Sending to ${to}: ${subject}`);
 
-    // 1. Create In-App Notification (Persistent)
+    // 2. Create In-App Notification (Persistent)
     try {
         await createInAppNotification(to, subject, text);
     } catch (e) {
         console.error("Error creating in-app notification:", e);
     }
 
-    // 2. Send Actual Email (Server Action / API)
+    // 3. Send Actual Email (Server Action / API)
     try {
         const apiUrl = (typeof window === 'undefined')
             ? `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/send-email`

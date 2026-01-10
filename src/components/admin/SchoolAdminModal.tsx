@@ -117,7 +117,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
         importTeachers, addTeacherToClass, removeTeacherFromClass, importGlobalTeachers,
         importStudents, addStudentToClass, removeStudentFromClass, allowedConventionTypes,
         toggleConventionType, schoolHeadEmail, delegatedAdminId, setDelegatedAdmin, schoolName,
-        schoolAddress, schoolPhone, schoolHeadName, generateStudentCredentials, generateTeacherCredentials, importGlobalStructure,
+        schoolAddress, schoolPhone, schoolHeadName, generateStudentCredentials, regenerateStudentCredentials, markCredentialsPrinted, generateTeacherCredentials, importGlobalStructure,
         partnerCompanies, importPartners, removePartner,
         // Visibility Store
         hiddenActivities, setHiddenActivities, hiddenJobs, setHiddenJobs, hiddenClasses, setHiddenClasses,
@@ -634,7 +634,27 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                 return;
             }
 
-            // 2.5 Sync with Firestore 'invitations' collection (Batch Write)
+            // 1. Ensure credentials exist for everyone (idempotent)
+            generateStudentCredentials(cls.id);
+
+            // Wait a tick for store update (local state sync)
+            await new Promise(resolve => setTimeout(resolve, 100));
+            const updatedClass = useSchoolStore.getState().classes.find(c => c.id === cls.id);
+            if (!updatedClass) return;
+
+            // 2. Filter: Only print NEW credentials (not yet printed)
+            // However, if ALL are printed, maybe asking to reprint all is better?
+            let studentsToPrint = updatedClass.studentsList.filter(s => !s.credentialsPrinted);
+
+            if (studentsToPrint.length === 0) {
+                if (confirm("Tous les élèves ont déjà leurs fiches imprimées. Voulez-vous imprimer à nouveau TOUS les identifiants de la classe ?")) {
+                    studentsToPrint = updatedClass.studentsList;
+                } else {
+                    return; // Cancel
+                }
+            }
+
+            // 2.5 Sync with Firestore (only for those we are printing/generating)
             try {
                 const { writeBatch, doc: firestoreDoc, collection } = await import("firebase/firestore");
                 const { db } = await import("@/lib/firebase");
@@ -643,30 +663,18 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                 const invitationsRef = collection(db, "invitations");
                 const currentUser = auth.currentUser;
 
-                console.log("Syncing invitations to Firestore...");
-
                 let operationCount = 0;
-                // Generate a new batch for every 500 ops if needed, but classes are usually < 35
-
-                cls.studentsList.forEach(student => {
+                studentsToPrint.forEach(student => {
                     if (student.tempId && student.tempCode) {
-                        // Use tempId as Document ID for easy lookup/deduplication? 
-                        // Or just addDoc? addDoc is safer but lookups need query.
-                        // Let's use custom ID if possible to avoid duplicates, OR just addDoc.
-                        // User verification queries by tempId. 
-                        // If we re-generate, we might duplicate.
-                        // Best practice: Query existing? Too expensive.
-                        // For now: Just create new entries. The query limits to 1.
-
-                        const newInvRef = firestoreDoc(invitationsRef); // Auto-ID
+                        const newInvRef = firestoreDoc(invitationsRef);
                         batch.set(newInvRef, {
                             tempId: student.tempId,
                             tempCode: student.tempCode,
-                            email: student.email || "", // Can be empty for students
+                            email: student.email || "",
                             name: `${student.firstName} ${student.lastName}`,
                             role: 'student',
-                            birthDate: student.birthDate || null, // Important for account activation
-                            schoolId: schoolName, // Using name as ID/Ref for now
+                            birthDate: student.birthDate || null,
+                            schoolId: schoolName,
                             createdAt: new Date().toISOString(),
                             createdBy: currentUser?.uid || "system",
                             status: 'pending',
@@ -679,39 +687,36 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
 
                 if (operationCount > 0) {
                     await batch.commit();
-                    console.log(`Successfully synced ${operationCount} invitations to Firestore.`);
-                } else {
-                    console.warn("No students with credentials to sync.");
+                    console.log(`Synced ${operationCount} invitations.`);
                 }
-
-            } catch (fsError) {
-                console.error("Firestore Sync Error:", fsError);
-                // Don't block PDF generation, but warn user?
-                alert("Attention : Impossible de synchroniser les identifiants en ligne. La connexion pourra échouer. Vérifiez votre connexion internet.");
+            } catch (err) {
+                console.error("Firestore sync warning:", err);
             }
 
+
             // 3. Generate PDF Blob
-            console.log("Generating PDF blob...");
+            console.log("Generating PDF blob for", studentsToPrint.length, "students...");
             const blob = await pdf(
                 <StudentCredentialsPdf
-                    students={cls.studentsList}
-                    classInfo={cls}
+                    students={studentsToPrint}
+                    classInfo={updatedClass}
                     schoolName={schoolName}
                 />
             ).toBlob();
-            console.log("PDF Blob created, size:", blob.size);
 
             // 4. Download (Native)
-            console.log("Triggering download...");
             const url = URL.createObjectURL(blob);
             const link = document.createElement('a');
             link.href = url;
-            link.download = `Identifiants_${cls.name.replace(/\s+/g, '_')}.pdf`;
+            link.download = `Identifiants_${cls.name.replace(/\s+/g, '_')}_${studentsToPrint.length}_elèves.pdf`;
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-            console.log("Download triggered.");
+
+            // 5. Mark as Printed
+            const printedIds = studentsToPrint.map(s => s.id);
+            markCredentialsPrinted(cls.id, printedIds);
 
         } catch (error) {
             console.error("PDF Gen Error Full:", error);
@@ -1815,15 +1820,35 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                                     <div key={student.id} className="flex justify-between items-center bg-gray-50 px-2 py-1 rounded text-xs group/student">
                                                                         <div className="flex flex-col overflow-hidden">
                                                                             <span className="truncate">{student.firstName} {student.lastName}</span>
-                                                                            {student.birthDate && <span className="text-[10px] text-gray-500">Né(e) le {student.birthDate}</span>}
+                                                                            {student.birthDate && <span className="text-[10px] text-gray-500">Né(e) le {(() => {
+                                                                                try {
+                                                                                    if (student.birthDate.includes('/')) return student.birthDate;
+                                                                                    return new Date(student.birthDate).toLocaleDateString('fr-FR');
+                                                                                } catch (e) { return student.birthDate; }
+                                                                            })()}</span>}
                                                                         </div>
                                                                         <span className="text-gray-400 truncate flex-1 mx-2">{student.email}</span>
-                                                                        <button
-                                                                            onClick={() => removeStudentFromClass(cls.id, student.id)}
-                                                                            className="text-gray-400 hover:text-red-500 opacity-0 group-hover/student:opacity-100"
-                                                                        >
-                                                                            <X className="w-3 h-3" />
-                                                                        </button>
+                                                                        <div className="flex items-center space-x-1 opacity-0 group-hover/student:opacity-100 transition-opacity">
+                                                                            <button
+                                                                                onClick={() => {
+                                                                                    if (confirm(`Régénérer les identifiants provisoires pour ${student.firstName} ${student.lastName} ?\nCeci annulera les anciens identifiants.`)) {
+                                                                                        regenerateStudentCredentials(cls.id, student.id);
+                                                                                        alert("Identifiants régénérés. Vous pouvez les voir en téléchargeant la fiche PDF.");
+                                                                                    }
+                                                                                }}
+                                                                                className="text-gray-400 hover:text-blue-600 p-1"
+                                                                                title="Régénérer Identifiants (Code Provisoire)"
+                                                                            >
+                                                                                <Key className="w-3 h-3" />
+                                                                            </button>
+                                                                            <button
+                                                                                onClick={() => removeStudentFromClass(cls.id, student.id)}
+                                                                                className="text-gray-400 hover:text-red-500 p-1"
+                                                                                title="Supprimer l'élève"
+                                                                            >
+                                                                                <X className="w-3 h-3" />
+                                                                            </button>
+                                                                        </div>
                                                                     </div>
                                                                 );
                                                             })

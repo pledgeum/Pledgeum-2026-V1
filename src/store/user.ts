@@ -1,5 +1,5 @@
 import { create } from 'zustand';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 export type UserRole = 'student' | 'teacher' | 'teacher_tracker' | 'school_head' | 'company_head' | 'tutor' | 'parent' | 'company_head_tutor' | 'ddfpt' | 'business_manager' | 'assistant_manager' | 'stewardship_secretary' | 'at_ddfpt';
@@ -67,7 +67,44 @@ export const useUserStore = create<UserState>((set, get) => ({
     clearNotifications: () => set({ notifications: [], unreadCount: 0 }),
 
     fetchUserProfile: async (uid: string) => {
+        console.log("UserStore: fetchUserProfile called for", uid);
         set({ isLoadingProfile: true });
+
+        // --- DEMO MODE INJECTION ---
+        // If the authenticated user is the demo account, we inject a mock profile
+        // and bypass Firestore completely.
+        const currentUser = auth.currentUser;
+        console.log("UserStore: currentUser in store is", currentUser?.email);
+
+        if (currentUser?.email === 'demo@pledgeum.fr') {
+            console.log("[DEMO] Loading Mock Profile for Demo User");
+
+            // Set Global Demo Mode
+            import('./demo').then(({ useDemoStore }) => {
+                useDemoStore.getState().setDemoMode(true);
+            });
+
+            // Inject Mock Profile
+            set({
+                name: "Utilisateur Démo",
+                email: "demo@pledgeum.fr",
+                role: 'school_head', // Admin role as requested
+                birthDate: "1980-01-01",
+                profileData: {
+                    ecole_nom: "Lycée d'Excellence Démo",
+                    ecole_ville: "Paris"
+                },
+                hasAcceptedTos: true, // Bypass TOS
+                isLoadingProfile: false
+            });
+
+            // We do NOT trigger school data load here to avoid circular dependencies.
+            // DemoUI or similar should handle "On Demo Enter -> Load School Data".
+
+            return true;
+        }
+        // ---------------------------
+
         try {
             const docRef = doc(db, "users", uid);
             const docSnap = await getDoc(docRef);

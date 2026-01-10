@@ -234,7 +234,7 @@ export function Step3Company() {
                         </div>
 
                         <div className="md:col-span-2 border-t pt-4 mt-2">
-                            <h3 className="text-sm font-semibold text-gray-900 mb-4">Représentant Légal (Signataire)</h3>
+                            <h3 className="text-sm font-semibold text-gray-900 mb-4">Représentant Légal (Signataire) de l'organisme d'accueil</h3>
                         </div>
 
                         <div>

@@ -1,3 +1,5 @@
+"use client";
+
 import { useState, useEffect, useRef } from 'react';
 import { Address } from '@/store/school';
 import { MapPin, Loader2, AlertCircle } from 'lucide-react';

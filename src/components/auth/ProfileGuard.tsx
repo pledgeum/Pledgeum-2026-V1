@@ -51,11 +51,15 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
                 return;
             }
 
-            if (isLoadingProfile) return; // Still loading
+            if (isLoadingProfile) {
+                console.log("ProfileGuard: Waiting for profile load...");
+                return;
+            }
 
             // Check exclusions AFTER data is potentially loaded
             const isExcluded = EXCLUDED_PATHS.some(p => pathname?.startsWith(p));
             if (isExcluded) {
+                console.log("ProfileGuard: Path excluded", pathname);
                 setIsChecking(false);
                 return;
             }
@@ -90,10 +94,8 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
     // Or if likely valid.
 
     // Simplification: If user && !isComplete && !excluded => return null (redirecting)
-    const isExcluded = EXCLUDED_PATHS.some(p => pathname?.startsWith(p));
-    if (user && !isLoadingProfile && !isComplete && !isExcluded) {
-        return null;
-    }
+    // ALLOW INCOMPLETE PROFILES TO RENDER
+    // We rely on ProfileModal or headers to nudge user to complete profile.
 
     return <>{children}</>;
 }
