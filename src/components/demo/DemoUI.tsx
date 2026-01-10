@@ -10,7 +10,7 @@ import { MockMailbox } from "./MockMailbox";
 export function DemoUI() {
     const { isDemoMode } = useDemoStore();
     const { restoreTestData } = useSchoolStore();
-    const { user } = useUserStore();
+    const { email } = useUserStore();
 
     useEffect(() => {
         if (isDemoMode) {
@@ -20,7 +20,7 @@ export function DemoUI() {
     }, [isDemoMode, restoreTestData]);
 
     // Only show if demo mode AND connected as the specific demo user
-    const showDemoUI = isDemoMode && user?.email === 'demo@pledgeum.fr';
+    const showDemoUI = isDemoMode && email === 'demo@pledgeum.fr';
 
     return (
         <>
