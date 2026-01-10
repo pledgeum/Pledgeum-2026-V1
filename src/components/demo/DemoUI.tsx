@@ -8,9 +8,9 @@ import { EmailSimulatorModal } from "./EmailSimulatorModal";
 import { MockMailbox } from "./MockMailbox";
 
 export function DemoUI() {
-    const { isDemoMode } = useDemoStore();
-    const { restoreTestData } = useSchoolStore();
-    const { email } = useUserStore();
+    const isDemoMode = useDemoStore((state) => state.isDemoMode);
+    const restoreTestData = useSchoolStore((state) => state.restoreTestData);
+    const email = useUserStore((state) => state.email);
 
     useEffect(() => {
         if (isDemoMode) {
@@ -62,9 +62,7 @@ export function DemoUI() {
                             </select>
                         </div>
 
-                        <div className="bg-indigo-600/90 hover:bg-indigo-500 backdrop-blur-sm text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 transition-all hover:scale-105 cursor-help" title="Mode Démonstration actif : Les données sont simulées et non sauvegardées.">
-                            <span>⚠️ Données Fictives</span>
-                        </div>
+
                     </div>
                 </div>
             )}

@@ -434,7 +434,7 @@ export default function Home() {
                 title="Rechercher une entreprise partenaire"
               >
                 <Building2 className="w-4 h-4 mr-1" />
-                Trouver une entreprise
+                <span className="hidden xl:inline">Trouver une entreprise</span>
               </button>
             )}
 
@@ -444,7 +444,7 @@ export default function Home() {
               title="Consulter les engagements RGPD"
             >
               <ShieldCheck className="w-4 h-4 mr-1" />
-              Respect RGPD
+              <span className="hidden xl:inline">Respect RGPD</span>
             </button>
 
             <button
@@ -455,7 +455,7 @@ export default function Home() {
               <div className="bg-blue-50 text-blue-600 p-1.5 rounded-lg mr-2">
                 <ShieldCheck className="w-4 h-4" />
               </div>
-              Authentification des documents
+              <span className="hidden xl:inline">Authentification des documents</span>
             </button>
 
             <button
@@ -486,7 +486,7 @@ export default function Home() {
                 <div className="bg-green-50 text-green-600 p-1.5 rounded-lg mr-2">
                   <FileText className="w-4 h-4" />
                 </div>
-                Ordres de Mission
+                <span className="hidden xl:inline">Ordres de Mission</span>
                 {useMissionOrderStore.getState().missionOrders.filter(o => o.status === 'PENDING').length > 0 && (
                   <span className="ml-2 bg-green-600 text-white text-[9px] px-1.5 py-0.5 rounded-full">
                     {useMissionOrderStore.getState().missionOrders.filter(o => o.status === 'PENDING').length}
@@ -507,7 +507,7 @@ export default function Home() {
                     <div className="bg-indigo-50 text-indigo-600 p-1.5 rounded-lg mr-2">
                       <span className="text-sm">🎓</span>
                     </div>
-                    Alumni
+                    <span className="hidden xl:inline">Alumni</span>
                   </button>
                 )}
 
@@ -519,7 +519,7 @@ export default function Home() {
                   <div className="bg-blue-50 text-blue-600 p-1.5 rounded-lg mr-2">
                     <Users className="w-4 h-4" />
                   </div>
-                  Admin. Établissement
+                  <span className="hidden xl:inline">Admin. Établissement</span>
                 </button>
               </div>
             )}
@@ -1363,7 +1363,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
 
   return (
     <div className="divide-y divide-gray-200">
-      <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center sticky top-0 z-1">
+      <div className="px-6 py-4 border-b border-gray-200 bg-gray-50 flex justify-between items-center sticky top-0 z-40">
         <div className="flex flex-col gap-4 w-full md:w-auto">
           <div className="flex items-center space-x-4">
             {isSchoolAdminRole(role) && actionableCount > 0 && (
