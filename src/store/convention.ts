@@ -249,11 +249,129 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
         try {
             // Super Admin Bypass
             // --- DEMO MODE SIMULATION ---
+            // --- DEMO MODE SIMULATION ---
             if (userEmail === 'demo@pledgeum.fr') {
                 console.log("[DEMO] Fetching Simulated Conventions");
-                // Ensure simulated conventions exist in STATE, no need to query DB.
-                // We'll return the MOCK_CONVENTION + MOCK_CONVENTION_READY
-                const demoConvs = [MOCK_CONVENTION, MOCK_CONVENTION_READY];
+
+                // Import demo store dynamically
+                // Note: We use the already imported UserRole type but fetch state dynamically
+                const { useDemoStore } = await import('./demo');
+                const demoRole = useDemoStore.getState().demoRole;
+                console.log("[DEMO] Generating conventions for role:", demoRole);
+
+                const demoConvs: Convention[] = [];
+
+                // Base Convention Template
+                const baseConv: Convention = { ...MOCK_CONVENTION, id: `conv_demo_${demoRole}`, studentId: 'eleve.demo@pledgeum.fr' };
+
+                if (demoRole === 'student') {
+                    // Scenario: Student needs to sign. Convention is validated by teacher but not signed by student yet? 
+                    // No, usually Student signs first. So it's DRAFT or SUBMITTED.
+                    // Let's make it SUBMITTED (created) but unsigned.
+                    demoConvs.push({
+                        ...baseConv,
+                        id: 'conv_student_action',
+                        status: 'SUBMITTED',
+                        signatures: { ...baseConv.signatures, studentAt: undefined, studentImg: undefined, studentCode: undefined }, // Clear student signature
+                        eleve_email: 'demo@pledgeum.fr' // Bind to current user
+                    });
+                    // Add a second one: Signed by student/parent, waiting for teacher (ReadOnly view for student)
+                    demoConvs.push({
+                        ...baseConv,
+                        id: 'conv_student_waiting',
+                        status: 'SIGNED_PARENT', // Student & Parent signed
+                        signatures: {
+                            ...baseConv.signatures,
+                            teacherAt: undefined, teacherCode: undefined,
+                            companyAt: undefined, companyCode: undefined,
+                            tutorAt: undefined, tutorCode: undefined,
+                            headAt: undefined, headCode: undefined
+                        },
+                        eleve_email: 'demo@pledgeum.fr'
+                    });
+                }
+                else if (demoRole === 'teacher') {
+                    // Scenario: Teacher needs to validate. Student & Parent signed.
+                    demoConvs.push({
+                        ...baseConv,
+                        id: 'conv_teacher_action',
+                        status: 'SIGNED_PARENT', // Ready for teacher
+                        signatures: {
+                            ...baseConv.signatures,
+                            teacherAt: undefined, teacherCode: undefined,
+                            companyAt: undefined, companyCode: undefined,
+                            tutorAt: undefined, tutorCode: undefined,
+                            headAt: undefined, headCode: undefined
+                        },
+                        prof_email: 'demo@pledgeum.fr'
+                    });
+
+                    // Add a second one: Validated by teacher, waiting for partners (History view)
+                    demoConvs.push({
+                        ...baseConv,
+                        id: 'conv_teacher_validated',
+                        status: 'VALIDATED_TEACHER', // Validated
+                        signatures: {
+                            ...baseConv.signatures,
+                            companyAt: undefined, companyCode: undefined,
+                            tutorAt: undefined, tutorCode: undefined,
+                            headAt: undefined, headCode: undefined
+                        },
+                        prof_email: 'demo@pledgeum.fr'
+                    });
+                }
+                else if (demoRole === 'tutor') {
+                    // Scenario: Tutor needs to sign. Teacher Validated.
+                    demoConvs.push({
+                        ...baseConv,
+                        id: 'conv_tutor_action',
+                        status: 'VALIDATED_TEACHER', // Ready for partners
+                        signatures: {
+                            ...baseConv.signatures,
+                            companyAt: undefined, companyCode: undefined,
+                            tutorAt: undefined, tutorCode: undefined,
+                            headAt: undefined, headCode: undefined
+                        },
+                        tuteur_email: 'demo@pledgeum.fr'
+                    });
+                }
+                else if (demoRole === 'company_head') { // Responsable BDE uses company_head role usually? No, "business_manager" is school role. "company_head" is Partner.
+                    // Scenario: Company Head needs to sign. Teacher Validated.
+                    demoConvs.push({
+                        ...baseConv,
+                        id: 'conv_company_action',
+                        status: 'VALIDATED_TEACHER',
+                        signatures: {
+                            ...baseConv.signatures,
+                            companyAt: undefined, companyCode: undefined,
+                            tutorAt: undefined, tutorCode: undefined,
+                            headAt: undefined, headCode: undefined
+                        },
+                        ent_rep_email: 'demo@pledgeum.fr'
+                    });
+                }
+                else if (demoRole === 'school_head' || demoRole === 'ddfpt' || demoRole === 'business_manager') {
+                    // Scenario: School Head needs to validate final. All others signed.
+                    demoConvs.push({
+                        ...baseConv,
+                        id: 'conv_head_action',
+                        status: 'SIGNED_TUTOR', // Waiting for Head
+                        signatures: {
+                            ...baseConv.signatures,
+                            headAt: undefined, headCode: undefined
+                        },
+                        ecole_chef_email: 'demo@pledgeum.fr'
+                    });
+
+                    // Also add a completed one for reference
+                    demoConvs.push({
+                        ...baseConv,
+                        id: 'conv_head_completed',
+                        status: 'VALIDATED_HEAD',
+                        ecole_chef_email: 'demo@pledgeum.fr'
+                    });
+                }
+
                 set({ conventions: demoConvs });
                 return;
             }

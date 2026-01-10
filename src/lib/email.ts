@@ -1,4 +1,5 @@
 import nodemailer from 'nodemailer';
+import { adminDb } from '@/lib/firebase-admin';
 
 interface EmailOptions {
     to: string;
@@ -15,6 +16,27 @@ export async function sendEmail({ to, subject, text, attachments }: EmailOptions
 
     const port = Number(process.env.EMAIL_PORT);
     const isSecure = port === 465;
+
+    if (to.includes('demo@pledgeum.fr')) {
+        console.log('[DEMO] Intercepting email to demo@pledgeum.fr');
+        try {
+            // Import dynamically to avoid build-time issues if possible, or use the imported adminDb
+            // We need to import adminDb at the top.
+            await adminDb.collection('demo_inbox').add({
+                to,
+                subject,
+                text: text || '',
+                html: text || '', // Usually content is text, but let's store it
+                date: new Date().toISOString(),
+                read: false,
+                from: process.env.EMAIL_FROM || 'Pledgeum <noreply@pledgeum.fr>'
+            });
+            return true;
+        } catch (e) {
+            console.error('[DEMO] Failed to save email to inbox', e);
+            return true;
+        }
+    }
 
     try {
         const transporter = nodemailer.createTransport({

@@ -13,15 +13,20 @@ export function TosModal({ isOpen = false, onClose }: TosModalProps) {
     const { hasAcceptedTos, acceptTos } = useUserStore();
     const [isLoading, setIsLoading] = useState(false);
 
+    // Admin Bypass Logic: Admin is considered to have accepted TOS to avoid blocking, 
+    // but the modal can still be opened manually (view-only mode).
+    const isAdmin = user?.email === 'pledgeum@gmail.com' || user?.email === 'demo@pledgeum.fr';
+    const effectiveAccepted = isAdmin ? true : hasAcceptedTos;
+
     // If status is unknown (loading), do not render yet
-    if (hasAcceptedTos === null) return null;
+    if (effectiveAccepted === null) return null;
 
     // Determine if we are in blocking mode (mandatory acceptance) or view mode
-    const isBlocking = hasAcceptedTos === false;
+    const isBlocking = effectiveAccepted === false;
     const isVisible = isBlocking || isOpen;
 
-    // EMERGENCY BYPASS FOR ADMIN - Only bypass blocking mode, not explicit open
-    if (user?.email === 'pledgeum@gmail.com' && !isOpen) return null;
+    // Admin: Never show automatically (blocking), only if explicit open
+    if (isAdmin && !isOpen) return null;
 
     if (!user || !isVisible) return null;
 

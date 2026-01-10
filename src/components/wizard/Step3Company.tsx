@@ -4,6 +4,7 @@ import { z } from 'zod';
 import { StepWrapper } from './StepWrapper';
 import { conventionSchema } from '@/types/schema';
 import { useWizardStore } from '@/store/wizard';
+import { useDemoStore } from '@/store/demo';
 import { fetchCompanyBySiret } from '@/lib/companyApi';
 import { Loader2, Search } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -65,6 +66,27 @@ export function Step3Company() {
                         form.setValue('tuteur_email', repEmail || '');
                     }
                 }, [isSamePerson, repNom, repFonction, repEmail, form]);
+
+                const isDemoMode = useDemoStore((state) => state.isDemoMode);
+
+                useEffect(() => {
+                    if (isDemoMode) {
+                        const currentRep = form.getValues('ent_rep_nom');
+                        if (!currentRep) {
+                            form.setValue('ent_rep_nom', "Directeur Entreprise Démo");
+                            form.setValue('ent_rep_fonction', "Gérant");
+                            form.setValue('ent_rep_email', "demo@pledgeum.fr");
+
+                            // Only set tutor if "same person" is not checked (logic elsewhere handles sync if checked)
+                            // But usually we can just set them, and if user checks box, it overwrites.
+                            if (!form.getValues('tuteur_nom')) {
+                                form.setValue('tuteur_nom', "Tuteur Entreprise Démo");
+                                form.setValue('tuteur_fonction', "Technicien Expert");
+                                form.setValue('tuteur_email', "demo@pledgeum.fr");
+                            }
+                        }
+                    }
+                }, [isDemoMode, form]);
 
                 const performSearch = async (siretValue: string, isManual: boolean = false) => {
                     const cleanSiret = siretValue ? siretValue.replace(/[^0-9]/g, '') : '';
@@ -159,6 +181,15 @@ export function Step3Company() {
                                         Rechercher
                                     </button>
                                 </div>
+                                {/* Demo Mode Hint */}
+                                {useDemoStore && useDemoStore((state) => state.isDemoMode) && (
+                                    <div className="absolute top-0 right-0 -mt-8 mr-12 flex items-center gap-2 animate-bounce text-indigo-600 font-bold pointer-events-none z-10">
+                                        <span className="text-sm bg-white/90 px-2 py-1 rounded shadow-sm border border-indigo-200">
+                                            Ajoutez un siret réel ici
+                                        </span>
+                                        <span className="text-2xl transform rotate-90 sm:rotate-45">👇</span>
+                                    </div>
+                                )}
                                 {form.formState.errors.ent_siret && <p className="text-red-500 text-xs mt-1">{form.formState.errors.ent_siret.message}</p>}
                                 {searchStatus === 'success' && <p className="text-green-600 text-xs mt-1 font-medium">✅ Entreprise trouvée : Informations remplies.</p>}
                                 {searchStatus === 'not_found' && <p className="text-amber-600 text-xs mt-1 font-medium">⚠️ Aucune entreprise trouvée pour ce SIRET.</p>}

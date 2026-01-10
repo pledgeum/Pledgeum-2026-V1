@@ -79,27 +79,106 @@ export const useUserStore = create<UserState>((set, get) => ({
         if (currentUser?.email === 'demo@pledgeum.fr') {
             console.log("[DEMO] Loading Mock Profile for Demo User");
 
-            // Set Global Demo Mode
-            import('./demo').then(({ useDemoStore }) => {
-                useDemoStore.getState().setDemoMode(true);
-            });
+            // Import demo store dynamically to avoid circular dependency issues at module level if any
+            const { useDemoStore } = await import('./demo');
+            useDemoStore.getState().setDemoMode(true);
+            const currentDemoRole = useDemoStore.getState().demoRole;
 
-            // Inject Mock Profile
-            set({
+            console.log("[DEMO] Selected Role:", currentDemoRole);
+
+            let mockProfile: Partial<UserState> = {
                 name: "Utilisateur Démo",
                 email: "demo@pledgeum.fr",
-                role: 'school_head', // Admin role as requested
+                role: 'school_head',
                 birthDate: "1980-01-01",
-                profileData: {
-                    ecole_nom: "Lycée d'Excellence Démo",
-                    ecole_ville: "Paris"
-                },
-                hasAcceptedTos: true, // Bypass TOS
-                isLoadingProfile: false
-            });
+                profileData: { ecole_nom: "Lycée d'Excellence Démo", ecole_ville: "Paris" },
+                hasAcceptedTos: true
+            };
 
-            // We do NOT trigger school data load here to avoid circular dependencies.
-            // DemoUI or similar should handle "On Demo Enter -> Load School Data".
+            switch (currentDemoRole) {
+                case 'student':
+                    mockProfile = {
+                        ...mockProfile,
+                        name: "Élève Démo",
+                        role: 'student',
+                        birthDate: "2005-06-15",
+                        profileData: {
+                            ...mockProfile.profileData,
+                            class: "2NDE 1", // Matches a likely existing class or one we should ensure exists
+                            firstName: "Élève",
+                            lastName: "Démo",
+                            birthDate: "2005-06-15",
+                            classe: "2NDE 1",
+                            address: "10 Rue de la Paix",
+                            postalCode: "75002",
+                            zipCode: "75002",
+                            city: "Paris",
+                            phone: "0612345678",
+                            diploma: "Bac pro MSPC",
+                            legalRepresentatives: [
+                                {
+                                    firstName: "Jean",
+                                    lastName: "Dupont",
+                                    email: "parent.demo@pledgeum.fr",
+                                    phone: "0699887766",
+                                    address: {
+                                        street: "10 Rue de la Paix",
+                                        postalCode: "75002",
+                                        city: "Paris"
+                                    },
+                                    role: "Responsable Légal 1"
+                                }
+                            ]
+                        }
+                    };
+                    break;
+                case 'teacher':
+                    mockProfile = {
+                        ...mockProfile,
+                        name: "Professeur Démo",
+                        role: 'teacher',
+                        profileData: {
+                            ...mockProfile.profileData,
+                            subjects: ["Mathématiques", "Sciences"]
+                        }
+                    };
+                    break;
+                case 'tutor':
+                    mockProfile = {
+                        ...mockProfile,
+                        name: "Tuteur Démo",
+                        role: 'tutor',
+                        profileData: {
+                            ...mockProfile.profileData,
+                            companyName: "Entreprise Partenaire (Démo)",
+                            jobTitle: "Maître de Stage"
+                        }
+                    };
+                    break;
+                case 'business_manager':
+                    mockProfile = {
+                        ...mockProfile,
+                        name: "Responsable BDE Démo",
+                        role: 'business_manager'
+                    };
+                    break;
+                case 'ddfpt':
+                    mockProfile = {
+                        ...mockProfile,
+                        name: "DDFPT Démo",
+                        role: 'ddfpt'
+                    };
+                    break;
+                case 'school_head':
+                default:
+                    // Default is already set
+                    break;
+            }
+
+            set({
+                ...mockProfile,
+                isLoadingProfile: false
+            } as any);
 
             return true;
         }

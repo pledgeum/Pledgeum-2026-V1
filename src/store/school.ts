@@ -626,6 +626,21 @@ export const useSchoolStore = create<SchoolState>()(
                             { id: 's5', firstName: 'Thomas', lastName: 'Simon', email: 'thomas.simon@etu.fr', birthDate: '2007-03-30' },
                             { id: 's6', firstName: 'Léa', lastName: 'Michel', email: 'lea.michel@etu.fr', birthDate: '2007-07-12' }
                         ]
+                    },
+                    {
+                        id: 'demo-class-2nde1',
+                        name: '2NDE 1',
+                        mainTeacher: { firstName: 'Professeur', lastName: 'Démo', email: 'demo@pledgeum.fr' },
+                        cpe: { firstName: 'Marie', lastName: 'Durand', email: 'marie.durand@ecole.fr' },
+                        mef: '22830023003', // Fictitious but consistent
+                        label: 'SECONDE PRO METIERS DU PILOTAGE',
+                        diploma: 'BAC PRO MSPC',
+                        teachersList: [
+                            { id: 't_demo', firstName: 'Professeur', lastName: 'Démo', email: 'demo@pledgeum.fr' }
+                        ],
+                        studentsList: [
+                            { id: 's_demo', firstName: 'Élève', lastName: 'Démo', email: 'demo@pledgeum.fr', birthDate: '2005-06-15' }
+                        ]
                     }
                 ],
                 collaborators: [
