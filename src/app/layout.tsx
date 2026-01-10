@@ -13,8 +13,8 @@ const geistMono = Geist_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Pledgeum Mon bureau des entreprises",
-  description: "Gérez vos conventions de stage et PFMP simplement.",
+  title: "Pledgeum - Mon bureau des entreprises",
+  description: "Plateforme de gestion des PFMP et conventions de stage",
 };
 
 import { AuthProvider } from "@/context/AuthContext";
