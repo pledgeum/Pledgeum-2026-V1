@@ -84,8 +84,8 @@ export function DemoUI() {
         }
     }, [isDemoMode, restoreTestData]);
 
-    // Only show if demo mode AND connected as the specific demo user
-    const showDemoUI = isDemoMode && email === 'demo@pledgeum.fr';
+    // Only show if demo mode AND connected as a demo user (including +alias)
+    const showDemoUI = isDemoMode && email?.startsWith('demo') && email?.endsWith('@pledgeum.fr');
 
     return (
         <>
