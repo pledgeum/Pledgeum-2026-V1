@@ -9,6 +9,7 @@ import { MockMailbox } from "./MockMailbox";
 
 export function DemoUI() {
     const isDemoMode = useDemoStore((state) => state.isDemoMode);
+    const demoRole = useDemoStore((state) => state.demoRole);
     const restoreTestData = useSchoolStore((state) => state.restoreTestData);
     const email = useUserStore((state) => state.email);
 
@@ -39,7 +40,7 @@ export function DemoUI() {
                         <div className="bg-indigo-600/90 hover:bg-indigo-500 backdrop-blur-sm text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 transition-all hover:scale-105">
                             <span className="text-xs font-bold whitespace-nowrap">🦁 Testez chaque rôle :</span>
                             <select
-                                value={useDemoStore((state) => state.demoRole)}
+                                value={demoRole}
                                 onChange={async (e) => {
                                     const newRole = e.target.value as any;
                                     useDemoStore.getState().setDemoRole(newRole);
