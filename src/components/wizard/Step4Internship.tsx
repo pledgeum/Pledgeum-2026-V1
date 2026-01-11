@@ -101,6 +101,12 @@ export function Step4Internship() {
                             form.setValue('stage_horaires.Samedi', { matin_debut: '', matin_fin: '', apres_midi_debut: '', apres_midi_fin: '' });
                         }
                     }
+
+                    // 3. Auto-fill Activities
+                    const currentActivites = form.getValues('stage_activites');
+                    if (!currentActivites) {
+                        form.setValue('stage_activites', "Les activités proposées et les compétences sont celles du référentiels du diplôme.");
+                    }
                 }, [form]);
 
                 // Calculate duration and validate logic (Render-pass logic for speed)
