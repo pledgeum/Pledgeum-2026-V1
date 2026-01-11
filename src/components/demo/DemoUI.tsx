@@ -110,11 +110,12 @@ export function DemoUI() {
                             <span className="text-xl">👉</span>
                         </div>
 
-                        <div className="bg-indigo-600/90 hover:bg-indigo-500 backdrop-blur-sm text-white pl-3 pr-4 py-2 rounded-full shadow-lg flex items-center gap-3 transition-all hover:scale-105 border border-indigo-400/30">
+                        <div className="bg-indigo-600/90 hover:bg-indigo-500 backdrop-blur-sm text-white pl-2 pr-2 py-1.5 rounded-full shadow-lg flex items-center gap-2 transition-all hover:scale-105 border border-indigo-400/30 max-w-[95vw]">
                             {/* Drag Handle Area */}
-                            <div className="flex items-center gap-2 cursor-grab active:cursor-grabbing border-r border-white/20 pr-3">
+                            <div className="flex items-center gap-1 cursor-grab active:cursor-grabbing border-r border-white/20 pr-2">
                                 <GripVertical className="w-5 h-5 text-indigo-200" />
-                                <span className="text-xs font-bold whitespace-nowrap">🦁 Testez chaque rôle</span>
+                                <span className="text-xs font-bold whitespace-nowrap hidden sm:inline">🦁 Testez chaque rôle</span>
+                                <span className="text-xs font-bold whitespace-nowrap sm:hidden">🦁 Rôles</span>
                             </div>
 
                             <select
@@ -130,13 +131,13 @@ export function DemoUI() {
                                         );
                                     }
                                 }}
-                                className="bg-transparent border-none text-white text-xs font-bold py-0 pr-8 pl-1 cursor-pointer focus:ring-0 hover:bg-white/10 rounded transition-colors uppercase tracking-wide"
+                                className="bg-transparent border-none text-white text-xs font-bold py-0 pr-6 pl-0 cursor-pointer focus:ring-0 hover:bg-white/10 rounded transition-colors uppercase tracking-wide max-w-[120px] sm:max-w-none truncate"
                             >
-                                <option className="text-black" value="school_head">Chef d'établissement</option>
+                                <option className="text-black" value="school_head">Admin</option>
                                 <option className="text-black" value="student">Élève</option>
-                                <option className="text-black" value="teacher">Enseignant</option>
+                                <option className="text-black" value="teacher">Prof</option>
                                 <option className="text-black" value="tutor">Tuteur</option>
-                                <option className="text-black" value="business_manager">Resp. BDE</option>
+                                <option className="text-black" value="business_manager">BDE</option>
                                 <option className="text-black" value="ddfpt">DDFPT</option>
                             </select>
                         </div>
