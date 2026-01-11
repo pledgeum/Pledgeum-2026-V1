@@ -88,8 +88,8 @@ export function DemoUI() {
     const pathname = usePathname();
     const router = useRouter();
 
-    // Only show if demo mode AND connected as a demo user (including +alias), OR if on login page
-    const showDemoUI = (isDemoMode && email?.startsWith('demo') && email?.endsWith('@pledgeum.fr')) || pathname === '/login';
+    // Only show if demo mode AND connected as a demo user (including +alias)
+    const showDemoUI = isDemoMode && email?.startsWith('demo') && email?.endsWith('@pledgeum.fr');
 
     return (
         <>
