@@ -81,8 +81,8 @@ export function MockMailbox() {
 
             {/* Mailbox Window */}
             {isOpen && (
-                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                    <div className="bg-white rounded-xl shadow-2xl w-full max-w-4xl h-[80vh] flex flex-col overflow-hidden border border-gray-200">
+                <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 backdrop-blur-sm p-0 md:p-4">
+                    <div className="bg-white md:rounded-xl shadow-2xl w-full max-w-7xl h-full md:h-[85vh] flex flex-col overflow-hidden border border-gray-200">
                         {/* Header */}
                         <div className="bg-gray-100 p-4 border-b flex justify-between items-center">
                             <div className="flex items-center gap-2">
