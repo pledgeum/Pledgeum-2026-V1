@@ -666,7 +666,7 @@ export default function Home() {
       </header>
       {/* MOBILE MENU DROPDOWN */}
       {isMobileMenuOpen && (
-        <div className="md:hidden fixed top-16 left-0 right-0 z-40 border-b border-gray-200 bg-white shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto">
+        <div className="md:hidden fixed top-16 left-0 right-0 z-50 border-b border-gray-200 bg-white shadow-xl max-h-[calc(100vh-4rem)] overflow-y-auto">
           <div className="px-2 pt-2 pb-3 space-y-1 sm:px-3">
             {/* User Info Mobile */}
             <div className="px-3 py-2 flex items-center space-x-3 mb-2 border-b border-gray-100">
