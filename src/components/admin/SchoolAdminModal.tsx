@@ -773,7 +773,8 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
             label: newClass.label,
             diploma: newClass.diploma,
             teachersList: [],
-            studentsList: []
+            studentsList: [],
+            pfmpPeriods: []
         });
         setNewClass({
             name: '',
