@@ -1428,7 +1428,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
           {isSchoolAdminRole(role) && selectedIds.size > 0 && (
             <button
               onClick={handleBulkSignClick}
-              className="flex items-center px-4 py-2 border border-transparent shadow-sm text-sm font-bold rounded-md text-white bg-blue-600 hover:bg-blue-700 animate-pulse"
+              className="flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-bold rounded-md text-white bg-blue-600 hover:bg-blue-700 animate-pulse"
             >
               <CheckCircle className="w-4 h-4 mr-2" />
               Signer {selectedIds.size} conventions
