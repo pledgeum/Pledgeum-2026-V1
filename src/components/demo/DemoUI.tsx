@@ -27,7 +27,7 @@ export function DemoUI() {
         <>
             <EmailSimulatorModal />
             {showDemoUI && (
-                <div className="fixed bottom-4 right-4 z-[9999] flex flex-col items-end gap-2 animate-in slide-in-from-bottom-4 fade-in duration-300">
+                <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2 animate-in slide-in-from-bottom-4 fade-in duration-300">
                     <MockMailbox />
 
                     {/* Role Selector */}
