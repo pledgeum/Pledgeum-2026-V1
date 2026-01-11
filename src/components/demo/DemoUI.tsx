@@ -96,7 +96,8 @@ export function DemoUI() {
                     onTouchStart={handleTouchStart}
                     style={{
                         transform: `translate(calc(-50% + ${position.x}px), ${position.y}px)`,
-                        transition: 'none' // Critical for 1:1 drag movement
+                        transition: 'none', // Critical for 1:1 drag movement
+                        touchAction: 'none' // Critical for mobile: prevents browser scrolling
                     }}
                     className="fixed bottom-4 left-1/2 z-[9999] flex flex-col items-center gap-2 fade-in duration-300 cursor-move select-none"
                 >
