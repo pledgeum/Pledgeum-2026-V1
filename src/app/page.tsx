@@ -940,10 +940,7 @@ export default function Home() {
             currentUserRole={role || 'student'}
           />
         )}
-        <TosModal
-          isOpen={false} // HARDCODED FORCE CLOSE FOR DEBUG
-          onClose={() => setIsTosModalOpen(false)}
-        />
+
         <SignatureVerificationModal
           isOpen={isVerificationModalOpen}
           onClose={() => setIsVerificationModalOpen(false)}
