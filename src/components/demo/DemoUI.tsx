@@ -20,13 +20,21 @@ export function DemoUI() {
     const dragStart = useRef({ x: 0, y: 0 });
     const startPos = useRef({ x: 0, y: 0 });
 
-    const handleMouseDown = (e: React.MouseEvent) => {
-        // Prevent drag if interacting with select
-        if ((e.target as HTMLElement).tagName === 'SELECT') return;
-
+    const handleStart = (clientX: number, clientY: number) => {
         isDragging.current = true;
-        dragStart.current = { x: e.clientX, y: e.clientY };
+        dragStart.current = { x: clientX, y: clientY };
         startPos.current = { ...position };
+    };
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        if ((e.target as HTMLElement).tagName === 'SELECT') return;
+        handleStart(e.clientX, e.clientY);
+    };
+
+    const handleTouchStart = (e: React.TouchEvent) => {
+        if ((e.target as HTMLElement).tagName === 'SELECT') return;
+        const touch = e.touches[0];
+        handleStart(touch.clientX, touch.clientY);
     };
 
     useEffect(() => {
@@ -40,15 +48,32 @@ export function DemoUI() {
             });
         };
 
-        const handleMouseUp = () => {
+        const handleTouchMove = (e: TouchEvent) => {
+            if (!isDragging.current) return;
+            e.preventDefault(); // Prevent scrolling while dragging
+            const touch = e.touches[0];
+            const dx = touch.clientX - dragStart.current.x;
+            const dy = touch.clientY - dragStart.current.y;
+            setPosition({
+                x: startPos.current.x + dx,
+                y: startPos.current.y + dy
+            });
+        };
+
+        const handleEnd = () => {
             isDragging.current = false;
         };
 
         window.addEventListener('mousemove', handleMouseMove);
-        window.addEventListener('mouseup', handleMouseUp);
+        window.addEventListener('mouseup', handleEnd);
+        window.addEventListener('touchmove', handleTouchMove, { passive: false });
+        window.addEventListener('touchend', handleEnd);
+
         return () => {
             window.removeEventListener('mousemove', handleMouseMove);
-            window.removeEventListener('mouseup', handleMouseUp);
+            window.removeEventListener('mouseup', handleEnd);
+            window.removeEventListener('touchmove', handleTouchMove);
+            window.removeEventListener('touchend', handleEnd);
         };
     }, []);
 
@@ -68,7 +93,11 @@ export function DemoUI() {
             {showDemoUI && (
                 <div
                     onMouseDown={handleMouseDown}
-                    style={{ transform: `translate(calc(-50% + ${position.x}px), ${position.y}px)` }}
+                    onTouchStart={handleTouchStart}
+                    style={{
+                        transform: `translate(calc(-50% + ${position.x}px), ${position.y}px)`,
+                        transition: 'none' // Critical for 1:1 drag movement
+                    }}
                     className="fixed bottom-4 left-1/2 z-[9999] flex flex-col items-center gap-2 fade-in duration-300 cursor-move select-none"
                 >
                     <MockMailbox />
