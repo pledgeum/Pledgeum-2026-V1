@@ -178,7 +178,7 @@ export function Step2Student() {
                                     form.formState.errors.eleve_nom
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.lastName && "bg-gray-200 text-gray-500 cursor-not-allowed"
+                                    profileData?.lastName && "bg-gray-200 text-gray-700 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_nom && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_nom.message}</p>}
@@ -194,7 +194,7 @@ export function Step2Student() {
                                     form.formState.errors.eleve_prenom
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.firstName && "bg-gray-200 text-gray-500 cursor-not-allowed"
+                                    profileData?.firstName && "bg-gray-200 text-gray-700 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_prenom && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_prenom.message}</p>}
@@ -212,7 +212,7 @@ export function Step2Student() {
                                     form.formState.errors.eleve_date_naissance
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.birthDate && "bg-gray-200 text-gray-500 cursor-not-allowed"
+                                    profileData?.birthDate && "bg-gray-200 text-gray-700 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_date_naissance && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_date_naissance.message}</p>}
@@ -230,7 +230,7 @@ export function Step2Student() {
                                     form.formState.errors.eleve_email
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.email && "bg-gray-200 text-gray-500 cursor-not-allowed"
+                                    profileData?.email && "bg-gray-200 text-gray-700 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_email && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_email.message}</p>}
@@ -248,7 +248,7 @@ export function Step2Student() {
                                     form.formState.errors.eleve_tel
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.phone && "bg-gray-200 text-gray-500 cursor-not-allowed"
+                                    profileData?.phone && "bg-gray-200 text-gray-700 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_tel && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_tel.message}</p>}
@@ -266,7 +266,7 @@ export function Step2Student() {
                                         form.formState.errors.eleve_classe
                                             ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                             : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                        profileData?.class ? "bg-gray-200 text-gray-500 cursor-not-allowed" : ""
+                                        profileData?.class ? "bg-gray-200 text-gray-700 cursor-not-allowed" : ""
                                     )}
                                 />
                                 {profileData?.class && (
@@ -290,7 +290,7 @@ export function Step2Student() {
                                     form.formState.errors.diplome_intitule
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.diploma && "bg-gray-200 text-gray-500 cursor-not-allowed"
+                                    profileData?.diploma && "bg-gray-200 text-gray-700 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.diplome_intitule && <p className="text-red-500 text-xs mt-1">{form.formState.errors.diplome_intitule.message}</p>}
@@ -308,7 +308,7 @@ export function Step2Student() {
                                     form.formState.errors.eleve_adresse
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.address && "bg-gray-200 text-gray-500 cursor-not-allowed"
+                                    profileData?.address && "bg-gray-200 text-gray-700 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_adresse && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_adresse.message}</p>}
@@ -325,7 +325,7 @@ export function Step2Student() {
                                     form.formState.errors.eleve_cp
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    (profileData?.zipCode || profileData?.postalCode) && "bg-gray-200 text-gray-500 cursor-not-allowed"
+                                    (profileData?.zipCode || profileData?.postalCode) && "bg-gray-200 text-gray-700 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_cp && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_cp.message}</p>}
@@ -342,7 +342,7 @@ export function Step2Student() {
                                     form.formState.errors.eleve_ville
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.city && "bg-gray-200 text-gray-500 cursor-not-allowed"
+                                    profileData?.city && "bg-gray-200 text-gray-700 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_ville && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_ville.message}</p>}
