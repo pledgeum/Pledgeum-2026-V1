@@ -91,7 +91,7 @@ export default function Home() {
   const [isAlumniModalOpen, setIsAlumniModalOpen] = useState(false);
   const [isSuperAdminModalOpen, setIsSuperAdminModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
-  const [isGdprModalOpen, setIsGdprModalOpen] = useState(false);
+  const [isRgpdModalOpen, setIsRgpdModalOpen] = useState(false);
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
   const [verificationConvention, setVerificationConvention] = useState<Convention | null>(null);
@@ -439,7 +439,7 @@ export default function Home() {
             )}
 
             <button
-              onClick={() => setIsGdprModalOpen(true)}
+              onClick={() => setIsRgpdModalOpen(true)}
               className="flex items-center text-gray-500 hover:text-blue-600 transition-colors text-xs font-bold"
               title="Consulter les engagements RGPD"
             >
@@ -687,7 +687,7 @@ export default function Home() {
             )}
 
             <button
-              onClick={() => { setIsGdprModalOpen(true); setIsMobileMenuOpen(false); }}
+              onClick={() => { setIsRgpdModalOpen(true); setIsMobileMenuOpen(false); }}
               className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-blue-700 hover:bg-gray-50"
             >
               <div className="flex items-center">
@@ -1718,8 +1718,8 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
       })}
 
       <TosModal
-        isOpen={isGdprModalOpen}
-        onClose={() => setIsGdprModalOpen(false)}
+        isOpen={isRgpdModalOpen}
+        onClose={() => setIsRgpdModalOpen(false)}
       />
 
       <SignatureModal
