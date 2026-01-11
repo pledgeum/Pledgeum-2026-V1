@@ -7,6 +7,7 @@ import { useUserStore } from "@/store/user";
 import { EmailSimulatorModal } from "./EmailSimulatorModal";
 import { MockMailbox } from "./MockMailbox";
 import { GripVertical } from "lucide-react";
+import { usePathname, useRouter } from 'next/navigation';
 
 export function DemoUI() {
     const isDemoMode = useDemoStore((state) => state.isDemoMode);
@@ -84,8 +85,11 @@ export function DemoUI() {
         }
     }, [isDemoMode, restoreTestData]);
 
-    // Only show if demo mode AND connected as a demo user (including +alias)
-    const showDemoUI = isDemoMode && email?.startsWith('demo') && email?.endsWith('@pledgeum.fr');
+    const pathname = usePathname();
+    const router = useRouter();
+
+    // Only show if demo mode AND connected as a demo user (including +alias), OR if on login page
+    const showDemoUI = (isDemoMode && email?.startsWith('demo') && email?.endsWith('@pledgeum.fr')) || pathname === '/login';
 
     return (
         <>
@@ -123,8 +127,41 @@ export function DemoUI() {
                                 onChange={async (e) => {
                                     const newRole = e.target.value as any;
                                     useDemoStore.getState().setDemoRole(newRole);
-                                    // Trigger profile refresh to apply new mock data
+
                                     const { auth } = await import('@/lib/firebase');
+                                    const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import('firebase/auth');
+
+                                    // Check if NOT logged in (Login Page scenario)
+                                    if (!auth.currentUser) {
+                                        const emailPrefix = newRole === 'school_head' ? 'demo' : `demo+${newRole}`;
+                                        const email = newRole === 'school_head' ? 'demo@pledgeum.fr' : `${emailPrefix}@pledgeum.fr`;
+                                        const password = 'demo1234';
+
+                                        try {
+                                            await signInWithEmailAndPassword(auth, email, password);
+                                            useDemoStore.getState().setDemoMode(true);
+                                            // Router push handled by AuthContext or Page
+                                            router.push('/');
+                                        } catch (loginErr: any) {
+                                            // Handle creation if generic error (user-not-found)
+                                            if (loginErr.code === 'auth/user-not-found' || loginErr.code === 'auth/invalid-credential') {
+                                                try {
+                                                    await createUserWithEmailAndPassword(auth, email, password);
+                                                    useDemoStore.getState().setDemoMode(true);
+                                                    router.push('/');
+                                                } catch (createErr) {
+                                                    console.error("Failed to create demo account from switcher", createErr);
+                                                    alert("Erreur lors de la création du compte démo.");
+                                                }
+                                            } else {
+                                                console.error("Login failed", loginErr);
+                                                alert("Erreur de connexion.");
+                                            }
+                                        }
+                                        return;
+                                    }
+
+                                    // Trigger profile refresh to apply new mock data (Existing Logic)
                                     if (auth.currentUser) {
                                         await import('@/store/user').then(({ useUserStore }) =>
                                             useUserStore.getState().fetchUserProfile(auth.currentUser!.uid)

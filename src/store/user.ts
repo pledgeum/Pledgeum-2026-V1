@@ -76,13 +76,28 @@ export const useUserStore = create<UserState>((set, get) => ({
         const currentUser = auth.currentUser;
         console.log("UserStore: currentUser in store is", currentUser?.email);
 
-        if (currentUser?.email === 'demo@pledgeum.fr') {
-            console.log("[DEMO] Loading Mock Profile for Demo User");
+        if (currentUser?.email?.startsWith('demo') && currentUser?.email?.endsWith('@pledgeum.fr')) {
+            console.log("[DEMO] Loading Mock Profile for Demo User:", currentUser.email);
 
-            // Import demo store dynamically to avoid circular dependency issues at module level if any
+            // Import demo store dynamically
             const { useDemoStore } = await import('./demo');
             useDemoStore.getState().setDemoMode(true);
-            const currentDemoRole = useDemoStore.getState().demoRole;
+
+            // Derive role from email if present (robustness across refreshes)
+            let currentDemoRole = useDemoStore.getState().demoRole;
+            const email = currentUser.email;
+
+            if (email.includes('+student')) currentDemoRole = 'student';
+            else if (email.includes('+teacher')) currentDemoRole = 'teacher';
+            else if (email.includes('+tutor')) currentDemoRole = 'tutor';
+            else if (email.includes('+bde')) currentDemoRole = 'business_manager';
+            else if (email.includes('+ddfpt')) currentDemoRole = 'ddfpt';
+            else if (email.includes('+head')) currentDemoRole = 'school_head';
+
+            // Sync store with derived role
+            if (currentDemoRole !== useDemoStore.getState().demoRole) {
+                useDemoStore.getState().setDemoRole(currentDemoRole);
+            }
 
             console.log("[DEMO] Selected Role:", currentDemoRole);
 
