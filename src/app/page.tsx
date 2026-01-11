@@ -439,7 +439,7 @@ export default function Home() {
             )}
 
             <button
-              onClick={() => setIsTosModalOpen(true)}
+              onClick={() => setIsGdprModalOpen(true)}
               className="flex items-center text-gray-500 hover:text-blue-600 transition-colors text-xs font-bold"
               title="Consulter les engagements RGPD"
             >
