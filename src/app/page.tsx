@@ -682,7 +682,7 @@ export default function Home() {
             {!['company_head', 'tutor', 'company_head_tutor'].includes(role) && (
               <button
                 onClick={() => { setIsSearchModalOpen(true); setIsMobileMenuOpen(false); }}
-                className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-700 hover:bg-gray-50"
+                className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-blue-700 hover:bg-gray-50"
               >
                 <div className="flex items-center">
                   <Building2 className="w-4 h-4 mr-2" />
@@ -693,7 +693,7 @@ export default function Home() {
 
             <button
               onClick={() => { setIsTosModalOpen(true); setIsMobileMenuOpen(false); }}
-              className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-700 hover:bg-gray-50"
+              className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-blue-700 hover:bg-gray-50"
             >
               <div className="flex items-center">
                 <ShieldCheck className="w-4 h-4 mr-2" />
@@ -703,7 +703,7 @@ export default function Home() {
 
             <button
               onClick={() => { setIsVerificationModalOpen(true); setIsMobileMenuOpen(false); }}
-              className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-700 hover:bg-gray-50"
+              className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-blue-700 hover:bg-gray-50"
             >
               <div className="flex items-center">
                 <ShieldCheck className="w-4 h-4 mr-2" />
@@ -717,7 +717,7 @@ export default function Home() {
                 {(isSchoolAuthorized(profileData?.ecole_nom || getConventionsByRole('school_head', user.email || '', user.uid)[0]?.ecole_nom || '') || user.email === 'pledgeum@gmail.com') && (
                   <button
                     onClick={() => { setIsAlumniModalOpen(true); setIsMobileMenuOpen(false); }}
-                    className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-indigo-700 hover:text-indigo-900 hover:bg-indigo-50"
+                    className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-indigo-700 hover:text-indigo-900 hover:bg-indigo-50"
                   >
                     <div className="flex items-center">
                       <span className="mr-2">🎓</span>
@@ -728,7 +728,7 @@ export default function Home() {
 
                 <button
                   onClick={() => { setIsSchoolAdminModalOpen(true); setIsMobileMenuOpen(false); }}
-                  className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-700 hover:bg-gray-50"
+                  className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-blue-700 hover:bg-gray-50"
                 >
                   <div className="flex items-center">
                     <Settings className="w-4 h-4 mr-2" />
@@ -741,7 +741,7 @@ export default function Home() {
             {(role === 'teacher' || isSchoolAdminRole(role) || user?.email === 'pledgeum@gmail.com') && (
               <button
                 onClick={() => { setIsFeedbackModalOpen(true); setIsMobileMenuOpen(false); }}
-                className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-700 hover:text-blue-700 hover:bg-gray-50"
+                className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-700 hover:text-blue-700 hover:bg-gray-50"
               >
                 <div className="flex items-center">
                   <MessageSquare className="w-4 h-4 mr-2" />
@@ -753,7 +753,7 @@ export default function Home() {
             <div className="border-t border-gray-100 mt-2 pt-2">
               <button
                 onClick={() => { setIsDeleteModalOpen(true); setIsMobileMenuOpen(false); }}
-                className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-red-600 hover:bg-red-50"
+                className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-red-600 hover:bg-red-50"
               >
                 <div className="flex items-center">
                   <Trash2 className="w-4 h-4 mr-2" />
@@ -762,7 +762,7 @@ export default function Home() {
               </button>
               <button
                 onClick={() => logout()}
-                className="block w-full text-left px-3 py-2 rounded-md text-base font-medium text-gray-500 hover:text-red-600 hover:bg-gray-50"
+                className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-red-600 hover:bg-gray-50"
               >
                 <div className="flex items-center">
                   <LogOut className="w-4 h-4 mr-2" />
@@ -1434,7 +1434,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
               Signer {selectedIds.size} conventions
             </button>
           )}
-          <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-full">
+          <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-full text-center inline-flex items-center justify-center">
             {filteredConventions.length} {isSchoolAdminRole(role) ? 'conventions à signer' : 'dossier(s)'}
           </span>
         </div>
