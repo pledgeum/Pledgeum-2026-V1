@@ -87,11 +87,12 @@ export default function Home() {
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isSchoolAdminModalOpen, setIsSchoolAdminModalOpen] = useState(false);
+  const [isRgpdModalOpen, setIsRgpdModalOpen] = useState(false);
   const [isMissionOrderModalOpen, setIsMissionOrderModalOpen] = useState(false);
   const [isAlumniModalOpen, setIsAlumniModalOpen] = useState(false);
   const [isSuperAdminModalOpen, setIsSuperAdminModalOpen] = useState(false);
   const [isFeedbackModalOpen, setIsFeedbackModalOpen] = useState(false);
-  const [isRgpdModalOpen, setIsRgpdModalOpen] = useState(false);
+
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
   const [verificationConvention, setVerificationConvention] = useState<Convention | null>(null);
