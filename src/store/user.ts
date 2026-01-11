@@ -100,6 +100,7 @@ export const useUserStore = create<UserState>((set, get) => ({
                     mockProfile = {
                         ...mockProfile,
                         name: "Élève Démo",
+                        email: "demo+student@pledgeum.fr",
                         role: 'student',
                         birthDate: "2005-06-15",
                         profileData: {
@@ -107,6 +108,7 @@ export const useUserStore = create<UserState>((set, get) => ({
                             class: "2NDE 1", // Matches a likely existing class or one we should ensure exists
                             firstName: "Élève",
                             lastName: "Démo",
+                            email: "demo+student@pledgeum.fr",
                             birthDate: "2005-06-15",
                             classe: "2NDE 1",
                             address: "10 Rue de la Paix",
@@ -119,7 +121,7 @@ export const useUserStore = create<UserState>((set, get) => ({
                                 {
                                     firstName: "Jean",
                                     lastName: "Dupont",
-                                    email: "parent.demo@pledgeum.fr",
+                                    email: "demo+parent@pledgeum.fr",
                                     phone: "0699887766",
                                     address: {
                                         street: "10 Rue de la Paix",
@@ -136,9 +138,13 @@ export const useUserStore = create<UserState>((set, get) => ({
                     mockProfile = {
                         ...mockProfile,
                         name: "Professeur Démo",
+                        email: "demo+teacher@pledgeum.fr",
                         role: 'teacher',
                         profileData: {
                             ...mockProfile.profileData,
+                            firstName: "Professeur",
+                            lastName: "Démo",
+                            email: "demo+teacher@pledgeum.fr",
                             subjects: ["Mathématiques", "Sciences"]
                         }
                     };
@@ -147,9 +153,13 @@ export const useUserStore = create<UserState>((set, get) => ({
                     mockProfile = {
                         ...mockProfile,
                         name: "Tuteur Démo",
+                        email: "demo+tutor@pledgeum.fr",
                         role: 'tutor',
                         profileData: {
                             ...mockProfile.profileData,
+                            firstName: "Tuteur",
+                            lastName: "Démo",
+                            email: "demo+tutor@pledgeum.fr",
                             companyName: "Entreprise Partenaire (Démo)",
                             jobTitle: "Maître de Stage"
                         }
@@ -159,19 +169,38 @@ export const useUserStore = create<UserState>((set, get) => ({
                     mockProfile = {
                         ...mockProfile,
                         name: "Responsable BDE Démo",
-                        role: 'business_manager'
+                        email: "demo+bde@pledgeum.fr",
+                        role: 'business_manager',
+                        profileData: {
+                            ...mockProfile.profileData,
+                            email: "demo+bde@pledgeum.fr"
+                        }
                     };
                     break;
                 case 'ddfpt':
                     mockProfile = {
                         ...mockProfile,
                         name: "DDFPT Démo",
-                        role: 'ddfpt'
+                        email: "demo+ddfpt@pledgeum.fr",
+                        role: 'ddfpt',
+                        profileData: {
+                            ...mockProfile.profileData,
+                            email: "demo+ddfpt@pledgeum.fr"
+                        }
                     };
                     break;
                 case 'school_head':
                 default:
-                    // Default is already set
+                    mockProfile = {
+                        ...mockProfile,
+                        name: "Proviseur Démo",
+                        email: "demo+head@pledgeum.fr",
+                        role: 'school_head',
+                        profileData: {
+                            ...mockProfile.profileData,
+                            email: "demo+head@pledgeum.fr"
+                        }
+                    };
                     break;
             }
 

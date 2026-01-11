@@ -6,6 +6,7 @@ import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } fro
 import { Mail, X, Trash2, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { useDemoStore } from '@/store/demo';
+import { useUserStore } from '@/store/user';
 
 interface MockEmail {
     id: string;
@@ -20,23 +21,31 @@ interface MockEmail {
 
 export function MockMailbox() {
     const [isOpen, setIsOpen] = useState(false);
+    const { email: userEmail } = useUserStore();
     const [emails, setEmails] = useState<MockEmail[]>([]);
     const [selectedEmail, setSelectedEmail] = useState<MockEmail | null>(null);
     const isDemoMode = useDemoStore((state) => state.isDemoMode);
     const [unreadCount, setUnreadCount] = useState(0);
 
     useEffect(() => {
-        if (!isDemoMode) return;
+        if (!isDemoMode || !userEmail) return;
 
         const q = query(collection(db, 'demo_inbox'), orderBy('date', 'desc'));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const msgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MockEmail));
-            setEmails(msgs);
-            setUnreadCount(msgs.filter(m => !m.read).length);
+            const allMsgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MockEmail));
+
+            // Filter emails for the current user (Role-based filtering)
+            const myMsgs = allMsgs.filter(msg =>
+                msg.to === userEmail ||
+                msg.to === 'demo@pledgeum.fr' // Optional: Allow global demo emails
+            );
+
+            setEmails(myMsgs);
+            setUnreadCount(myMsgs.filter(m => !m.read).length);
         });
 
         return () => unsubscribe();
-    }, [isDemoMode]);
+    }, [isDemoMode, userEmail]);
 
     if (!isDemoMode) return null;
 
