@@ -1434,7 +1434,9 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
               Signer {selectedIds.size} conventions
             </button>
           )}
-          <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-full">{filteredConventions.length} dossier(s)</span>
+          <span className="bg-blue-100 text-blue-800 text-xs font-bold px-2 py-1 rounded-full">
+            {filteredConventions.length} {isSchoolAdminRole(role) ? 'conventions à signer' : 'dossier(s)'}
+          </span>
         </div>
       </div>
 
