@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useDemoStore } from "@/store/demo";
 import { useSchoolStore } from "@/store/school";
 import { useUserStore } from "@/store/user";
@@ -12,6 +12,44 @@ export function DemoUI() {
     const demoRole = useDemoStore((state) => state.demoRole);
     const restoreTestData = useSchoolStore((state) => state.restoreTestData);
     const email = useUserStore((state) => state.email);
+
+    // Drag Logic
+    const [position, setPosition] = useState({ x: 0, y: 0 });
+    const isDragging = useRef(false);
+    const dragStart = useRef({ x: 0, y: 0 });
+    const startPos = useRef({ x: 0, y: 0 });
+
+    const handleMouseDown = (e: React.MouseEvent) => {
+        // Prevent drag if interacting with select
+        if ((e.target as HTMLElement).tagName === 'SELECT') return;
+
+        isDragging.current = true;
+        dragStart.current = { x: e.clientX, y: e.clientY };
+        startPos.current = { ...position };
+    };
+
+    useEffect(() => {
+        const handleMouseMove = (e: MouseEvent) => {
+            if (!isDragging.current) return;
+            const dx = e.clientX - dragStart.current.x;
+            const dy = e.clientY - dragStart.current.y;
+            setPosition({
+                x: startPos.current.x + dx,
+                y: startPos.current.y + dy
+            });
+        };
+
+        const handleMouseUp = () => {
+            isDragging.current = false;
+        };
+
+        window.addEventListener('mousemove', handleMouseMove);
+        window.addEventListener('mouseup', handleMouseUp);
+        return () => {
+            window.removeEventListener('mousemove', handleMouseMove);
+            window.removeEventListener('mouseup', handleMouseUp);
+        };
+    }, []);
 
     useEffect(() => {
         if (isDemoMode) {
@@ -27,7 +65,11 @@ export function DemoUI() {
         <>
             <EmailSimulatorModal />
             {showDemoUI && (
-                <div className="fixed bottom-4 left-1/2 -translate-x-1/2 z-[9999] flex flex-col items-center gap-2 animate-in slide-in-from-bottom-4 fade-in duration-300">
+                <div
+                    onMouseDown={handleMouseDown}
+                    style={{ transform: `translate(calc(-50% + ${position.x}px), ${position.y}px)` }}
+                    className="fixed bottom-4 left-1/2 z-[9999] flex flex-col items-center gap-2 fade-in duration-300 cursor-move select-none"
+                >
                     <MockMailbox />
 
                     {/* Role Selector */}
