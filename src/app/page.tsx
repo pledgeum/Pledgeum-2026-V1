@@ -1382,12 +1382,12 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
 
           {/* FILTERS TOOLBAR (Only for Admin Roles) */}
           {hasFilterAccess(role) && (
-            <div className="flex flex-wrap items-center gap-3 mt-2 md:mt-0">
+            <div className="grid grid-cols-2 md:flex md:flex-wrap items-center gap-2 mt-2 md:mt-0 w-full md:w-auto">
               <div className="relative">
                 <select
                   value={filterClass}
                   onChange={(e) => setFilterClass(e.target.value)}
-                  className="block w-40 pl-3 pr-8 py-1.5 text-sm text-gray-900 border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md"
+                  className="block w-full md:w-40 pl-3 pr-8 py-1.5 text-xs md:text-sm text-gray-900 border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md"
                 >
                   <option value="">Toutes classes</option>
                   {uniqueClasses.map(c => <option key={c} value={c}>{c}</option>)}
@@ -1397,23 +1397,26 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
                 <select
                   value={filterYear}
                   onChange={(e) => setFilterYear(e.target.value)}
-                  className="block w-40 pl-3 pr-8 py-1.5 text-sm text-gray-900 border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md"
+                  className="block w-full md:w-40 pl-3 pr-8 py-1.5 text-xs md:text-sm text-gray-900 border-gray-300 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md"
                 >
                   <option value="">Toutes années</option>
                   {uniqueYears.map(y => <option key={y} value={y}>{y}</option>)}
                 </select>
               </div>
-              <div className="relative">
+              <div className="relative col-span-2 md:col-span-0">
                 <input
                   type="text"
                   placeholder="Rechercher élève..."
                   value={filterName}
                   onChange={(e) => setFilterName(e.target.value)}
-                  className="block w-48 pl-3 pr-3 py-1.5 text-sm text-gray-900 border-gray-300 placeholder:text-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md"
+                  className="block w-full md:w-48 pl-3 pr-3 py-1.5 text-xs md:text-sm text-gray-900 border-gray-300 placeholder:text-gray-500 focus:outline-none focus:ring-blue-500 focus:border-blue-500 rounded-md"
                 />
               </div>
               {(filterClass || filterYear || filterName) && (
-                <button onClick={() => { setFilterClass(''); setFilterYear(''); setFilterName(''); }} className="text-xs text-blue-600 hover:underline">
+                <button
+                  onClick={() => { setFilterClass(''); setFilterYear(''); setFilterName(''); }}
+                  className="col-span-2 md:col-span-0 text-xs text-blue-600 hover:underline text-center md:text-left"
+                >
                   Effacer
                 </button>
               )}

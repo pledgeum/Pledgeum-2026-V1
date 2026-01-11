@@ -133,7 +133,7 @@ export function DemoUI() {
                                 }}
                                 className="bg-transparent border-none text-white text-xs font-bold py-0 pr-6 pl-0 cursor-pointer focus:ring-0 hover:bg-white/10 rounded transition-colors uppercase tracking-wide max-w-[120px] sm:max-w-none truncate"
                             >
-                                <option className="text-black" value="school_head">Directeur</option>
+                                <option className="text-black" value="school_head">Proviseur</option>
                                 <option className="text-black" value="student">Élève</option>
                                 <option className="text-black" value="teacher">Enseignant</option>
                                 <option className="text-black" value="tutor">Tuteur</option>
