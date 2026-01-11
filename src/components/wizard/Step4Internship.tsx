@@ -352,7 +352,7 @@ export function Step4Internship() {
                                             {...form.register('stage_lieu')}
                                             rows={2}
                                             placeholder="Ex: Atelier, 12 Rue des Oliviers, 69002 Lyon"
-                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
+                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border placeholder:text-gray-500"
                                         />
                                         <button
                                             type="button"
@@ -391,7 +391,7 @@ export function Step4Internship() {
                                 {...form.register('stage_activites')}
                                 rows={4}
                                 placeholder="Détaillez les tâches confiées au stagiaire..."
-                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border"
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border placeholder:text-gray-500"
                             />
                             {form.formState.errors.stage_activites && <p className="text-red-500 text-xs mt-1">{form.formState.errors.stage_activites.message}</p>}
                         </div>

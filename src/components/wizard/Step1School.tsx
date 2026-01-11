@@ -158,7 +158,7 @@ export function Step1School() {
                                             value={cityQuery}
                                             onChange={(e) => setCityQuery(e.target.value)}
                                             placeholder="Ex: Lyon"
-                                            className="block w-full rounded-md border-blue-200 focus:border-blue-500 focus:ring-blue-500 text-sm p-2"
+                                            className="block w-full rounded-md border-blue-200 focus:border-blue-500 focus:ring-blue-500 text-sm p-2 placeholder:text-gray-500"
                                         />
                                     </div>
                                     <div className="relative">
@@ -171,7 +171,7 @@ export function Step1School() {
                                                 setShowResults(true);
                                             }}
                                             placeholder="Ex: Jules Ferry"
-                                            className="block w-full rounded-md border-blue-200 focus:border-blue-500 focus:ring-blue-500 text-sm p-2"
+                                            className="block w-full rounded-md border-blue-200 focus:border-blue-500 focus:ring-blue-500 text-sm p-2 placeholder:text-gray-500"
                                         />
                                         {loading && (
                                             <div className="absolute right-2 top-8">

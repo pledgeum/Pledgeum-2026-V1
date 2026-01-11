@@ -164,7 +164,7 @@ export function Step3Company() {
                                             {...form.register('ent_siret')}
                                             maxLength={20}
                                             placeholder="Entrez le SIRET..."
-                                            className="mt-1 block w-full rounded-md border-blue-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border pr-10 bg-blue-50"
+                                            className="mt-1 block w-full rounded-md border-blue-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border pr-10 bg-blue-50 placeholder:text-gray-500"
                                         />
                                         {isSearchingSiret && (
                                             <div className="absolute right-3 top-3">
@@ -211,7 +211,8 @@ export function Step3Company() {
                                 placeholder="Ex: SARL ..."
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
-                                    form.formState.errors.ent_nom && "border-red-500 focus:border-red-500 focus:ring-red-500"
+                                    form.formState.errors.ent_nom && "border-red-500 focus:border-red-500 focus:ring-red-500",
+                                    "placeholder:text-gray-500"
                                 )}
                             />
                             {form.formState.errors.ent_nom && <p className="text-red-500 text-xs mt-1">{form.formState.errors.ent_nom.message}</p>}
@@ -286,7 +287,8 @@ export function Step3Company() {
                                 placeholder="Ex: Gérant"
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
-                                    form.formState.errors.ent_rep_fonction && "border-red-500 focus:border-red-500 focus:ring-red-500"
+                                    form.formState.errors.ent_rep_fonction && "border-red-500 focus:border-red-500 focus:ring-red-500",
+                                    "placeholder:text-gray-500"
                                 )}
                             />
                         </div>
@@ -400,7 +402,8 @@ export function Step3Company() {
                                         placeholder="0"
                                         className={cn(
                                             "block w-full rounded-md border-gray-300 focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border pr-16",
-                                            form.formState.errors.gratification_montant && "border-red-500 focus:border-red-500 focus:ring-red-500"
+                                            form.formState.errors.gratification_montant && "border-red-500 focus:border-red-500 focus:ring-red-500",
+                                            "placeholder:text-gray-500"
                                         )}
                                     />
                                     <div className="absolute inset-y-0 right-0 pr-3 flex items-center pointer-events-none">

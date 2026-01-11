@@ -290,7 +290,8 @@ export function Step2Student() {
                                     form.formState.errors.diplome_intitule
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.diploma && "bg-gray-200 text-gray-700 cursor-not-allowed"
+                                    profileData?.diploma && "bg-gray-200 text-gray-700 cursor-not-allowed",
+                                    "placeholder:text-gray-500"
                                 )}
                             />
                             {form.formState.errors.diplome_intitule && <p className="text-red-500 text-xs mt-1">{form.formState.errors.diplome_intitule.message}</p>}
