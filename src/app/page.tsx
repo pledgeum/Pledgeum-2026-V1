@@ -656,12 +656,7 @@ export default function Home() {
             </div>
           )}
 
-          <button
-            onClick={() => setIsProfileModalOpen(true)}
-            className="text-xs text-blue-600 hover:text-blue-800 underline ml-2"
-          >
-            Modifier
-          </button>
+
         </div>
       </header>
       {/* MOBILE MENU DROPDOWN */}
