@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useRef, useMemo, useEffect } from 'react';
-import { X, Search, Plus, Trash, Edit, Mail, AlertTriangle, ShieldCheck, Download, Users, Briefcase, Sparkles, FileUp, HelpCircle, Archive, Key, Building, GraduationCap, Lock, Shield, FileSpreadsheet, UserPlus, Trash2, Building2, Loader2, ChevronDown, Check } from 'lucide-react';
+import { X, Search, Plus, Trash, Edit, Mail, AlertTriangle, ShieldCheck, Download, Users, Briefcase, Sparkles, FileUp, HelpCircle, Archive, Key, Building, GraduationCap, Lock, Shield, FileSpreadsheet, UserPlus, Trash2, Building2, Loader2, ChevronDown, Check, Calendar } from 'lucide-react';
 import { useSchoolStore, COLLABORATOR_LABELS, CollaboratorRole, Teacher, Student, ClassDefinition, PartnerCompany } from '@/store/school';
 import { StructureImportReviewModal } from './StructureImportReviewModal';
 import { TeacherImportReviewModal } from './TeacherImportReviewModal';
+import { ClassCalendarManager } from './ClassCalendarManager';
 // PartnerImportReviewModal removed (progressive import)
 import { useUserStore } from '@/store/user';
 import Papa from 'papaparse';
@@ -111,7 +112,7 @@ interface SchoolAdminModalProps {
 
 
 export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
-    const [activeTab, setActiveTab] = useState<'rgpd' | 'collaborators' | 'classes' | 'config' | 'identity' | 'partners'>('rgpd');
+    const [activeTab, setActiveTab] = useState<'rgpd' | 'collaborators' | 'classes' | 'config' | 'identity' | 'partners' | 'pfmp'>('rgpd');
     const {
         collaborators, classes, addCollaborator, removeCollaborator, addClass, removeClass, updateClass,
         importTeachers, addTeacherToClass, removeTeacherFromClass, importGlobalTeachers,
@@ -1005,6 +1006,13 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                         <GraduationCap className="w-4 h-4" />
                         <span>Classes & Professeurs</span>
                         {missingClasses && <span className="absolute top-2 right-2 w-2 h-2 bg-red-500 rounded-full" title="Au moins une classe avec Prof. Principal requise"></span>}
+                    </button>
+                    <button
+                        onClick={() => setActiveTab('pfmp')}
+                        className={`flex-1 py-4 text-sm font-medium flex items-center justify-center space-x-2 transition-colors relative ${activeTab === 'pfmp' ? 'text-blue-900 border-b-2 border-blue-900 bg-blue-50' : 'text-gray-500 hover:bg-gray-50'}`}
+                    >
+                        <Calendar className="w-4 h-4" />
+                        <span>Calendrier PFMP</span>
                     </button>
                     <button
                         onClick={() => setActiveTab('partners')}
@@ -2081,6 +2089,10 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                     </div>
                                 )}
                             </div>
+                        </div>
+                    ) : activeTab === 'pfmp' ? (
+                        <div className="space-y-6">
+                            <ClassCalendarManager />
                         </div>
                     ) : (
                         <div className="space-y-6">

@@ -55,7 +55,16 @@ export interface Student {
     credentialsPrinted?: boolean;
     phone?: string;
     address?: Address;
+
     legalRepresentatives?: LegalRepresentative[];
+}
+
+export interface PfmpPeriod {
+    id: string;
+    label: string;
+    startDate: string;
+    endDate: string;
+    classId: string;
 }
 
 export interface SchoolStaff {
@@ -74,6 +83,7 @@ export interface ClassDefinition {
     diploma?: string; // Diplôme préparé (ex: BAC PRO)
     teachersList: Teacher[]; // List of available teachers for tracking
     studentsList: Student[];
+    pfmpPeriods: PfmpPeriod[];
 }
 
 export interface Teacher {
@@ -98,6 +108,11 @@ interface SchoolState {
     addClass: (cls: Omit<ClassDefinition, 'id'>) => void;
     removeClass: (id: string) => void;
     updateClass: (id: string, updates: Partial<ClassDefinition>) => void;
+
+    // PFMP Calendar Management
+    addPfmpPeriod: (period: Omit<PfmpPeriod, 'id'>) => void;
+    updatePfmpPeriod: (id: string, updates: Partial<PfmpPeriod>) => void;
+    deletePfmpPeriod: (id: string) => void;
 
     importTeachers: (classId: string, teachers: Omit<Teacher, 'id'>[]) => void;
     addTeacherToClass: (classId: string, teacher: Omit<Teacher, 'id'>) => void;
@@ -162,6 +177,11 @@ export interface PartnerCompany {
     activity: string; // From CSV 'ACTIVITE'
     jobs: string[]; // From CSV 'METIERS'
 }
+
+const createPfmpPeriod = (data: Omit<PfmpPeriod, 'id'>): PfmpPeriod => ({
+    ...data,
+    id: Math.random().toString(36).substr(2, 9)
+});
 
 export const useSchoolStore = create<SchoolState>()(
     persist(
@@ -282,7 +302,8 @@ export const useSchoolStore = create<SchoolState>()(
                     label: 'TLE PRO3 ACC.SOINS-S.PERS. OPT.EN STRUCTUR',
                     diploma: 'BAC PRO EN 3 ANS : TERMINALE PRO',
                     teachersList: [],
-                    studentsList: []
+                    studentsList: [],
+                    pfmpPeriods: []
                 }
             ],
 
@@ -329,6 +350,32 @@ export const useSchoolStore = create<SchoolState>()(
                 classes: state.classes.map((c) => c.id === id ? { ...c, ...updates } : c)
             })),
 
+            addPfmpPeriod: (periodData) => set((state) => ({
+                classes: state.classes.map((c) => {
+                    if (c.id !== periodData.classId) return c;
+                    return {
+                        ...c,
+                        pfmpPeriods: [...(c.pfmpPeriods || []), createPfmpPeriod(periodData)]
+                    };
+                })
+            })),
+
+            updatePfmpPeriod: (periodId, updates) => set((state) => ({
+                classes: state.classes.map((c) => ({
+                    ...c,
+                    pfmpPeriods: (c.pfmpPeriods || []).map(p =>
+                        p.id === periodId ? { ...p, ...updates } : p
+                    )
+                }))
+            })),
+
+            deletePfmpPeriod: (periodId) => set((state) => ({
+                classes: state.classes.map((c) => ({
+                    ...c,
+                    pfmpPeriods: (c.pfmpPeriods || []).filter(p => p.id !== periodId)
+                }))
+            })),
+
             importTeachers: (classId, teachers) => set((state) => ({
                 classes: state.classes.map((c) => {
                     if (c.id !== classId) return c;
@@ -362,7 +409,8 @@ export const useSchoolStore = create<SchoolState>()(
                                 id: Math.random().toString(36).substr(2, 9),
                                 name: className,
                                 teachersList: [],
-                                studentsList: []
+                                studentsList: [],
+                                pfmpPeriods: []
                             };
                             currentClasses.push(newClass);
                             targetClassIndex = currentClasses.length - 1;
@@ -518,7 +566,8 @@ export const useSchoolStore = create<SchoolState>()(
                             id: Math.random().toString(36).substr(2, 9),
                             name: group.className,
                             teachersList: [],
-                            studentsList: []
+                            studentsList: [],
+                            pfmpPeriods: []
                         };
                         currentClasses.push(newClass);
                         targetClassIndex = currentClasses.length - 1;
@@ -608,7 +657,8 @@ export const useSchoolStore = create<SchoolState>()(
                             { id: 's2', firstName: 'Emma', lastName: 'Petit', email: 'emma.petit@etu.fr', birthDate: '2006-08-22' },
                             { id: 's3', firstName: 'Louis', lastName: 'Robert', email: 'louis.robert@etu.fr', birthDate: '2006-02-10' },
                             { id: 's4', firstName: 'Chloé', lastName: 'Richard', email: 'chloe.richard@etu.fr', birthDate: '2006-11-05' }
-                        ]
+                        ],
+                        pfmpPeriods: []
                     },
                     {
                         id: 'test-class-2',
@@ -625,7 +675,8 @@ export const useSchoolStore = create<SchoolState>()(
                         studentsList: [
                             { id: 's5', firstName: 'Thomas', lastName: 'Simon', email: 'thomas.simon@etu.fr', birthDate: '2007-03-30' },
                             { id: 's6', firstName: 'Léa', lastName: 'Michel', email: 'lea.michel@etu.fr', birthDate: '2007-07-12' }
-                        ]
+                        ],
+                        pfmpPeriods: []
                     },
                     {
                         id: 'demo-class-2nde1',
@@ -640,7 +691,8 @@ export const useSchoolStore = create<SchoolState>()(
                         ],
                         studentsList: [
                             { id: 's_demo', firstName: 'Élève', lastName: 'Démo', email: 'demo@pledgeum.fr', birthDate: '2005-06-15' }
-                        ]
+                        ],
+                        pfmpPeriods: []
                     }
                 ],
                 collaborators: [

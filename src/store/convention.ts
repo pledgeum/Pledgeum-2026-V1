@@ -64,6 +64,7 @@ export interface Convention extends ConventionData {
     activites?: string; // For attestation override
     competences?: string; // For attestation override
     cpe_email?: string;
+    derogationJustification?: string;
 
     signatures: {
         teacherAt?: string;

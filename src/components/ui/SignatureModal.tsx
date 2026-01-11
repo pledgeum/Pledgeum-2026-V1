@@ -1,8 +1,11 @@
-import { useState, useRef, useEffect } from 'react';
-import { X, PenTool, Mail, CheckCircle, Loader2 } from 'lucide-react';
+import { useRef, useEffect, useState } from 'react';
+import { X, PenTool, Mail, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { auth } from '@/lib/firebase';
 import { useDemoStore } from '@/store/demo';
+import { useConventionStore } from '@/store/convention';
+import { useSchoolStore } from '@/store/school';
+import { parseISO, format } from 'date-fns';
 
 interface SignatureModalProps {
     isOpen: boolean;
@@ -34,8 +37,34 @@ export function SignatureModal({
     const [otpSent, setOtpSent] = useState(false);
     const [loading, setLoading] = useState(false);
     const [isDualSignChecked, setIsDualSignChecked] = useState(false);
+    const [justification, setJustification] = useState('');
     const sigCanvas = useRef<any>({});
     const { isDemoMode, openEmailModal } = useDemoStore();
+    const { conventions, updateConvention } = useConventionStore();
+    const { classes } = useSchoolStore();
+
+    // Derogation / Date Check Logic
+    const convention = conventions.find(c => c.id === conventionId);
+    const studentClass = convention ? classes.find(c => c.name === convention.eleve_classe || c.id === convention.eleve_classe) : null;
+
+    // Check if dates match any official period
+    const isDerogation = (() => {
+        if (!convention || !studentClass || !studentClass.pfmpPeriods || studentClass.pfmpPeriods.length === 0) return false;
+
+        // Return TRUE if NO period matches the convention dates exactly
+        // (Strict check: must match start AND end of one period)
+        const match = studentClass.pfmpPeriods.some(p =>
+            p.startDate === convention.stage_date_debut && p.endDate === convention.stage_date_fin
+        );
+        return !match;
+    })();
+
+    // Initialize justification from convention if already present
+    useEffect(() => {
+        if (convention?.derogationJustification) {
+            setJustification(convention.derogationJustification);
+        }
+    }, [convention]);
 
     useEffect(() => {
         if (isOpen) {
@@ -54,6 +83,11 @@ export function SignatureModal({
     };
 
     const handleSignatureSave = async (signature: string) => {
+        // Save justification if needed/present (BEFORE signing)
+        if (justification && convention && justification !== convention.derogationJustification) {
+            await updateConvention(conventionId, { derogationJustification: justification });
+        }
+
         // We pass the isDualSignChecked state to the onSign callback
         await onSign('canvas', signature, undefined, isDualSignChecked);
     };
@@ -61,6 +95,10 @@ export function SignatureModal({
     const handleCanvasSubmit = async () => {
         if (sigCanvas.current.isEmpty()) {
             alert("Veuillez signer avant de valider.");
+            return;
+        }
+        if (isDerogation && !justification.trim() && !convention?.derogationJustification) {
+            alert("Une justification est requise pour valider ces dates hors période officielle.");
             return;
         }
         setLoading(true);
@@ -117,12 +155,20 @@ export function SignatureModal({
     };
 
     const handleOtpOnSign = async (dataUrl: string, auditLog: any) => {
+        // Save justification if needed (OTP flow)
+        if (justification && convention && justification !== convention.derogationJustification) {
+            await updateConvention(conventionId, { derogationJustification: justification });
+        }
         await onSign('otp', dataUrl, auditLog, isDualSignChecked);
     };
 
     const handleOtpSubmit = async () => {
         if (otpCode.length < 4) {
             alert("Code invalide");
+            return;
+        }
+        if (isDerogation && !justification.trim() && !convention?.derogationJustification) {
+            alert("Une justification est requise pour valider ces dates hors période officielle.");
             return;
         }
         setLoading(true);
@@ -236,6 +282,33 @@ export function SignatureModal({
                         <X className="w-5 h-5" />
                     </button>
                 </div>
+
+                {/* Warning Banner for Derogation */}
+                {isDerogation && (
+                    <div className="bg-red-50 border-b border-red-100 p-4">
+                        <div className="flex items-start space-x-3">
+                            <AlertTriangle className="w-5 h-5 text-red-600 mt-0.5 flex-shrink-0" />
+                            <div className="flex-1">
+                                <h4 className="text-sm font-bold text-red-800">Attention : Dates hors calendrier officiel</h4>
+                                <p className="text-xs text-red-700 mt-1">
+                                    Les dates de cette convention ({convention?.stage_date_debut ? format(parseISO(convention.stage_date_debut), 'dd/MM/yyyy') : '?'} - {convention?.stage_date_fin ? format(parseISO(convention.stage_date_fin), 'dd/MM/yyyy') : '?'})
+                                    ne correspondent pas aux périodes définies pour la classe {studentClass?.name}.
+                                </p>
+                                <div className="mt-3">
+                                    <label className="block text-xs font-medium text-red-900 mb-1">
+                                        Justification requise pour signer :
+                                    </label>
+                                    <textarea
+                                        value={justification}
+                                        onChange={(e) => setJustification(e.target.value)}
+                                        placeholder="Ex: Accord exceptionnel du Chef d'Établissement pour décalage d'une semaine..."
+                                        className="w-full text-sm border-red-300 rounded-md focus:ring-red-500 focus:border-red-500 min-h-[60px]"
+                                    />
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                )}
 
                 {/* Tabs */}
                 <div className="flex border-b border-gray-200">

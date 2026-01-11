@@ -6,8 +6,10 @@ import { z } from 'zod';
 import { StepWrapper } from './StepWrapper';
 import { conventionSchema } from '@/types/schema';
 import { useWizardStore } from '@/store/wizard';
-import { FileText, MapPin, Search } from 'lucide-react';
+import { useSchoolStore, PfmpPeriod } from '@/store/school';
+import { FileText, MapPin, Search, Calendar, AlertTriangle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { differenceInDays, isWithinInterval, parseISO, format } from 'date-fns';
 
 const stepSchema = conventionSchema.pick({
     stage_date_debut: true,
@@ -23,7 +25,20 @@ type Step4Data = z.infer<typeof stepSchema>;
 
 export function Step4Internship() {
     const { setData, data: allData, nextStep } = useWizardStore();
+
+    const { classes } = useSchoolStore();
     const [warnings, setWarnings] = useState<string[]>([]);
+
+    // Find Student Class and PFMP Periods
+    const studentClass = classes.find(c =>
+        c.id === allData.eleve_classe || c.name === allData.eleve_classe
+    );
+
+    const upcomingPeriod = studentClass?.pfmpPeriods?.find(p => {
+        // Simple logic: Find first period ending in the future
+        // Ideally should be sorted by date
+        return new Date(p.endDate) >= new Date();
+    });
 
     const handleNext = (data: Step4Data) => {
         setData(data);
@@ -58,6 +73,16 @@ export function Step4Internship() {
 
                 // Auto-fill defaults if empty on mount
                 useEffect(() => {
+                    // 1. Auto-fill Dates from Calendar (if available and empty)
+                    const currentStart = form.getValues('stage_date_debut');
+                    const currentEnd = form.getValues('stage_date_fin');
+
+                    if ((!currentStart || !currentEnd) && upcomingPeriod) {
+                        if (!currentStart) form.setValue('stage_date_debut', upcomingPeriod.startDate);
+                        if (!currentEnd) form.setValue('stage_date_fin', upcomingPeriod.endDate);
+                    }
+
+                    // 2. Auto-fill Hours
                     const current = form.getValues('stage_horaires');
                     // Only fill if completely empty/undefined to avoid overwriting
                     if (!current || Object.keys(current).length === 0) {
@@ -141,8 +166,45 @@ export function Step4Internship() {
                     }
                 }, [totalHours, warnings, form]); // We use the derived totalHours here
 
+                // Date Validation Visuals
+                const dateDebut = form.watch('stage_date_debut');
+                const dateFin = form.watch('stage_date_fin');
+
+                // Check if dates match the official period (if one exists)
+                const isOfficialPeriod = upcomingPeriod && dateDebut === upcomingPeriod.startDate && dateFin === upcomingPeriod.endDate;
+                const isDerogation = upcomingPeriod && (!isOfficialPeriod);
+
                 return (
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                        {/* PFMP Period Info Banner */}
+                        {upcomingPeriod && (
+                            <div className={`md:col-span-2 p-3 rounded-md border flex items-start space-x-3 text-sm ${isOfficialPeriod
+                                ? 'bg-blue-50 border-blue-200 text-blue-800'
+                                : 'bg-orange-50 border-orange-200 text-orange-800'
+                                }`}>
+                                {isOfficialPeriod ? (
+                                    <Calendar className="w-5 h-5 mt-0.5 text-blue-600" />
+                                ) : (
+                                    <AlertTriangle className="w-5 h-5 mt-0.5 text-orange-600" />
+                                )}
+                                <div>
+                                    <p className="font-bold">
+                                        {isOfficialPeriod ? "Période de stage officielle" : "Attention : Dates hors calendrier officiel"}
+                                    </p>
+                                    <p>
+                                        La période définie pour la classe <strong>{studentClass?.name}</strong> est du{' '}
+                                        <strong>{format(parseISO(upcomingPeriod.startDate), 'dd/MM/yyyy')}</strong> au{' '}
+                                        <strong>{format(parseISO(upcomingPeriod.endDate), 'dd/MM/yyyy')}</strong>.
+                                    </p>
+                                    {!isOfficialPeriod && (
+                                        <p className="mt-1 text-xs italic">
+                                            Vous pouvez modifier ces dates si une dérogation a été accordée. Une justification sera demandée lors de la signature.
+                                        </p>
+                                    )}
+                                </div>
+                            </div>
+                        )}
+
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Date de Début</label>
                             <input
