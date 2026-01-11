@@ -78,6 +78,7 @@ export default function Home() {
   const { role, notifications, unreadCount, markAsRead, clearNotifications, addNotification, fetchUserProfile, profileData, trackConnection, anonymizeAccount } = useUserStore();
   const { getConventionsByRole, fetchConventions, signConvention } = useConventionStore();
   const { isSchoolAuthorized } = useAdminStore();
+  const [isRgpdModalOpen, setIsRgpdModalOpen] = useState(false);
 
   const resetWizard = useWizardStore((state) => state.reset);
   const [showWizard, setShowWizard] = useState(false);
@@ -1021,7 +1022,6 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
   const [selectedConventionId, setSelectedConventionId] = useState<string | null>(null);
   const [isSigModalOpen, setIsSigModalOpen] = useState(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
-  const [isRgpdModalOpen, setIsRgpdModalOpen] = useState(false); // Validated state for Vercel
   const [isParentValModalOpen, setIsParentValModalOpen] = useState(false);
   const [isAbsenceModalOpen, setIsAbsenceModalOpen] = useState(false);
   const [isAttestationModalOpen, setIsAttestationModalOpen] = useState(false);
