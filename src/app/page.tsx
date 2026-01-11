@@ -1720,6 +1720,11 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
         );
       })}
 
+      <TosModal
+        isOpen={isTosModalOpen}
+        onClose={() => setIsTosModalOpen(false)}
+      />
+
       <SignatureModal
         isOpen={isSigModalOpen}
         onClose={() => setIsSigModalOpen(false)}
