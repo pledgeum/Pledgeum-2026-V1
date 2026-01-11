@@ -115,7 +115,7 @@ export function DemoUI() {
                             <div className="flex items-center gap-1 cursor-grab active:cursor-grabbing border-r border-white/20 pr-2">
                                 <GripVertical className="w-5 h-5 text-indigo-200" />
                                 <span className="text-xs font-bold whitespace-nowrap hidden sm:inline">🦁 Testez chaque rôle</span>
-                                <span className="text-xs font-bold whitespace-nowrap sm:hidden">🦁 Rôles</span>
+                                <span className="text-xs font-bold whitespace-nowrap sm:hidden">🦁 Tester des rôles</span>
                             </div>
 
                             <select
@@ -133,11 +133,11 @@ export function DemoUI() {
                                 }}
                                 className="bg-transparent border-none text-white text-xs font-bold py-0 pr-6 pl-0 cursor-pointer focus:ring-0 hover:bg-white/10 rounded transition-colors uppercase tracking-wide max-w-[120px] sm:max-w-none truncate"
                             >
-                                <option className="text-black" value="school_head">Admin</option>
+                                <option className="text-black" value="school_head">Directeur</option>
                                 <option className="text-black" value="student">Élève</option>
-                                <option className="text-black" value="teacher">Prof</option>
+                                <option className="text-black" value="teacher">Enseignant</option>
                                 <option className="text-black" value="tutor">Tuteur</option>
-                                <option className="text-black" value="business_manager">BDE</option>
+                                <option className="text-black" value="business_manager">R-BDE</option>
                                 <option className="text-black" value="ddfpt">DDFPT</option>
                             </select>
                         </div>
