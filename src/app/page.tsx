@@ -87,6 +87,7 @@ export default function Home() {
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isSchoolAdminModalOpen, setIsSchoolAdminModalOpen] = useState(false);
+  // RGPD Modal State
   const [isRgpdModalOpen, setIsRgpdModalOpen] = useState(false);
   const [isMissionOrderModalOpen, setIsMissionOrderModalOpen] = useState(false);
   const [isAlumniModalOpen, setIsAlumniModalOpen] = useState(false);
