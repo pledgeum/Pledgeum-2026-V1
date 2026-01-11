@@ -68,7 +68,7 @@ export function MockMailbox() {
             {/* Trigger Button */}
             <button
                 onClick={() => setIsOpen(true)}
-                className="relative bg-white/10 hover:bg-white/20 text-white p-2 rounded-full transition-colors mx-2"
+                className="relative bg-white shadow-md text-gray-900 p-2 rounded-full transition-colors mx-2 hover:bg-gray-100"
                 title="Ouvrir la boîte mail fictive"
             >
                 <Mail className="w-5 h-5" />
