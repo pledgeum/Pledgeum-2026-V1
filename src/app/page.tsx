@@ -87,8 +87,6 @@ export default function Home() {
   const [isSearchModalOpen, setIsSearchModalOpen] = useState(false);
   const [isProfileModalOpen, setIsProfileModalOpen] = useState(false);
   const [isSchoolAdminModalOpen, setIsSchoolAdminModalOpen] = useState(false);
-  // RGPD Modal State
-  const [isRgpdModalOpen, setIsRgpdModalOpen] = useState(false);
   const [isMissionOrderModalOpen, setIsMissionOrderModalOpen] = useState(false);
   const [isAlumniModalOpen, setIsAlumniModalOpen] = useState(false);
   const [isSuperAdminModalOpen, setIsSuperAdminModalOpen] = useState(false);
@@ -1023,6 +1021,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
   const [selectedConventionId, setSelectedConventionId] = useState<string | null>(null);
   const [isSigModalOpen, setIsSigModalOpen] = useState(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
+  const [isRgpdModalOpen, setIsRgpdModalOpen] = useState(false);
   const [isParentValModalOpen, setIsParentValModalOpen] = useState(false);
   const [isAbsenceModalOpen, setIsAbsenceModalOpen] = useState(false);
   const [isAttestationModalOpen, setIsAttestationModalOpen] = useState(false);
