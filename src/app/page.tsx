@@ -829,7 +829,7 @@ export default function Home() {
             </div>
 
             <div className="mt-8">
-              <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={user.uid} />
+              <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={user.uid} isRgpdModalOpen={isRgpdModalOpen} setIsRgpdModalOpen={setIsRgpdModalOpen} />
             </div>
           </>
         ) : (
@@ -868,7 +868,7 @@ export default function Home() {
               </div>
             )}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={user.uid} />
+              <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={user.uid} isRgpdModalOpen={isRgpdModalOpen} setIsRgpdModalOpen={setIsRgpdModalOpen} />
             </div>
           </div>
         )}
@@ -1013,7 +1013,7 @@ export default function Home() {
 
 // Sub-component for list rendering to keep Page clean
 
-function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail: string, userId?: string }) {
+function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdModalOpen }: { role: UserRole, userEmail: string, userId?: string, isRgpdModalOpen: boolean, setIsRgpdModalOpen: (v: boolean) => void }) {
   const router = useRouter();
   const { getConventionsByRole, signConvention, sendReminder, bulkSignConventions, updateEmail, assignTrackingTeacher } = useConventionStore();
   const { classes } = useSchoolStore();
