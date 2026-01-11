@@ -1021,7 +1021,7 @@ function ConventionList({ role, userEmail, userId }: { role: UserRole, userEmail
   const [selectedConventionId, setSelectedConventionId] = useState<string | null>(null);
   const [isSigModalOpen, setIsSigModalOpen] = useState(false);
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
-  const [isRgpdModalOpen, setIsRgpdModalOpen] = useState(false);
+  const [isRgpdModalOpen, setIsRgpdModalOpen] = useState(false); // Validated state for Vercel
   const [isParentValModalOpen, setIsParentValModalOpen] = useState(false);
   const [isAbsenceModalOpen, setIsAbsenceModalOpen] = useState(false);
   const [isAttestationModalOpen, setIsAttestationModalOpen] = useState(false);
