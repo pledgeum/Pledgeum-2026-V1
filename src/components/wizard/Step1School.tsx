@@ -71,7 +71,7 @@ export function Step1School() {
     return (
         <StepWrapper<Step1Data>
             title="L'Établissement Scolaire"
-            description="Informations concernant le lycée professionnel ou le CFA."
+            description="Informations concernant le lycée."
             schema={stepSchema}
             onNext={handleNext}
         >
