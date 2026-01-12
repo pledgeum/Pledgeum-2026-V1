@@ -218,7 +218,7 @@ export function Step4Internship() {
                                 type="date"
                                 min={today}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
                                     form.formState.errors.stage_date_debut && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -232,7 +232,7 @@ export function Step4Internship() {
                                 type="date"
                                 min={form.watch('stage_date_debut') || today}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
                                     form.formState.errors.stage_date_fin && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -259,13 +259,13 @@ export function Step4Internship() {
                                                     <input
                                                         type="time"
                                                         {...form.register(`stage_horaires.${day}.matin_debut`)}
-                                                        className="w-24 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-xs p-1 border"
+                                                        className="w-24 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-xs p-1 border text-gray-900"
                                                     />
                                                     <span className="text-gray-400">-</span>
                                                     <input
                                                         type="time"
                                                         {...form.register(`stage_horaires.${day}.matin_fin`)}
-                                                        className="w-24 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-xs p-1 border"
+                                                        className="w-24 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-xs p-1 border text-gray-900"
                                                     />
                                                 </div>
                                             </td>
@@ -274,13 +274,13 @@ export function Step4Internship() {
                                                     <input
                                                         type="time"
                                                         {...form.register(`stage_horaires.${day}.apres_midi_debut`)}
-                                                        className="w-24 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-xs p-1 border"
+                                                        className="w-24 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-xs p-1 border text-gray-900"
                                                     />
                                                     <span className="text-gray-400">-</span>
                                                     <input
                                                         type="time"
                                                         {...form.register(`stage_horaires.${day}.apres_midi_fin`)}
-                                                        className="w-24 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-xs p-1 border"
+                                                        className="w-24 border-gray-300 rounded-md shadow-sm focus:ring-blue-500 focus:border-blue-500 sm:text-xs p-1 border text-gray-900"
                                                     />
                                                 </div>
                                             </td>
@@ -358,7 +358,7 @@ export function Step4Internship() {
                                             {...form.register('stage_lieu')}
                                             rows={2}
                                             placeholder="Ex: Atelier, 12 Rue des Oliviers, 69002 Lyon"
-                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border placeholder:text-gray-500"
+                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border placeholder:text-gray-500 text-gray-900"
                                         />
                                         <button
                                             type="button"
@@ -397,7 +397,7 @@ export function Step4Internship() {
                                 {...form.register('stage_activites')}
                                 rows={4}
                                 placeholder="Détaillez les tâches confiées au stagiaire..."
-                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border placeholder:text-gray-500"
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border placeholder:text-gray-500 text-gray-900"
                             />
                             {form.formState.errors.stage_activites && <p className="text-red-500 text-xs mt-1">{form.formState.errors.stage_activites.message}</p>}
                         </div>

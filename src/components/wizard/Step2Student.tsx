@@ -174,7 +174,7 @@ export function Step2Student() {
                                 disabled={!!profileData?.lastName}
                                 readOnly={!!profileData?.lastName}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
                                     form.formState.errors.eleve_nom
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
@@ -190,7 +190,7 @@ export function Step2Student() {
                                 disabled={!!profileData?.firstName}
                                 readOnly={!!profileData?.firstName}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
                                     form.formState.errors.eleve_prenom
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
@@ -208,7 +208,7 @@ export function Step2Student() {
                                 disabled={!!profileData?.birthDate}
                                 readOnly={!!profileData?.birthDate}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
                                     form.formState.errors.eleve_date_naissance
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
@@ -226,7 +226,7 @@ export function Step2Student() {
                                 disabled={!!profileData?.email}
                                 readOnly={!!profileData?.email}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
                                     form.formState.errors.eleve_email
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
@@ -244,7 +244,7 @@ export function Step2Student() {
                                 disabled={!!profileData?.phone}
                                 readOnly={!!profileData?.phone}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
                                     form.formState.errors.eleve_tel
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
@@ -262,7 +262,7 @@ export function Step2Student() {
                                     disabled={!!profileData?.class} // Lock if coming from profile
                                     readOnly={!!profileData?.class}
                                     className={cn(
-                                        "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
+                                        "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
                                         form.formState.errors.eleve_classe
                                             ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                             : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
@@ -286,7 +286,7 @@ export function Step2Student() {
                                 disabled={!!profileData?.diploma}
                                 readOnly={!!profileData?.diploma}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
                                     form.formState.errors.diplome_intitule
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
@@ -305,7 +305,7 @@ export function Step2Student() {
                                 disabled={!!profileData?.address}
                                 readOnly={!!profileData?.address}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
                                     form.formState.errors.eleve_adresse
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
@@ -322,7 +322,7 @@ export function Step2Student() {
                                 disabled={!!profileData?.zipCode || !!profileData?.postalCode}
                                 readOnly={!!profileData?.zipCode || !!profileData?.postalCode}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
                                     form.formState.errors.eleve_cp
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
@@ -339,7 +339,7 @@ export function Step2Student() {
                                 disabled={!!profileData?.city}
                                 readOnly={!!profileData?.city}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
                                     form.formState.errors.eleve_ville
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                         : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
@@ -362,7 +362,7 @@ export function Step2Student() {
                                         <input
                                             {...form.register('rep_legal_nom')}
                                             className={cn(
-                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
+                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
                                                 form.formState.errors.rep_legal_nom
                                                     ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                                     : "border-blue-300 focus:border-blue-500 focus:ring-blue-500"
@@ -376,7 +376,7 @@ export function Step2Student() {
                                             {...form.register('rep_legal_email')}
                                             type="email"
                                             className={cn(
-                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
+                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
                                                 form.formState.errors.rep_legal_email
                                                     ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                                     : "border-blue-300 focus:border-blue-500 focus:ring-blue-500"
@@ -390,7 +390,7 @@ export function Step2Student() {
                                             {...form.register('rep_legal_tel')}
                                             type="tel"
                                             className={cn(
-                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
+                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
                                                 form.formState.errors.rep_legal_tel
                                                     ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                                     : "border-blue-300 focus:border-blue-500 focus:ring-blue-500"
@@ -403,7 +403,7 @@ export function Step2Student() {
                                         <input
                                             {...form.register('rep_legal_adresse')}
                                             className={cn(
-                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border",
+                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
                                                 form.formState.errors.rep_legal_adresse
                                                     ? "border-red-500 focus:border-red-500 focus:ring-red-500"
                                                     : "border-blue-300 focus:border-blue-500 focus:ring-blue-500"
