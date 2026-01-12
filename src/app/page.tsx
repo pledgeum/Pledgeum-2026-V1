@@ -393,22 +393,31 @@ export default function Home() {
       <header className="bg-white border-b border-gray-200 sticky top-0 z-50">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex justify-between items-center">
           {/* 4. Wrap user info div in a button */}
-          <button
-            onClick={() => setIsProfileModalOpen(true)}
-            className="flex items-center space-x-3 p-2 -ml-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer group"
-            title={!isProfileComplete() ? "Profil incomplet - Cliquez pour compléter" : "Voir ou modifier mon profil"}
-          >
-            <div className="bg-blue-100 p-2 rounded-full group-hover:bg-blue-200 transition-colors relative">
-              <UserCircle className="w-6 h-6 text-blue-600 group-hover:text-blue-700" />
-              {!isProfileComplete() && (
-                <span className="absolute -top-0.5 -right-0.5 block h-3 w-3 rounded-full ring-2 ring-white bg-red-500 animate-pulse shadow-sm" />
-              )}
+          <div className="flex items-center gap-4">
+            {/* App Branding */}
+            <div className="hidden md:flex flex-col">
+              <span className="text-lg font-bold text-indigo-900 leading-tight">Pledgeum</span>
+              <span className="text-[10px] text-gray-500 font-medium -mt-1">Mon bureau des entreprises</span>
             </div>
-            <div className="hidden md:block">
-              <p className="text-sm font-bold text-gray-900 group-hover:text-blue-700 transition-colors">{user.email?.split('@')[0]}</p>
-              <p className="text-xs text-gray-500 group-hover:text-blue-500 transition-colors">{user.email}</p>
-            </div>
-          </button>
+
+            {/* User Profile Button */}
+            <button
+              onClick={() => setIsProfileModalOpen(true)}
+              className="flex items-center space-x-3 p-2 -ml-2 rounded-lg hover:bg-gray-100 transition-colors cursor-pointer group"
+              title={!isProfileComplete() ? "Profil incomplet - Cliquez pour compléter" : "Voir ou modifier mon profil"}
+            >
+              <div className="bg-blue-100 p-2 rounded-full group-hover:bg-blue-200 transition-colors relative">
+                <UserCircle className="w-6 h-6 text-blue-600 group-hover:text-blue-700" />
+                {!isProfileComplete() && (
+                  <span className="absolute -top-0.5 -right-0.5 block h-3 w-3 rounded-full ring-2 ring-white bg-red-500 animate-pulse shadow-sm" />
+                )}
+              </div>
+              <div className="hidden md:block text-left">
+                <p className="text-sm font-bold text-gray-900 group-hover:text-blue-700 transition-colors">{user.email?.split('@')[0]}</p>
+                <p className="text-xs text-gray-500 group-hover:text-blue-500 transition-colors">{user.email}</p>
+              </div>
+            </button>
+          </div>
 
           {/* HAMBURGER BUTTON (Mobile Only) */}
           <div className="md:hidden flex items-center">
