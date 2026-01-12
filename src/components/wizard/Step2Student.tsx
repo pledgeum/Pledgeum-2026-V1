@@ -174,11 +174,11 @@ export function Step2Student() {
                                 disabled={!!profileData?.lastName}
                                 readOnly={!!profileData?.lastName}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900 disabled:opacity-100 disabled:text-gray-900",
                                     form.formState.errors.eleve_nom
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.lastName && "bg-gray-200 text-gray-700 cursor-not-allowed"
+                                        : "border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200",
+                                    profileData?.lastName && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_nom && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_nom.message}</p>}
@@ -190,11 +190,11 @@ export function Step2Student() {
                                 disabled={!!profileData?.firstName}
                                 readOnly={!!profileData?.firstName}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900 disabled:opacity-100 disabled:text-gray-900",
                                     form.formState.errors.eleve_prenom
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.firstName && "bg-gray-200 text-gray-700 cursor-not-allowed"
+                                        : "border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200",
+                                    profileData?.firstName && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_prenom && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_prenom.message}</p>}
@@ -208,11 +208,11 @@ export function Step2Student() {
                                 disabled={!!profileData?.birthDate}
                                 readOnly={!!profileData?.birthDate}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900 disabled:opacity-100 disabled:text-gray-900",
                                     form.formState.errors.eleve_date_naissance
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.birthDate && "bg-gray-200 text-gray-700 cursor-not-allowed"
+                                        : "border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200",
+                                    profileData?.birthDate && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_date_naissance && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_date_naissance.message}</p>}
@@ -226,11 +226,11 @@ export function Step2Student() {
                                 disabled={!!profileData?.email}
                                 readOnly={!!profileData?.email}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900 disabled:opacity-100 disabled:text-gray-900",
                                     form.formState.errors.eleve_email
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.email && "bg-gray-200 text-gray-700 cursor-not-allowed"
+                                        : "border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200",
+                                    profileData?.email && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_email && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_email.message}</p>}
@@ -244,11 +244,11 @@ export function Step2Student() {
                                 disabled={!!profileData?.phone}
                                 readOnly={!!profileData?.phone}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900 disabled:opacity-100 disabled:text-gray-900",
                                     form.formState.errors.eleve_tel
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.phone && "bg-gray-200 text-gray-700 cursor-not-allowed"
+                                        : "border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200",
+                                    profileData?.phone && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_tel && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_tel.message}</p>}
@@ -262,11 +262,11 @@ export function Step2Student() {
                                     disabled={!!profileData?.class} // Lock if coming from profile
                                     readOnly={!!profileData?.class}
                                     className={cn(
-                                        "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
+                                        "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900 disabled:opacity-100 disabled:text-gray-900",
                                         form.formState.errors.eleve_classe
                                             ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                            : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                        profileData?.class ? "bg-gray-200 text-gray-700 cursor-not-allowed" : ""
+                                            : "border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200",
+                                        profileData?.class ? "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed" : ""
                                     )}
                                 />
                                 {profileData?.class && (
@@ -286,11 +286,11 @@ export function Step2Student() {
                                 disabled={!!profileData?.diploma}
                                 readOnly={!!profileData?.diploma}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900 disabled:opacity-100 disabled:text-gray-900",
                                     form.formState.errors.diplome_intitule
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.diploma && "bg-gray-200 text-gray-700 cursor-not-allowed",
+                                        : "border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200",
+                                    profileData?.diploma && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed",
                                     "placeholder:text-gray-500"
                                 )}
                             />
@@ -305,11 +305,11 @@ export function Step2Student() {
                                 disabled={!!profileData?.address}
                                 readOnly={!!profileData?.address}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900 disabled:opacity-100 disabled:text-gray-900",
                                     form.formState.errors.eleve_adresse
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.address && "bg-gray-200 text-gray-700 cursor-not-allowed"
+                                        : "border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200",
+                                    profileData?.address && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_adresse && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_adresse.message}</p>}
@@ -322,11 +322,11 @@ export function Step2Student() {
                                 disabled={!!profileData?.zipCode || !!profileData?.postalCode}
                                 readOnly={!!profileData?.zipCode || !!profileData?.postalCode}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900 disabled:opacity-100 disabled:text-gray-900",
                                     form.formState.errors.eleve_cp
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    (profileData?.zipCode || profileData?.postalCode) && "bg-gray-200 text-gray-700 cursor-not-allowed"
+                                        : "border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200",
+                                    (profileData?.zipCode || profileData?.postalCode) && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_cp && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_cp.message}</p>}
@@ -339,11 +339,11 @@ export function Step2Student() {
                                 disabled={!!profileData?.city}
                                 readOnly={!!profileData?.city}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900 disabled:opacity-100 disabled:text-gray-900",
                                     form.formState.errors.eleve_ville
                                         ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                        : "border-gray-300 focus:border-blue-500 focus:ring-blue-500",
-                                    profileData?.city && "bg-gray-200 text-gray-700 cursor-not-allowed"
+                                        : "border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200",
+                                    profileData?.city && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed"
                                 )}
                             />
                             {form.formState.errors.eleve_ville && <p className="text-red-500 text-xs mt-1">{form.formState.errors.eleve_ville.message}</p>}
@@ -362,10 +362,10 @@ export function Step2Student() {
                                         <input
                                             {...form.register('rep_legal_nom')}
                                             className={cn(
-                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
+                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900 disabled:opacity-100 disabled:text-gray-900",
                                                 form.formState.errors.rep_legal_nom
                                                     ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                                    : "border-blue-300 focus:border-blue-500 focus:ring-blue-500"
+                                                    : "border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                                             )}
                                         />
                                         {form.formState.errors.rep_legal_nom && <p className="text-red-500 text-xs mt-1">{form.formState.errors.rep_legal_nom.message}</p>}
@@ -376,10 +376,10 @@ export function Step2Student() {
                                             {...form.register('rep_legal_email')}
                                             type="email"
                                             className={cn(
-                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
+                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900 disabled:opacity-100 disabled:text-gray-900",
                                                 form.formState.errors.rep_legal_email
                                                     ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                                    : "border-blue-300 focus:border-blue-500 focus:ring-blue-500"
+                                                    : "border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                                             )}
                                         />
                                         {form.formState.errors.rep_legal_email && <p className="text-red-500 text-xs mt-1">{form.formState.errors.rep_legal_email.message}</p>}
@@ -390,10 +390,10 @@ export function Step2Student() {
                                             {...form.register('rep_legal_tel')}
                                             type="tel"
                                             className={cn(
-                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
+                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900 disabled:opacity-100 disabled:text-gray-900",
                                                 form.formState.errors.rep_legal_tel
                                                     ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                                    : "border-blue-300 focus:border-blue-500 focus:ring-blue-500"
+                                                    : "border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                                             )}
                                         />
                                         {form.formState.errors.rep_legal_tel && <p className="text-red-500 text-xs mt-1">{form.formState.errors.rep_legal_tel.message}</p>}
@@ -403,10 +403,10 @@ export function Step2Student() {
                                         <input
                                             {...form.register('rep_legal_adresse')}
                                             className={cn(
-                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900",
+                                                "mt-1 block w-full rounded-md shadow-sm sm:text-sm p-2 border text-gray-900 disabled:opacity-100 disabled:text-gray-900",
                                                 form.formState.errors.rep_legal_adresse
                                                     ? "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                                    : "border-blue-300 focus:border-blue-500 focus:ring-blue-500"
+                                                    : "border-gray-400 focus:border-blue-500 focus:ring-2 focus:ring-blue-200"
                                             )}
                                         />
                                         {form.formState.errors.rep_legal_adresse && <p className="text-red-500 text-xs mt-1">{form.formState.errors.rep_legal_adresse.message}</p>}

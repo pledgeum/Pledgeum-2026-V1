@@ -25,6 +25,18 @@ body {
   font-family: Arial, Helvetica, sans-serif;
 }
 
+/* Force iOS disabled text color */
+input:disabled,
+textarea:disabled,
+select:disabled,
+input[readonly],
+textarea[readonly],
+select[readonly] {
+  -webkit-text-fill-color: #111827;
+  opacity: 1;
+  color: #111827;
+}
+
 @keyframes breathe {
   0% {
     transform: scale(1);

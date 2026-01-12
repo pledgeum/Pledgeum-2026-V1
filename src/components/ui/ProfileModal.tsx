@@ -355,7 +355,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                 onChange={handleChange}
                 placeholder={placeholder}
                 disabled={disabled}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 outline-none transition-all placeholder:text-gray-500 text-gray-900 ${disabled ? 'bg-gray-50 text-gray-500 border-gray-200 cursor-not-allowed' : 'border-gray-300 bg-white'}`}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 outline-none transition-all placeholder:text-gray-500 text-gray-900 disabled:opacity-100 disabled:text-gray-900 ${disabled ? 'bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed' : 'border-gray-400 bg-white'}`}
             />
         </div>
     );
