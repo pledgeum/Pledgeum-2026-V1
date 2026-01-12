@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { collection, query, where, getDocs } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
 
 export type SchoolStatus = 'BETA' | 'ADHERENT';
 export type FeedbackType = 'IMPROVEMENT' | 'BUG';
@@ -30,6 +32,7 @@ interface AdminState {
 
     authorizeSchool: (school: Omit<AuthorizedSchool, 'authorizedAt'>) => void;
     removeSchool: (id: string) => void;
+    fetchAuthorizedSchools: () => Promise<void>; // NEW: Fetch from Firestore
 
     addFeedback: (feedback: Omit<Feedback, 'id' | 'createdAt'>) => void;
 
@@ -52,6 +55,34 @@ export const useAdminStore = create<AdminState>()(
             removeSchool: (id) => set((state) => ({
                 authorizedSchools: state.authorizedSchools.filter(s => s.id !== id)
             })),
+
+            fetchAuthorizedSchools: async () => {
+                try {
+                    console.log("[AdminStore] Fetching authorized schools from Firestore...");
+                    const q = query(collection(db, "schools"), where("isAuthorized", "==", true));
+                    const snapshot = await getDocs(q);
+
+                    const fetchedSchools: AuthorizedSchool[] = [];
+                    snapshot.forEach(doc => {
+                        const data = doc.data();
+                        fetchedSchools.push({
+                            id: doc.id,
+                            name: data.schoolName,
+                            city: data.schoolCity,
+                            email: data.schoolHeadEmail,
+                            status: (data.schoolStatus as SchoolStatus) || 'ADHERENT', // Use persisted status
+                            authorizedAt: data.updatedAt || new Date().toISOString()
+                        });
+                    });
+
+                    // Merge with existing logic if needed, or overwrite? 
+                    // Overwrite is safer to sync with source of truth
+                    set({ authorizedSchools: fetchedSchools });
+                    console.log(`[AdminStore] Loaded ${fetchedSchools.length} schools.`);
+                } catch (e) {
+                    console.error("[AdminStore] Error fetching schools:", e);
+                }
+            },
 
             addFeedback: (feedback) => set((state) => ({
                 feedbacks: [

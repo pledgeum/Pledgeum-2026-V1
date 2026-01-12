@@ -163,6 +163,7 @@ interface SchoolState {
     hiddenClasses: string[];
     setHiddenClasses: (classes: string[]) => void;
 
+    reset: () => void;
     restoreTestData: () => void;
 }
 
@@ -706,6 +707,20 @@ export const useSchoolStore = create<SchoolState>()(
                 schoolHeadEmail: "demo@pledgeum.fr"
             })),
 
+            reset: () => set({
+                collaborators: [],
+                classes: [],
+                partnerCompanies: [],
+                hiddenActivities: [],
+                hiddenJobs: [],
+                hiddenClasses: [],
+                delegatedAdminId: null,
+                schoolName: '',
+                schoolAddress: '',
+                schoolPhone: '',
+                schoolHeadName: '',
+                schoolHeadEmail: ''
+            })
         }),
         {
             name: 'school-storage', // Persist to localStorage for demo persistence

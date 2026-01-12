@@ -1021,8 +1021,8 @@ export default function Home() {
           <button
             onClick={handleNewConvention}
             className={`md:hidden fixed bottom-6 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg flex items-center justify-center transition-transform active:scale-95 ${(isProfileModalOpen || isSearchModalOpen || isSchoolAdminModalOpen || isMissionOrderModalOpen || isAlumniModalOpen || isSuperAdminModalOpen || isFeedbackModalOpen || isDeleteModalOpen || isVerificationModalOpen || isClassDocModalOpen || isTrackingMatrixOpen || isRgpdModalOpen || isChildModalOpen)
-                ? 'hidden'
-                : ''
+              ? 'hidden'
+              : ''
               }`}
             title="Nouvelle Convention"
           >

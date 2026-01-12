@@ -1,7 +1,7 @@
 'use server';
 
 import { adminAuth, adminFirestore } from '@/lib/firebase-admin';
-import { sendNotification } from '@/lib/notification';
+import { sendEmail } from '@/lib/email';
 
 export async function initializeSchoolIdentity(schoolId: string, data: {
     name: string;
@@ -10,19 +10,21 @@ export async function initializeSchoolIdentity(schoolId: string, data: {
     postalCode: string;
     email: string;
     phone?: string;
+    status: 'BETA' | 'ADHERENT'; // NEW: Status
 }) {
     try {
-        console.log(`[Initialize School] Starting for ${data.name} (${schoolId})`);
+        console.log(`[Initialize School] Starting for ${data.name} (${schoolId}) - Status: ${data.status}`);
 
         await adminFirestore.collection('schools').doc(schoolId).set({
             schoolName: data.name,
-            schoolAddress: data.address, // Full address string usually
+            schoolAddress: data.address,
             schoolCity: data.city,
             schoolPostalCode: data.postalCode,
-            schoolHeadEmail: data.email, // Default head email to school email
-            schoolPhone: data.phone || '', // Optional
+            schoolHeadEmail: data.email,
+            schoolPhone: data.phone || '',
             updatedAt: new Date().toISOString(),
-            isAuthorized: true
+            isAuthorized: true,
+            schoolStatus: data.status // Persist specific status
         }, { merge: true });
 
         console.log(`[Initialize School] Success for ${schoolId}`);
@@ -91,7 +93,7 @@ Cordialement,
 L'équipe Pledgeum
         `;
 
-        const emailSent = await sendNotification(email, subject, message);
+        const emailSent = await sendEmail({ to: email, subject, text: message });
 
         if (!emailSent) {
             throw new Error("Failed to send email via notification service");
@@ -100,6 +102,63 @@ L'équipe Pledgeum
         return { success: true };
     } catch (error: any) {
         console.error("[Welcome Email] Error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function forceSandboxUserRole(email: string) {
+    try {
+        console.log(`[Sandbox Role] Forcing role for ${email}`);
+
+        let user;
+        try {
+            user = await adminAuth.getUserByEmail(email);
+        } catch (e: any) {
+            if (e.code === 'auth/user-not-found') {
+                user = await adminAuth.createUser({
+                    email,
+                    emailVerified: true,
+                    displayName: "Admin Sandbox"
+                });
+            } else throw e;
+        }
+
+        const schoolId = "9999999X";
+        const schoolName = "Mon LYCEE TOUTFAUX";
+
+        // 1. Set Auth Claims - Explicitly School Admin for this school only
+        await adminAuth.setCustomUserClaims(user.uid, {
+            role: 'school_admin',
+            schoolId: schoolId,
+            schoolName: schoolName
+            // No 'super_admin' claim
+        });
+
+        // 2. Overwrite Firestore Profile (The Source of Truth for App Logic)
+        // We use merge: true to keep system fields, but we overwrite all app logic fields
+        await adminFirestore.collection('users').doc(user.uid).set({
+            name: "Fabrice Dumasdelage",
+            email: email,
+            role: 'school_head', // App level role
+            schoolId: schoolId, // Direct link
+            profileData: {
+                firstName: "Fabrice",
+                lastName: "Dumasdelage",
+                email: email,
+                phone: "0102030405", // Required for profile completion
+                ecole_nom: schoolName,
+                ecole_ville: "Elbeuf",
+                role: "Proviseur",
+                function: "Proviseur" // Often checked for checking profile completion
+            },
+            hasAcceptedTos: true,
+            updatedAt: new Date().toISOString()
+        }, { merge: true });
+
+        console.log(`[Sandbox Role] Success for ${user.uid} - Appointed Head of ${schoolName}`);
+        return { success: true };
+    } catch (error: any) {
+        console.error("[Sandbox Role] Error:", error);
         return { success: false, error: error.message };
     }
 }

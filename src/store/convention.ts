@@ -495,9 +495,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 });
             });
 
-            // INJECT MOCK DATA FOR DEMO/TESTING
-            conventionsMap.set(MOCK_CONVENTION_READY.id, MOCK_CONVENTION_READY);
-            conventionsMap.set(MOCK_CONVENTION.id, MOCK_CONVENTION);
+
 
             set({ conventions: Array.from(conventionsMap.values()) });
         } catch (error) {

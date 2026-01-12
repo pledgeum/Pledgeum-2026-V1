@@ -1,11 +1,12 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { X, Search, ShieldCheck, MessageSquare, Trash2, Building2, User, Mail, Calendar, Key } from 'lucide-react';
 import { useAdminStore, SchoolStatus } from '@/store/admin';
 import { useSchoolStore, Student } from '@/store/school'; // Import School Store
+import { useUserStore } from '@/store/user';
 import { searchSchools, SchoolResult } from '@/lib/educationApi';
-import { sendWelcomeEmail, initializeSchoolIdentity } from '@/app/actions/schoolAdmin';
+import { initializeSchoolIdentity, sendWelcomeEmail, forceSandboxUserRole } from '@/app/actions/schoolAdmin';
 
 interface SuperAdminModalProps {
     isOpen: boolean;
@@ -21,6 +22,13 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
     const [searchResults, setSearchResults] = useState<SchoolResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
+
+    // Refresh list on open
+    useEffect(() => {
+        if (isOpen) {
+            useAdminStore.getState().fetchAuthorizedSchools();
+        }
+    }, [isOpen]);
 
     if (!isOpen) return null;
 
@@ -56,6 +64,7 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                 city: school.ville,
                 postalCode: school.cp,
                 email: school.mail || '',
+                status: status // Pass the status ('BETA' or 'ADHERENT')
                 // phone not available in SchoolResult currently
             });
 
@@ -128,8 +137,71 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                 <div className="p-6 overflow-y-auto bg-gray-50 flex-1">
                     {activeTab === 'schools' ? (
                         <div className="space-y-8">
+
+
                             {/* Search */}
                             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+
+                                {/* URGENT: FLASHY SANDBOX BUTTON FOR PLEDGEUM */}
+                                {useUserStore.getState().email === 'pledgeum@gmail.com' && (
+                                    <button
+                                        type="button"
+                                        className="relative z-[9999] bg-orange-600 hover:bg-orange-700 text-white font-bold text-lg p-4 block w-full mb-6 rounded-lg shadow-2xl border-4 border-white animate-pulse"
+                                        onClick={async () => {
+                                            if (!confirm("⚠️ Initialiser 'Mon LYCEE TOUTFAUX' en mode 'Coquille Vide' (Aucune donnée) et réparer Fabrice ?")) return;
+
+                                            // 0. RESET STORES (Coquille Vide enforcement)
+                                            // Wipe any localized data from persistence
+                                            useSchoolStore.getState().reset();
+
+                                            const sandboxSchool = {
+                                                id: "9999999X",
+                                                nom: "Mon LYCEE TOUTFAUX",
+                                                ville: "Elbeuf",
+                                                mail: "fabrice.dumasdelage@gmail.com",
+                                                adresse: "12 Rue Ampère",
+                                                cp: "76500"
+                                            };
+
+                                            const sandboxSchoolResult: SchoolResult = {
+                                                id: sandboxSchool.id,
+                                                nom: sandboxSchool.nom,
+                                                ville: sandboxSchool.ville,
+                                                cp: sandboxSchool.cp,
+                                                adresse: sandboxSchool.adresse,
+                                                mail: sandboxSchool.mail,
+                                                type: "Lycée",
+                                                lat: 0,
+                                                lng: 0
+                                            };
+
+                                            // Authorize & Persist
+                                            await handleAuthorize(sandboxSchoolResult, 'ADHERENT');
+
+                                            // Persist Identity Explicitly
+                                            await initializeSchoolIdentity(sandboxSchool.id, {
+                                                name: sandboxSchool.nom,
+                                                address: sandboxSchool.adresse,
+                                                city: sandboxSchool.ville,
+                                                postalCode: sandboxSchool.cp,
+                                                email: sandboxSchool.mail,
+                                                status: 'ADHERENT'
+                                            });
+
+                                            // Repair User
+                                            await forceSandboxUserRole(sandboxSchool.mail);
+
+                                            alert("✅ SANDBOX INITIALISÉE & RÉPARÉE");
+                                            useAdminStore.getState().fetchAuthorizedSchools();
+                                        }}
+                                    >
+                                        <div className="flex items-center justify-center gap-2">
+                                            <ShieldCheck className="w-8 h-8" />
+                                            <span>INITIALISER LE LYCÉE SANDBOX (TEST)</span>
+                                        </div>
+                                    </button>
+                                )}
+
                                 <h4 className="text-sm font-bold text-gray-900 mb-4 flex items-center">
                                     <Search className="w-4 h-4 mr-2 text-purple-600" />
                                     Ajouter un établissement
@@ -150,7 +222,6 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                         Rechercher
                                     </button>
                                 </form>
-
                                 {/* Results */}
                                 {searchResults.length > 0 && (
                                     <div className="mt-4 border-t border-gray-100 pt-4 max-h-60 overflow-y-auto">
@@ -225,6 +296,52 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center space-x-2">
+                                                    {school.status === 'BETA' && (
+                                                        <button
+                                                            onClick={async () => {
+                                                                if (confirm(`Passer ${school.name} en mode ADHÉRENT ?`)) {
+                                                                    // Need to reconstruct SchoolResult-like object or modify handleAuthorize to accept partial
+                                                                    // Since handleAuthorize expects SchoolResult, we map back or cast. 
+                                                                    // Actually authorizeSchool just takes { id, name, ... }.
+                                                                    // Let's see handleAuthorize signature in lines 40-72.
+                                                                    // It takes (school: SchoolResult, status: SchoolStatus).
+                                                                    // We need to pass a SchoolResult. The 'school' here is from authorizedSchools which might differ slightly or be just the store object.
+                                                                    // The store object has { id, name, city, email, status, authorizedAt }
+                                                                    // SchoolResult has { id, nom, ville, mail, ... }
+                                                                    // We can construct a minimal compatible object if handleAuthorize uses it safely.
+                                                                    // Looking at handleAuthorize:
+                                                                    // It uses school.id, school.nom, school.ville, school.mail for authorizeSchool
+                                                                    // and school.adresse, school.cp etc for initializeSchoolIdentity.
+                                                                    // If we are just upgrading status, initializeSchoolIdentity might re-run nicely or check if exists.
+                                                                    // Ideally we should just update the status in store if we assume identity is already fine.
+                                                                    // BUT `authorizeSchool` in store might overwrite.
+                                                                    // Let's try to just call authorizeSchool from store directly if we want to skip re-initialization overhead, 
+                                                                    // OR better: Just update the status.
+
+                                                                    // However, for simplicity and consistency with the "Authorize" flow which implies "Set this status", we can re-use logic if possible.
+                                                                    // BUT `school` variable here is from `authorizedSchools` (store), NOT `searchResults` (API).
+                                                                    // Store object lacks address/cp usually unless we stored them?
+                                                                    // user.ts/admin.ts types:
+                                                                    // AuthorizedSchool { id, name, city, email, status, authorizedAt }
+                                                                    // It misses address/cp.
+                                                                    // So calling `handleAuthorize` fully might fail on `initializeSchoolIdentity` (missing address).
+                                                                    // So we should probably just call `authorizeSchool` from `useAdminStore` to update the status.
+
+                                                                    authorizeSchool({
+                                                                        id: school.id,
+                                                                        name: school.name,
+                                                                        city: school.city,
+                                                                        email: school.email,
+                                                                        status: 'ADHERENT'
+                                                                    });
+                                                                }
+                                                            }}
+                                                            className="px-2 py-1 bg-green-50 text-green-700 text-xs font-bold rounded hover:bg-green-100 border border-green-200 transition-colors mr-2"
+                                                            title="Passer en mode Adhérent complet"
+                                                        >
+                                                            Passer Adhérent
+                                                        </button>
+                                                    )}
                                                     <span className={`px-2.5 py-0.5 rounded-full text-xs font-bold ${school.status === 'BETA' ? 'bg-yellow-100 text-yellow-800' : 'bg-green-100 text-green-800'}`}>
                                                         {school.status}
                                                     </span>

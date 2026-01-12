@@ -1,6 +1,8 @@
+
 import { create } from 'zustand';
 import { db, auth } from '@/lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
+import { useAdminStore } from './admin';
 
 export type UserRole = 'student' | 'teacher' | 'teacher_tracker' | 'school_head' | 'company_head' | 'tutor' | 'parent' | 'company_head_tutor' | 'ddfpt' | 'business_manager' | 'assistant_manager' | 'stewardship_secretary' | 'at_ddfpt';
 
@@ -226,6 +228,66 @@ export const useUserStore = create<UserState>((set, get) => ({
 
             return true;
         }
+
+
+        // --- SANDBOX USER HANDLING ---
+        // Specific hardcoded handling for the sandbox test user to ensure they are always School Head of the Sandbox School
+        if (currentUser?.email === 'fabrice.dumasdelage@gmail.com') {
+            console.log("[SANDBOX] Initializing Sandbox User: Fabrice Dumasdelage");
+
+            // Force Authorization in Admin Store so buttons appear
+            useAdminStore.getState().authorizeSchool({
+                id: "9999999X",
+                name: "Mon LYCEE TOUTFAUX",
+                city: "Elbeuf",
+                status: 'ADHERENT',
+                email: "fabrice.dumasdelage@gmail.com"
+            });
+
+            const sandboxData = {
+                name: "Fabrice Dumasdelage",
+                email: "fabrice.dumasdelage@gmail.com",
+                role: 'school_head' as UserRole,
+                schoolId: "9999999X",
+                birthDate: "1980-01-01",
+                profileData: {
+                    firstName: "Fabrice",
+                    lastName: "Dumasdelage",
+                    email: "fabrice.dumasdelage@gmail.com",
+                    phone: "0102030405",
+                    ecole_nom: "Mon LYCEE TOUTFAUX",
+                    ecole_ville: "Elbeuf",
+                    role: "Proviseur",
+                    function: "Proviseur"
+                },
+                hasAcceptedTos: true
+            };
+
+            // Force update/create in Firestore to ensure persistence for real login flows
+            try {
+                const userRef = doc(db, "users", uid);
+                await setDoc(userRef, {
+                    ...sandboxData,
+                    lastConnectionAt: new Date().toISOString()
+                }, { merge: true });
+
+                set({
+                    ...sandboxData,
+                    isLoadingProfile: false
+                });
+                return true;
+            } catch (e) {
+                console.error("Error initializing sandbox user:", e);
+                // Fallback to local set if DB fails (shouldn't happen often)
+                set({
+                    ...sandboxData,
+                    isLoadingProfile: false
+                });
+                return true;
+            }
+        }
+        // -----------------------------
+
         // ---------------------------
 
         try {
@@ -244,6 +306,48 @@ export const useUserStore = create<UserState>((set, get) => ({
                 });
                 return true;
             }
+            // AUTO-CLAIM LOGIC: Check if user is an authorized School Head but hasn't initialized profile
+            const schoolsRef = collection(db, "schools");
+            const q = query(schoolsRef, where("schoolHeadEmail", "==", currentUser.email || ''));
+            const querySnapshot = await getDocs(q);
+
+            if (!querySnapshot.empty) {
+                console.log("[Auto-Claim] Found authorized school for user");
+                const schoolDoc = querySnapshot.docs[0];
+                const schoolData = schoolDoc.data();
+
+                const claimedProfile = {
+                    name: currentUser.displayName || "Chef d'Etablissement",
+                    email: currentUser.email || '',
+                    role: 'school_head' as UserRole,
+                    schoolId: schoolDoc.id,
+                    profileData: {
+                        firstName: (currentUser.displayName || "").split(' ')[0] || "Admin",
+                        lastName: (currentUser.displayName || "").split(' ').slice(1).join(' ') || "Scolaire",
+                        email: currentUser.email || '',
+                        phone: schoolData.schoolPhone || '',
+                        ecole_nom: schoolData.schoolName,
+                        ecole_ville: schoolData.schoolCity,
+                        role: "Proviseur",
+                        function: "Proviseur"
+                    },
+                    hasAcceptedTos: true
+                };
+
+                // Auto-create in Firestore
+                await setDoc(docRef, {
+                    ...claimedProfile,
+                    createdAt: new Date().toISOString(),
+                    lastConnectionAt: new Date().toISOString()
+                });
+
+                set({
+                    ...claimedProfile,
+                    isLoadingProfile: false
+                });
+                return true;
+            }
+
             set({
                 isLoadingProfile: false,
                 hasAcceptedTos: false
@@ -341,8 +445,8 @@ export const useUserStore = create<UserState>((set, get) => ({
         try {
             const randomId = Math.random().toString(36).substr(2, 6);
             const anonymizedData = {
-                name: `Anonyme ${randomId}`,
-                email: `anonymized-${randomId}@pledgeum.deleted`,
+                name: `Anonyme ${randomId} `,
+                email: `anonymized - ${randomId} @pledgeum.deleted`,
                 birthDate: null,
                 profileData: {}, // Clear all profile details
                 hasAcceptedTos: false,
@@ -392,7 +496,7 @@ export const useUserStore = create<UserState>((set, get) => ({
                 const data = doc.data();
                 // For Super Admin, maybe prepend recipient to title?
                 const titlePrefix = (userEmail === 'pledgeum@gmail.com' && data.recipientEmail)
-                    ? `[${data.recipientEmail}] `
+                    ? `[${data.recipientEmail}]`
                     : '';
 
                 loadedNotifs.push({
