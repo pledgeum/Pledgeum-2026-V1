@@ -12,14 +12,20 @@ export async function sendNotification(to: string, subject: string, text: string
         console.log(`[DEMO] Intercepted email to ${to}`);
         openEmailModal({ to, subject, text });
 
-        // Also create the in-app notification locally for realism
+        // PERSISTENCE: Save to Firestore 'demo_inbox' so it persists across profile switches
         try {
-            // In demo mode, we might want to skip Firestore write for notifications too?
-            // Or allow it if we are mocking Firestore? 
-            // Ideally, skip real DB write to avoid pollution.
-            console.log(`[DEMO] Skipped DB notification write for ${to}`);
+            await addDoc(collection(db, 'demo_inbox'), {
+                to,
+                subject,
+                text,
+                html: text.replace(/\n/g, '<br/>'), // Simple formatting
+                date: new Date().toISOString(),
+                read: false,
+                from: 'Pledgeum <notification@pledgeum.fr>'
+            });
+            console.log(`[DEMO] Persisted email to demo_inbox for ${to}`);
         } catch (e) {
-            console.error("Error invoking demo logic", e);
+            console.error("Error invoking demo persistence", e);
         }
 
         return true; // Simulate success

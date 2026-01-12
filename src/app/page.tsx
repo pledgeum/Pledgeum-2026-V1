@@ -114,6 +114,7 @@ export default function Home() {
   const [isTrackingMatrixOpen, setIsTrackingMatrixOpen] = useState(false);
   const [isClassDocModalOpen, setIsClassDocModalOpen] = useState(false);
   const [studentDocModalClassId, setStudentDocModalClassId] = useState<string | null>(null); // New state
+  const [isChildModalOpen, setIsChildModalOpen] = useState(false);
 
   // Helper to check profile completion
   const isProfileComplete = () => {
@@ -838,7 +839,7 @@ export default function Home() {
             </div>
 
             <div className="mt-8">
-              <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={user.uid} isRgpdModalOpen={isRgpdModalOpen} setIsRgpdModalOpen={setIsRgpdModalOpen} />
+              <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={user.uid} isRgpdModalOpen={isRgpdModalOpen} setIsRgpdModalOpen={setIsRgpdModalOpen} onModalChange={setIsChildModalOpen} />
             </div>
           </>
         ) : (
@@ -877,7 +878,7 @@ export default function Home() {
               </div>
             )}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={user.uid} isRgpdModalOpen={isRgpdModalOpen} setIsRgpdModalOpen={setIsRgpdModalOpen} />
+              <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={user.uid} isRgpdModalOpen={isRgpdModalOpen} setIsRgpdModalOpen={setIsRgpdModalOpen} onModalChange={setIsChildModalOpen} />
             </div>
           </div>
         )}
@@ -1019,7 +1020,10 @@ export default function Home() {
         {role === 'student' && (
           <button
             onClick={handleNewConvention}
-            className="md:hidden fixed bottom-6 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg flex items-center justify-center transition-transform active:scale-95"
+            className={`md:hidden fixed bottom-6 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg flex items-center justify-center transition-transform active:scale-95 ${(isProfileModalOpen || isSearchModalOpen || isSchoolAdminModalOpen || isMissionOrderModalOpen || isAlumniModalOpen || isSuperAdminModalOpen || isFeedbackModalOpen || isDeleteModalOpen || isVerificationModalOpen || isClassDocModalOpen || isTrackingMatrixOpen || isRgpdModalOpen || isChildModalOpen)
+                ? 'hidden'
+                : ''
+              }`}
             title="Nouvelle Convention"
           >
             <Plus className="w-6 h-6" />
@@ -1031,8 +1035,7 @@ export default function Home() {
 }
 
 // Sub-component for list rendering to keep Page clean
-
-function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdModalOpen }: { role: UserRole, userEmail: string, userId?: string, isRgpdModalOpen: boolean, setIsRgpdModalOpen: (v: boolean) => void }) {
+function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdModalOpen, onModalChange }: { role: UserRole, userEmail: string, userId?: string, isRgpdModalOpen: boolean, setIsRgpdModalOpen: (v: boolean) => void, onModalChange?: (isOpen: boolean) => void }) {
   const router = useRouter();
   const { getConventionsByRole, signConvention, sendReminder, bulkSignConventions, updateEmail, assignTrackingTeacher } = useConventionStore();
   const { classes } = useSchoolStore();
@@ -1044,8 +1047,14 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
   const [isParentValModalOpen, setIsParentValModalOpen] = useState(false);
   const [isAbsenceModalOpen, setIsAbsenceModalOpen] = useState(false);
   const [isAttestationModalOpen, setIsAttestationModalOpen] = useState(false);
-
   const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
+
+  // Notify parent when any modal is open
+  useEffect(() => {
+    if (onModalChange) {
+      onModalChange(isSigModalOpen || isPdfModalOpen || isParentValModalOpen || isAbsenceModalOpen || isAttestationModalOpen || isTrackingModalOpen);
+    }
+  }, [isSigModalOpen, isPdfModalOpen, isParentValModalOpen, isAbsenceModalOpen, isAttestationModalOpen, isTrackingModalOpen, onModalChange]);
 
   // Evaluation Templates State
   const [evaluationTemplates, setEvaluationTemplates] = useState<any[]>([]);

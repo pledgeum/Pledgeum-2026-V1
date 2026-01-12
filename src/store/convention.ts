@@ -170,16 +170,16 @@ const MOCK_CONVENTION: Convention = {
     ecole_adresse: "123 Avenue de la République, 75011 Paris",
     ecole_tel: "0143123456",
     ecole_chef_nom: "Mme Martin",
-    ecole_chef_email: "direction@lycee-jaures.fr",
+    ecole_chef_email: "demo@pledgeum.fr",
     prof_nom: "M. Dupont",
-    prof_email: "prof.referent@lycee-jaures.fr",
+    prof_email: "demo+teacher@pledgeum.fr",
     cpe_email: "vie-scolaire@lycee-jaures.fr",
 
     eleve_nom: "Martin",
     eleve_prenom: "Lucas",
     eleve_date_naissance: "2006-03-12",
     eleve_adresse: "15 Rue de la Paix, 75011 Paris",
-    eleve_email: "lucas.martin@email.com",
+    eleve_email: "demo+student@pledgeum.fr",
     eleve_tel: "0612345678",
     eleve_cp: "75011",
     eleve_ville: "Paris",
@@ -192,7 +192,7 @@ const MOCK_CONVENTION: Convention = {
     est_mineur: true,
     rep_legal_nom: "M. Martin Paul",
     rep_legal_prenom: "Paul",
-    rep_legal_email: "parent.martin@email.com",
+    rep_legal_email: "demo+parent@pledgeum.fr",
     rep_legal_tel: "0698765432",
     rep_legal_adresse: "15 Rue de la Paix, 75011 Paris",
 
@@ -202,11 +202,11 @@ const MOCK_CONVENTION: Convention = {
     ent_code_postal: "75009",
     ent_ville: "Paris",
     ent_rep_nom: "Mme Directrice",
-    ent_rep_email: "pledgeum@gmail.com", // ACCESSIBLE BY USER AS COMPANY_HEAD
+    ent_rep_email: "demo+company_head@pledgeum.fr", // ACCESSIBLE BY USER AS COMPANY_HEAD
     ent_rep_fonction: "PDG",
 
     tuteur_nom: "M. Tuteur",
-    tuteur_email: "pledgeum@gmail.com", // ACCESSIBLE BY USER AS TUTOR
+    tuteur_email: "demo+tutor@pledgeum.fr", // ACCESSIBLE BY USER AS TUTOR
     tuteur_fonction: "Responsable Technique",
     tuteur_tel: "0102030405",
 
@@ -251,19 +251,35 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             // Super Admin Bypass
             // --- DEMO MODE SIMULATION ---
             // --- DEMO MODE SIMULATION ---
-            if (userEmail === 'demo@pledgeum.fr') {
-                console.log("[DEMO] Fetching Simulated Conventions");
+            // Super Admin Bypass
+            // --- DEMO MODE SIMULATION ---
+            // --- DEMO MODE SIMULATION ---
+            // Catch any email starting with demo... or specifically demo@pledgeum.fr
+            if (userEmail && (userEmail === 'demo@pledgeum.fr' || (userEmail.startsWith('demo') && userEmail.endsWith('@pledgeum.fr')))) {
+                console.log("[DEMO] Fetching Simulated Conventions for:", userEmail);
 
                 // Import demo store dynamically
-                // Note: We use the already imported UserRole type but fetch state dynamically
                 const { useDemoStore } = await import('./demo');
-                const demoRole = useDemoStore.getState().demoRole;
+                // Infer role from email if possible, otherwise fallback to store
+                let demoRole = useDemoStore.getState().demoRole;
+
+                // If the user email suggests a specific role, prioritize that to ensure consistency
+                if (userEmail.includes('+student')) demoRole = 'student';
+                else if (userEmail.includes('+teacher')) demoRole = 'teacher';
+                else if (userEmail.includes('+tutor')) demoRole = 'tutor';
+                else if (userEmail.includes('+parent')) demoRole = 'parent';
+                else if (userEmail.includes('+company_head')) demoRole = 'company_head';
+                else if (userEmail === 'demo@pledgeum.fr') demoRole = 'school_head';
+
+                // Ensure store reflects this role (optional, but good for UI consistency)
+                useDemoStore.getState().setDemoRole(demoRole);
+
                 console.log("[DEMO] Generating conventions for role:", demoRole);
 
                 const demoConvs: Convention[] = [];
 
                 // Base Convention Template
-                const baseConv: Convention = { ...MOCK_CONVENTION, id: `conv_demo_${demoRole}`, studentId: 'eleve.demo@pledgeum.fr' };
+                const baseConv: Convention = { ...MOCK_CONVENTION, id: `conv_demo_${demoRole}`, studentId: 'demo+student@pledgeum.fr' };
 
                 if (demoRole === 'student') {
                     // Scenario: Student needs to sign. Convention is validated by teacher but not signed by student yet? 
@@ -274,7 +290,6 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                         id: 'conv_student_action',
                         status: 'SUBMITTED',
                         signatures: { ...baseConv.signatures, studentAt: undefined, studentImg: undefined, studentCode: undefined }, // Clear student signature
-                        eleve_email: 'demo@pledgeum.fr' // Bind to current user
                     });
                     // Add a second one: Signed by student/parent, waiting for teacher (ReadOnly view for student)
                     demoConvs.push({
@@ -287,8 +302,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                             companyAt: undefined, companyCode: undefined,
                             tutorAt: undefined, tutorCode: undefined,
                             headAt: undefined, headCode: undefined
-                        },
-                        eleve_email: 'demo@pledgeum.fr'
+                        }
                     });
                 }
                 else if (demoRole === 'teacher') {
@@ -303,8 +317,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                             companyAt: undefined, companyCode: undefined,
                             tutorAt: undefined, tutorCode: undefined,
                             headAt: undefined, headCode: undefined
-                        },
-                        prof_email: 'demo@pledgeum.fr'
+                        }
                     });
 
                     // Add a second one: Validated by teacher, waiting for partners (History view)
@@ -317,8 +330,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                             companyAt: undefined, companyCode: undefined,
                             tutorAt: undefined, tutorCode: undefined,
                             headAt: undefined, headCode: undefined
-                        },
-                        prof_email: 'demo@pledgeum.fr'
+                        }
                     });
                 }
                 else if (demoRole === 'tutor') {
@@ -332,11 +344,10 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                             companyAt: undefined, companyCode: undefined,
                             tutorAt: undefined, tutorCode: undefined,
                             headAt: undefined, headCode: undefined
-                        },
-                        tuteur_email: 'demo@pledgeum.fr'
+                        }
                     });
                 }
-                else if (demoRole === 'company_head') { // Responsable BDE uses company_head role usually? No, "business_manager" is school role. "company_head" is Partner.
+                else if (demoRole === 'company_head') {
                     // Scenario: Company Head needs to sign. Teacher Validated.
                     demoConvs.push({
                         ...baseConv,
@@ -347,8 +358,23 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                             companyAt: undefined, companyCode: undefined,
                             tutorAt: undefined, tutorCode: undefined,
                             headAt: undefined, headCode: undefined
-                        },
-                        ent_rep_email: 'demo@pledgeum.fr'
+                        }
+                    });
+                }
+                else if (demoRole === 'parent') {
+                    // Scenario: Parent needs to sign. Student Signed.
+                    demoConvs.push({
+                        ...baseConv,
+                        id: 'conv_parent_action',
+                        status: 'SUBMITTED', // Student Signed, Ready for Parent
+                        signatures: {
+                            ...baseConv.signatures,
+                            parentAt: undefined, parentImg: undefined, parentCode: undefined,
+                            teacherAt: undefined, teacherCode: undefined,
+                            companyAt: undefined, companyCode: undefined,
+                            tutorAt: undefined, tutorCode: undefined,
+                            headAt: undefined, headCode: undefined
+                        }
                     });
                 }
                 else if (demoRole === 'school_head' || demoRole === 'ddfpt' || demoRole === 'business_manager') {
@@ -360,16 +386,14 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                         signatures: {
                             ...baseConv.signatures,
                             headAt: undefined, headCode: undefined
-                        },
-                        ecole_chef_email: 'demo@pledgeum.fr'
+                        }
                     });
 
                     // Also add a completed one for reference
                     demoConvs.push({
                         ...baseConv,
                         id: 'conv_head_completed',
-                        status: 'VALIDATED_HEAD',
-                        ecole_chef_email: 'demo@pledgeum.fr'
+                        status: 'VALIDATED_HEAD'
                     });
                 }
 
@@ -727,7 +751,23 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             const isLocal = origin.includes('localhost');
             const dashboardLink = isLocal ? 'http://localhost:3000/' : 'https://www.pledgeum.fr/';
 
-            if (newStatus === 'SIGNED_PARENT') {
+            if (newStatus === 'SUBMITTED') {
+                // Student has signed -> Notify Parent (if minor) or Teacher (if major)
+                if (convention.est_mineur && convention.rep_legal_email) {
+                    await sendNotification(
+                        convention.rep_legal_email,
+                        `Convention PFMP à signer - ${convention.eleve_prenom} ${convention.eleve_nom}`,
+                        `Bonjour,\n\nVotre enfant ${convention.eleve_prenom} ${convention.eleve_nom} a signé sa convention de stage.\nMerci de la signer à votre tour : ${dashboardLink}`
+                    );
+                } else {
+                    await sendNotification(
+                        convention.prof_email,
+                        `Convention PFMP à valider - ${convention.eleve_prenom} ${convention.eleve_nom}`,
+                        `Bonjour,\n\nL'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Majeur) a signé sa convention.\nMerci de la valider : ${dashboardLink}`
+                    );
+                }
+            }
+            else if (newStatus === 'SIGNED_PARENT') {
                 // Parent has signed -> Notify Teacher to Validate
                 const parentName = convention.rep_legal_prenom ? `${convention.rep_legal_prenom} ${convention.rep_legal_nom}` : convention.rep_legal_nom;
                 await sendNotification(
@@ -1152,6 +1192,14 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                     } : c
                 )
             }));
+
+            // Notify Teacher
+            await sendNotification(
+                convention.prof_email,
+                `Attestation de stage signée - ${convention.eleve_prenom} ${convention.eleve_nom}`,
+                `Bonjour,\n\nL'attestation de stage pour ${convention.eleve_prenom} ${convention.eleve_nom} a été validée et signée par l'entreprise.\n\nVous pouvez la consulter sur le tableau de bord.\n\nCordialement.`
+            );
+
         } catch (error) {
             console.error("Error validating attestation:", error);
             throw error;

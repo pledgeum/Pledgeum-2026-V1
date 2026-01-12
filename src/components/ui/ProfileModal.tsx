@@ -385,9 +385,10 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
         <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in sm:p-4">
             <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg overflow-hidden animate-in slide-in-from-bottom-5 sm:zoom-in-95 duration-200 max-h-[90vh] sm:max-h-[85vh] flex flex-col">
                 {/* Header */}
-                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white flex justify-between items-start">
+                {/* Header */}
+                <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-4 sm:p-6 text-white flex justify-between items-start">
                     <div>
-                        <h2 className="text-2xl font-bold flex items-center gap-2">
+                        <h2 className="text-xl sm:text-2xl font-bold flex items-center gap-2">
                             <User className="h-6 w-6" />
                             Mon Profil
                         </h2>
@@ -741,7 +742,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                 </form>
 
                 {/* Footer */}
-                <div className="p-4 bg-gray-50 border-t flex flex-col gap-4">
+                <div className="p-4 pb-8 sm:pb-4 bg-gray-50 border-t flex flex-col gap-4">
                     <div className="flex justify-end gap-3">
                         <button
                             type="button"
