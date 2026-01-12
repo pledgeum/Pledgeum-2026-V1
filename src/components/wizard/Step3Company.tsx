@@ -143,7 +143,7 @@ export function Step3Company() {
                             <label className="block text-sm font-medium text-gray-700">Pays de l'entreprise</label>
                             <select
                                 {...form.register('ent_pays')}
-                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900"
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900"
                             >
                                 <option value="France">France</option>
                                 <option value="Allemagne">Allemagne</option>
@@ -164,7 +164,7 @@ export function Step3Company() {
                                             {...form.register('ent_siret')}
                                             maxLength={20}
                                             placeholder="Entrez le SIRET..."
-                                            className="mt-1 block w-full rounded-md border-blue-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border pr-10 bg-blue-50 placeholder:text-gray-500 text-gray-900"
+                                            className="mt-1 block w-full rounded-md border-blue-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border pr-10 bg-blue-50 placeholder:text-gray-500 text-gray-900"
                                         />
                                         {isSearchingSiret && (
                                             <div className="absolute right-3 top-3">
@@ -210,7 +210,7 @@ export function Step3Company() {
                                 {...form.register('ent_nom')}
                                 placeholder="Ex: SARL ..."
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
                                     form.formState.errors.ent_nom && "border-red-500 focus:border-red-500 focus:ring-red-500",
                                     "placeholder:text-gray-500"
                                 )}
@@ -224,7 +224,7 @@ export function Step3Company() {
                                 {...form.register('ent_adresse')}
                                 rows={2}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
                                     form.formState.errors.ent_adresse && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -246,7 +246,7 @@ export function Step3Company() {
                             <input
                                 {...form.register('ent_code_postal')}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
                                     form.formState.errors.ent_code_postal && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -258,7 +258,7 @@ export function Step3Company() {
                             <input
                                 {...form.register('ent_ville')}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
                                     form.formState.errors.ent_ville && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -274,7 +274,7 @@ export function Step3Company() {
                             <input
                                 {...form.register('ent_rep_nom')}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
                                     form.formState.errors.ent_rep_nom && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -286,7 +286,7 @@ export function Step3Company() {
                                 {...form.register('ent_rep_fonction')}
                                 placeholder="Ex: Gérant"
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
                                     form.formState.errors.ent_rep_fonction && "border-red-500 focus:border-red-500 focus:ring-red-500",
                                     "placeholder:text-gray-500"
                                 )}
@@ -299,7 +299,7 @@ export function Step3Company() {
                                 {...form.register('ent_rep_email')}
                                 type="email"
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
                                     form.formState.errors.ent_rep_email && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -325,7 +325,7 @@ export function Step3Company() {
                             <input
                                 {...form.register('tuteur_nom')}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
                                     form.formState.errors.tuteur_nom && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -335,7 +335,7 @@ export function Step3Company() {
                             <input
                                 {...form.register('tuteur_fonction')}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
                                     form.formState.errors.tuteur_fonction && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -346,7 +346,7 @@ export function Step3Company() {
                                 {...form.register('tuteur_email')}
                                 type="email"
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
                                     form.formState.errors.tuteur_email && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />

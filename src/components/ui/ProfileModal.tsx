@@ -355,7 +355,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                 onChange={handleChange}
                 placeholder={placeholder}
                 disabled={disabled}
-                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${disabled ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : ''}`}
+                className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 outline-none transition-all placeholder:text-gray-500 text-gray-900 ${disabled ? 'bg-gray-50 text-gray-500 border-gray-200 cursor-not-allowed' : 'border-gray-300 bg-white'}`}
             />
         </div>
     );
@@ -482,7 +482,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                                                             value={cityQuery}
                                                             onChange={(e) => setCityQuery(e.target.value)}
                                                             placeholder="Ex: Lyon"
-                                                            className="w-full px-3 py-2 border rounded text-sm"
+                                                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500 placeholder:text-gray-500 text-gray-900"
                                                         />
                                                     </div>
                                                     <div className="relative">
@@ -497,7 +497,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                                                                     setShowSchoolResults(true);
                                                                 }}
                                                                 placeholder="Ex: Jules Ferry"
-                                                                className="w-full pl-8 pr-3 py-2 border rounded text-sm"
+                                                                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500 placeholder:text-gray-500 text-gray-900"
                                                             />
                                                             {isSearchingSchool && <Loader2 className="absolute right-2 top-2.5 w-4 h-4 animate-spin text-blue-500" />}
                                                         </div>
@@ -639,7 +639,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                                         onChange={handleChange}
                                         maxLength={14}
                                         placeholder="1234..."
-                                        className="w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all pr-10"
+                                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 outline-none transition-all pr-10 placeholder:text-gray-500 text-gray-900"
                                     />
                                     {isSearchingSiret && (
                                         <div className="absolute right-3 top-2.5">
@@ -688,7 +688,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                                             setCityQuery(val); // Trigger search
                                         }}
                                         placeholder="Rechercher une commune..."
-                                        className="w-full pl-9 pr-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none"
+                                        className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 outline-none placeholder:text-gray-500 text-gray-900"
                                     />
                                     {(cityQuery.length > 2 && !formData.preferredCityLat) && (
                                         <div className="absolute right-3 top-2.5">

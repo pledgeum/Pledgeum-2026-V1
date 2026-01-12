@@ -126,7 +126,7 @@ export function Step1School() {
                             <label className="block text-sm font-bold text-indigo-900 mb-2">Type de Convention</label>
                             <select
                                 {...form.register('type')}
-                                className="block w-full rounded-md border-indigo-200 focus:border-indigo-500 focus:ring-indigo-500 text-sm p-2 bg-white text-gray-900"
+                                className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 bg-white text-gray-900"
                             >
                                 <option value="PFMP_STANDARD" disabled={allowedConventionTypes && !allowedConventionTypes.includes('PFMP_STANDARD')}>
                                     PFMP Lycée Professionnel (Standard) {allowedConventionTypes && !allowedConventionTypes.includes('PFMP_STANDARD') && '(Non activé)'}
@@ -158,7 +158,7 @@ export function Step1School() {
                                             value={cityQuery}
                                             onChange={(e) => setCityQuery(e.target.value)}
                                             placeholder="Ex: Lyon"
-                                            className="block w-full rounded-md border-blue-200 focus:border-blue-500 focus:ring-blue-500 text-sm p-2 placeholder:text-gray-500 text-gray-900"
+                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 placeholder:text-gray-500 text-gray-900"
                                         />
                                     </div>
                                     <div className="relative">
@@ -171,7 +171,7 @@ export function Step1School() {
                                                 setShowResults(true);
                                             }}
                                             placeholder="Ex: Jules Ferry"
-                                            className="block w-full rounded-md border-blue-200 focus:border-blue-500 focus:ring-blue-500 text-sm p-2 placeholder:text-gray-500 text-gray-900"
+                                            className="block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 placeholder:text-gray-500 text-gray-900"
                                         />
                                         {loading && (
                                             <div className="absolute right-2 top-8">
@@ -209,8 +209,8 @@ export function Step1School() {
                                 disabled={isSchoolLocked}
                                 readOnly={isSchoolLocked}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
-                                    isSchoolLocked && "bg-gray-200 text-gray-700 cursor-not-allowed",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
+                                    isSchoolLocked && "bg-gray-50 text-gray-500 border-gray-200 cursor-not-allowed",
                                     form.formState.errors.ecole_nom && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -225,8 +225,8 @@ export function Step1School() {
                                 disabled={isSchoolLocked}
                                 readOnly={isSchoolLocked}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
-                                    isSchoolLocked && "bg-gray-200 text-gray-700 cursor-not-allowed",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
+                                    isSchoolLocked && "bg-gray-50 text-gray-500 border-gray-200 cursor-not-allowed",
                                     form.formState.errors.ecole_adresse && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -241,8 +241,8 @@ export function Step1School() {
                                 disabled={isSchoolLocked}
                                 readOnly={isSchoolLocked}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
-                                    isSchoolLocked && "bg-gray-200 text-gray-700 cursor-not-allowed",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
+                                    isSchoolLocked && "bg-gray-50 text-gray-500 border-gray-200 cursor-not-allowed",
                                     form.formState.errors.ecole_tel && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -262,8 +262,8 @@ export function Step1School() {
                                 disabled={isSchoolLocked}
                                 readOnly={isSchoolLocked}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
-                                    isSchoolLocked && "bg-gray-200 text-gray-700 cursor-not-allowed",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
+                                    isSchoolLocked && "bg-gray-50 text-gray-500 border-gray-200 cursor-not-allowed",
                                     form.formState.errors.ecole_chef_nom && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -277,8 +277,8 @@ export function Step1School() {
                                 disabled={isSchoolLocked}
                                 readOnly={isSchoolLocked}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
-                                    isSchoolLocked && "bg-gray-200 text-gray-700 cursor-not-allowed",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
+                                    isSchoolLocked && "bg-gray-50 text-gray-500 border-gray-200 cursor-not-allowed",
                                     form.formState.errors.ecole_chef_email && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -296,8 +296,8 @@ export function Step1School() {
                                 type="text"
                                 disabled={!!lockedMainTeacher}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
-                                    !!lockedMainTeacher && "bg-gray-200 text-gray-500 cursor-not-allowed",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
+                                    !!lockedMainTeacher && "bg-gray-50 text-gray-500 border-gray-200 cursor-not-allowed",
                                     form.formState.errors.prof_nom && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />
@@ -310,8 +310,8 @@ export function Step1School() {
                                 type="email"
                                 disabled={!!lockedMainTeacher}
                                 className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 sm:text-sm p-2 border text-gray-900",
-                                    !!lockedMainTeacher && "bg-gray-200 text-gray-500 cursor-not-allowed",
+                                    "mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500",
+                                    !!lockedMainTeacher && "bg-gray-50 text-gray-500 border-gray-200 cursor-not-allowed",
                                     form.formState.errors.prof_email && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />

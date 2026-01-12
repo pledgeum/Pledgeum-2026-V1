@@ -41,7 +41,7 @@ export function StepWrapper<T extends FieldValues>({
     };
 
     return (
-        <div className="max-w-2xl mx-auto p-6 bg-white shadow-lg rounded-xl border border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
+        <div className="max-w-2xl mx-auto p-6 bg-white shadow-sm rounded-xl border border-gray-100 animate-in fade-in slide-in-from-bottom-4 duration-500">
             <div className="mb-6">
                 <h2 className="text-2xl font-bold text-gray-900">{title}</h2>
                 {description && <p className="text-gray-500 mt-1">{description}</p>}
