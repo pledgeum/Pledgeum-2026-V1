@@ -382,8 +382,8 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
     }, [role, showParent, formData.parentName]); // Run when minor status determined
 
     return (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-black/50 backdrop-blur-sm animate-in fade-in">
-            <div className="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden animate-in zoom-in-95 duration-200">
+        <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/50 backdrop-blur-sm animate-in fade-in sm:p-4">
+            <div className="bg-white rounded-t-2xl sm:rounded-2xl shadow-2xl w-full sm:max-w-lg overflow-hidden animate-in slide-in-from-bottom-5 sm:zoom-in-95 duration-200 max-h-[90vh] sm:max-h-[85vh] flex flex-col">
                 {/* Header */}
                 <div className="bg-gradient-to-r from-blue-600 to-indigo-700 p-6 text-white flex justify-between items-start">
                     <div>
@@ -409,7 +409,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                 </div>
 
                 {/* Body */}
-                <form onSubmit={handleSave} className="p-6 space-y-4 max-h-[70vh] overflow-y-auto">
+                <form onSubmit={handleSave} className="p-6 space-y-4 overflow-y-auto flex-1">
 
                     {/* Common Fields */}
                     <div className="grid grid-cols-2 gap-4">

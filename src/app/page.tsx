@@ -404,7 +404,7 @@ export default function Home() {
                 <span className="absolute -top-0.5 -right-0.5 block h-3 w-3 rounded-full ring-2 ring-white bg-red-500 animate-pulse shadow-sm" />
               )}
             </div>
-            <div>
+            <div className="hidden md:block">
               <p className="text-sm font-bold text-gray-900 group-hover:text-blue-700 transition-colors">{user.email?.split('@')[0]}</p>
               <p className="text-xs text-gray-500 group-hover:text-blue-500 transition-colors">{user.email}</p>
             </div>
@@ -1006,6 +1006,16 @@ export default function Home() {
           })()}
           schoolAddress="123 Avenue de la République, 75011 Paris"
         />
+        {/* MOBILE: Floating Action Button for Student (New Convention) */}
+        {role === 'student' && (
+          <button
+            onClick={handleNewConvention}
+            className="md:hidden fixed bottom-6 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg flex items-center justify-center transition-transform active:scale-95"
+            title="Nouvelle Convention"
+          >
+            <Plus className="w-6 h-6" />
+          </button>
+        )}
       </div>
     </main>
   );
@@ -1852,60 +1862,64 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
       }
 
       {/* ODM PREVIEW MODAL */}
-      {odmPreviewData && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-          <div className="bg-white rounded-xl shadow-2xl flex flex-col w-full max-w-5xl h-[90vh] overflow-hidden">
-            <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
-              <h3 className="text-lg font-bold text-gray-900">
-                Aperçu Ordre de Mission - {odmPreviewData.convention.eleve_nom} {odmPreviewData.convention.eleve_prenom}
-              </h3>
-              <div className="flex items-center gap-2">
-                {/* Check if signed. If not, force sign. */}
-                {odmPreviewData.odm.signatureImg ? (
-                  <button
-                    onClick={() => executeDownloadOdm(odmPreviewData.odm, odmPreviewData.convention)}
-                    className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2"
-                  >
-                    <FileText className="w-4 h-4" />
-                    Télécharger PDF
-                  </button>
-                ) : (
-                  <button
-                    onClick={() => setIsSigningOdm(true)}
-                    className="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 flex items-center gap-2 animate-pulse"
-                  >
-                    <PenTool className="w-4 h-4" />
-                    Signer l'ordre de mission
-                  </button>
-                )}
+      {
+        odmPreviewData && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-xl shadow-2xl flex flex-col w-full max-w-5xl h-[90vh] overflow-hidden">
+              <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
+                <h3 className="text-lg font-bold text-gray-900">
+                  Aperçu Ordre de Mission - {odmPreviewData.convention.eleve_nom} {odmPreviewData.convention.eleve_prenom}
+                </h3>
+                <div className="flex items-center gap-2">
+                  {/* Check if signed. If not, force sign. */}
+                  {odmPreviewData.odm.signatureImg ? (
+                    <button
+                      onClick={() => executeDownloadOdm(odmPreviewData.odm, odmPreviewData.convention)}
+                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2"
+                    >
+                      <FileText className="w-4 h-4" />
+                      Télécharger PDF
+                    </button>
+                  ) : (
+                    <button
+                      onClick={() => setIsSigningOdm(true)}
+                      className="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 flex items-center gap-2 animate-pulse"
+                    >
+                      <PenTool className="w-4 h-4" />
+                      Signer l'ordre de mission
+                    </button>
+                  )}
 
-                <button onClick={() => setOdmPreviewData(null)} className="text-gray-500 hover:text-gray-700 ml-2">
-                  <X className="w-6 h-6" />
-                </button>
+                  <button onClick={() => setOdmPreviewData(null)} className="text-gray-500 hover:text-gray-700 ml-2">
+                    <X className="w-6 h-6" />
+                  </button>
+                </div>
+              </div>
+              <div className="flex-1 bg-gray-100 overflow-hidden relative">
+                <PDFViewer width="100%" height="100%" className="w-full h-full">
+                  <MissionOrderPdf missionOrder={odmPreviewData.odm} convention={odmPreviewData.convention} />
+                </PDFViewer>
               </div>
             </div>
-            <div className="flex-1 bg-gray-100 overflow-hidden relative">
-              <PDFViewer width="100%" height="100%" className="w-full h-full">
-                <MissionOrderPdf missionOrder={odmPreviewData.odm} convention={odmPreviewData.convention} />
-              </PDFViewer>
-            </div>
           </div>
-        </div>
-      )}
+        )
+      }
 
       {/* ODM SIGNATURE MODAL */}
-      {isSigningOdm && odmPreviewData && (
-        <SignatureModal
-          isOpen={isSigningOdm}
-          onClose={() => setIsSigningOdm(false)}
-          onSign={(method, signatureImg) => handleSignOdm(signatureImg || '')}
-          title="Signature Ordre de Mission"
-          signeeName={name}
-          signeeEmail={userEmail}
-          conventionId={odmPreviewData.convention.id}
-          hideOtp={true} // Internal signature for teacher/admin usually doesn't need OTP here
-        />
-      )}
+      {
+        isSigningOdm && odmPreviewData && (
+          <SignatureModal
+            isOpen={isSigningOdm}
+            onClose={() => setIsSigningOdm(false)}
+            onSign={(method, signatureImg) => handleSignOdm(signatureImg || '')}
+            title="Signature Ordre de Mission"
+            signeeName={name}
+            signeeEmail={userEmail}
+            conventionId={odmPreviewData.convention.id}
+            hideOtp={true} // Internal signature for teacher/admin usually doesn't need OTP here
+          />
+        )
+      }
 
 
     </div >

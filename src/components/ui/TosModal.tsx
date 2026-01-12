@@ -42,8 +42,8 @@ export function TosModal({ isOpen = false, onClose }: TosModalProps) {
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-xl shadow-2xl max-w-2xl w-full overflow-hidden border border-gray-200">
+        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/95 backdrop-blur-sm sm:p-4">
+            <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-2xl overflow-hidden border border-gray-200 max-h-[90vh] sm:h-auto flex flex-col">
                 {/* Header */}
                 <div className="bg-blue-600 px-8 py-6 flex justify-between items-start">
                     <div className="flex items-center space-x-4">
