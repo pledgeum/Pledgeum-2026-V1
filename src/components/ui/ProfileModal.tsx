@@ -119,10 +119,11 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                         setDefault('firstName', conventionDefaults?.eleve_prenom);
 
                         let bd = birthDate || conventionDefaults?.eleve_date_naissance;
-                        // Convert DD/MM/YYYY to YYYY-MM-DD for input type="date"
-                        if (bd && bd.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-                            const [d, m, y] = bd.split('/');
-                            bd = `${y}-${m}-${d}`;
+
+                        // Ensure DD/MM/YYYY for text display
+                        if (bd && bd.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                            const [y, m, d] = bd.split('-');
+                            bd = `${d}/${m}/${y}`;
                         }
                         setDefault('birthDate', bd);
 
@@ -424,7 +425,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
 
                     {role === 'student' && (
                         <>
-                            {renderField("birthDate", "Date de Naissance (Non modifiable, contactez l'administration)", <Calendar className="w-4 h-4" />, "date", "", true)}
+                            {renderField("birthDate", "Date de Naissance (Non modifiable, contactez l'administration)", <Calendar className="w-4 h-4" />, "text", "jj/mm/aaaa", true)}
                             <AddressAutocomplete
                                 label="Adresse Personnelle"
                                 value={{
