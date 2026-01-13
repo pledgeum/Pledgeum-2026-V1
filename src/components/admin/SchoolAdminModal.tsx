@@ -446,16 +446,12 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
 
         console.log("File selected:", file.name);
         setIsPartnerImporting(true);
-        // alert(`Analyse du fichier "${file.name}" en cours... Veuillez patienter.`); // Removed in favor of spinner
 
         Papa.parse(file, {
             header: true,
             skipEmptyLines: true,
-            // delimiter: ";", // Let PapaParse auto-detect
-            // encoding: "ISO-8859-1", // Let browser/PapaParse handle encoding
             complete: async (results) => {
                 console.log("Parse complete. Rows:", results.data.length);
-                console.log("Fields:", results.meta.fields);
 
                 // Helper to find key case-insensitively
                 const findKey = (row: any, search: string[]) => {
@@ -472,6 +468,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                 // Process each row
                 let processedCount = 0;
                 let addedCount = 0;
+                const partnersToAdd: PartnerCompany[] = [];
 
                 for (const row of results.data as any[]) {
                     processedCount++;
@@ -514,7 +511,6 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                     jobs: jobs
                                 };
                             } else {
-                                console.warn(`SIRET ${siret} not found in API.`);
                                 partnerToAdd = {
                                     siret: siret,
                                     name: `Entreprise ${siret} (Non trouvée API)`,
@@ -526,7 +522,6 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                 };
                             }
                         } else {
-                            console.warn(`API Error for SIRET ${siret}: ${response.status}`);
                             partnerToAdd = {
                                 siret: siret,
                                 name: `Entreprise ${siret} (Erreur API)`,
@@ -538,7 +533,6 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                             };
                         }
                     } catch (err) {
-                        console.warn(`Failed to fetch info for SIRET ${siret}`, err);
                         partnerToAdd = {
                             siret: siret,
                             name: `Entreprise ${siret} (Erreur Réseau)`,
@@ -550,31 +544,35 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                         };
                     }
 
-                    // Add to store immediately if valid
                     if (partnerToAdd) {
-                        importPartners([partnerToAdd]);
+                        partnersToAdd.push(partnerToAdd);
                         addedCount++;
                     }
 
-                    // Delay to prevent API flooding and allow UI update
-                    await new Promise(r => setTimeout(r, 100));
+                    // Simple throttling
+                    await new Promise(r => setTimeout(r, 50));
                 }
 
-                console.log(`Processed ${processedCount} rows. Added ${addedCount} candidates progressively.`);
-                setIsPartnerImporting(false); // Stop loader
+                // Batch Import
+                if (partnersToAdd.length > 0) {
+                    // Pass schoolId for persistence
+                    const state = useUserStore.getState();
+                    const schoolId = state.schoolId || (email === 'fabrice.dumasdelage@gmail.com' ? '9999999X' : undefined);
 
-                if (addedCount === 0) {
-                    alert(`Aucune entreprise valide trouvée.\n\nColonnes détectées: ${results.meta.fields?.join(', ')}\nLignes analysées: ${processedCount}`);
+                    // Await import
+                    await importPartners(partnersToAdd, schoolId);
+
+                    if (schoolId) alert(`${addedCount} partenaires importés et sauvegardés.`);
+                    else alert(`${addedCount} partenaires importés (Locale seulement - ID établissement manquant).`);
                 } else {
-                    // Optional: Summary alert, or just silence if user sees the list growing
-                    // alert(`Import terminé : ${addedCount} entreprises traitées.`);
+                    alert(`Aucune entreprise valide trouvée.`);
                 }
 
-                // Reset file input
+                setIsPartnerImporting(false);
                 if (partnerFileInputRef.current) partnerFileInputRef.current.value = '';
             },
             error: (error) => {
-                setIsPartnerImporting(false); // Stop loader
+                setIsPartnerImporting(false);
                 console.error("CSV Import Error:", error);
                 alert(`Erreur technique lors de l'import CSV: ${error.message}`);
                 if (partnerFileInputRef.current) partnerFileInputRef.current.value = '';

@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { db } from '@/lib/firebase';
-import { doc, writeBatch, collection } from 'firebase/firestore';
+import { doc, writeBatch, collection, setDoc } from 'firebase/firestore';
 
 export type CollaboratorRole =
     | 'DDFPT'
@@ -119,7 +119,7 @@ interface SchoolState {
     importTeachers: (classId: string, teachers: Omit<Teacher, 'id'>[]) => void;
     addTeacherToClass: (classId: string, teacher: Omit<Teacher, 'id'>) => void;
 
-    importGlobalTeachers: (structure: { teacher: Omit<Teacher, 'id'>; classes: string[] }[]) => void;
+    importGlobalTeachers: (structure: { teacher: Omit<Teacher, 'id'>; classes: string[] }[], schoolId?: string) => Promise<void>;
     updateTeacher: (classId: string, teacherId: string, updates: Partial<Teacher>) => void;
     removeTeacherFromClass: (classId: string, teacherId: string) => void;
 
@@ -130,7 +130,7 @@ interface SchoolState {
     regenerateStudentCredentials: (classId: string, studentId: string) => void;
     markCredentialsPrinted: (classId: string, studentIds: string[]) => void;
 
-    importGlobalStructure: (structure: { className: string; students: Omit<Student, 'id'>[] }[]) => void;
+    importGlobalStructure: (structure: { className: string; students: Omit<Student, 'id'>[] }[], schoolId?: string) => Promise<void>;
     generateTeacherCredentials: (classId: string, schoolId: string) => Promise<void>;
 
     schoolName: string;
@@ -437,7 +437,8 @@ export const useSchoolStore = create<SchoolState>()(
                 })
             })),
 
-            importGlobalTeachers: (structure: { teacher: Omit<Teacher, 'id'>; classes: string[] }[]) => set((state) => {
+            importGlobalTeachers: async (structure: { teacher: Omit<Teacher, 'id'>; classes: string[] }[], schoolId?: string) => {
+                const state = get();
                 let currentClasses = [...state.classes];
 
                 structure.forEach((item) => {
@@ -489,8 +490,21 @@ export const useSchoolStore = create<SchoolState>()(
                     });
                 });
 
-                return { classes: currentClasses };
-            }),
+                // --- FIRESTORE PERSISTENCE ---
+                if (schoolId) {
+                    try {
+                        await setDoc(doc(db, 'schools', schoolId), {
+                            classes: currentClasses,
+                            updatedAt: new Date().toISOString()
+                        }, { merge: true });
+                        console.log("School teachers persisted to Firestore.");
+                    } catch (e) {
+                        console.error("Failed to persist teachers:", e);
+                    }
+                }
+
+                set({ classes: currentClasses });
+            },
             addTeacherToClass: (classId, teacher) => set((state) => ({
                 classes: state.classes.map((c) => {
                     if (c.id !== classId) return c;
@@ -596,7 +610,8 @@ export const useSchoolStore = create<SchoolState>()(
                 })
             })),
 
-            importGlobalStructure: (structure: { className: string; students: Omit<Student, 'id'>[] }[]) => set((state) => {
+            importGlobalStructure: async (structure: { className: string; students: Omit<Student, 'id'>[] }[], schoolId?: string) => {
+                const state = get();
                 let currentClasses = [...state.classes];
 
                 structure.forEach((group) => {
@@ -604,6 +619,7 @@ export const useSchoolStore = create<SchoolState>()(
                     // Try to match by Exact Name first, strictly.
                     let targetClassIndex = currentClasses.findIndex(c => c.name.trim().toLowerCase() === group.className.trim().toLowerCase());
 
+                    let isNewClass = false;
                     if (targetClassIndex === -1) {
                         // Create new class
                         const newClass: ClassDefinition = {
@@ -615,6 +631,7 @@ export const useSchoolStore = create<SchoolState>()(
                         };
                         currentClasses.push(newClass);
                         targetClassIndex = currentClasses.length - 1;
+                        isNewClass = true;
                     }
 
                     // 2. Process Students
@@ -655,18 +672,52 @@ export const useSchoolStore = create<SchoolState>()(
                     };
                 });
 
-                return { classes: currentClasses };
+                // --- FIRESTORE PERSISTENCE ---
+                if (schoolId) {
+                    try {
+                        // We persist the ENTIRE classes array to Firestore for simplicity 
+                        // (Schema: schools/{schoolId} -> classes: ClassDefinition[])
+                        // OR individual sync?
+                        // Given the structure, full replace of the 'classes' field is safest for consistency for now,
+                        // assuming we are the only writer.
 
-            }),
+                        await setDoc(doc(db, 'schools', schoolId), {
+                            classes: currentClasses,
+                            updatedAt: new Date().toISOString()
+                        }, { merge: true });
+                        console.log("School structure persisted to Firestore.");
+                    } catch (e) {
+                        console.error("Failed to persist structure:", e);
+                    }
+                }
+
+                set({ classes: currentClasses });
+            },
 
             partnerCompanies: [],
 
-            importPartners: (newPartners) => set((state) => {
+            importPartners: async (newPartners: PartnerCompany[], schoolId?: string) => {
+                const state = get();
                 const existing = state.partnerCompanies || [];
                 const existingSirets = new Set(existing.map(p => p.siret));
                 const toAdd = newPartners.filter(p => !existingSirets.has(p.siret));
-                return { partnerCompanies: [...existing, ...toAdd] };
-            }),
+                const updatedPartners = [...existing, ...toAdd];
+
+                // --- FIRESTORE PERSISTENCE ---
+                if (schoolId) {
+                    try {
+                        await setDoc(doc(db, 'schools', schoolId), {
+                            partnerCompanies: updatedPartners,
+                            updatedAt: new Date().toISOString()
+                        }, { merge: true });
+                        console.log("Partner companies persisted to Firestore.");
+                    } catch (e) {
+                        console.error("Failed to persist partners:", e);
+                    }
+                }
+
+                set({ partnerCompanies: updatedPartners });
+            },
 
             removePartner: (siret) => set((state) => ({
                 partnerCompanies: (state.partnerCompanies || []).filter(p => p.siret !== siret)
