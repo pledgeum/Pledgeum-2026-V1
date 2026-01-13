@@ -10,23 +10,24 @@ export async function initializeSchoolIdentity(schoolId: string, data: {
     postalCode: string;
     email: string;
     phone?: string;
-    status: 'BETA' | 'ADHERENT'; // NEW: Status
-    uai?: string; // NEW: Specific UAI
+    status: 'BETA' | 'ADHERENT';
+    uai?: string;
+    adminEmail?: string; // NEW: Explicit admin email for linkage
 }) {
     try {
         console.log(`[Initialize School] Starting for ${data.name} (${schoolId}) - Status: ${data.status} - UAI: ${data.uai}`);
 
         await adminFirestore.collection('schools').doc(schoolId).set({
             schoolName: data.name,
-            schoolAddress: data.address, // Expected to be full address if passed
+            schoolAddress: data.address,
             schoolCity: data.city,
             schoolPostalCode: data.postalCode,
-            schoolHeadEmail: data.email,
+            schoolHeadEmail: data.adminEmail || data.email, // Prefer explicit adminEmail
             schoolPhone: data.phone || '',
-            schoolUai: data.uai || schoolId, // Persist UAI
+            schoolUai: data.uai || schoolId,
             updatedAt: new Date().toISOString(),
             isAuthorized: true,
-            schoolStatus: data.status // Persist specific status
+            schoolStatus: data.status
         }, { merge: true });
 
         console.log(`[Initialize School] Success for ${schoolId}`);
@@ -161,6 +162,18 @@ export async function forceSandboxUserRole(email: string) {
         return { success: true };
     } catch (error: any) {
         console.error("[Sandbox Role] Error:", error);
+        return { success: false, error: error.message };
+    }
+}
+
+export async function removeSchoolAccess(schoolId: string) {
+    try {
+        console.log(`[Remove School] Deleting school ID: ${schoolId}`);
+        await adminFirestore.collection('schools').doc(schoolId).delete();
+        console.log(`[Remove School] Success for ${schoolId}`);
+        return { success: true };
+    } catch (error: any) {
+        console.error("[Remove School] Error:", error);
         return { success: false, error: error.message };
     }
 }

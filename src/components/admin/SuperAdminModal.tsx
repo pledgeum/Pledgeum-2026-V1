@@ -6,7 +6,7 @@ import { useAdminStore, SchoolStatus } from '@/store/admin';
 import { useSchoolStore, Student } from '@/store/school'; // Import School Store
 import { useUserStore } from '@/store/user';
 import { searchSchools, SchoolResult } from '@/lib/educationApi';
-import { initializeSchoolIdentity, sendWelcomeEmail, forceSandboxUserRole } from '@/app/actions/schoolAdmin';
+import { initializeSchoolIdentity, sendWelcomeEmail, forceSandboxUserRole, removeSchoolAccess } from '@/app/actions/schoolAdmin';
 
 interface SuperAdminModalProps {
     isOpen: boolean;
@@ -185,21 +185,36 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                 status: 'ADHERENT'
                                             });
 
-                                            // Persist Identity Explicitly with UAI
-                                            await initializeSchoolIdentity(sandboxSchool.id, {
-                                                name: sandboxSchool.nom,
-                                                address: sandboxSchool.adresse,
-                                                city: sandboxSchool.ville,
-                                                postalCode: sandboxSchool.cp,
-                                                email: sandboxSchool.mail,
-                                                status: 'ADHERENT',
-                                                uai: sandboxSchool.uai
-                                            });
+                                            // Persist Identity Explicitly with UAI and Admin Email
+                                            try {
+                                                console.log("Starting Real DB Write for Sandbox...");
+                                                await initializeSchoolIdentity(sandboxSchool.id, {
+                                                    name: sandboxSchool.nom,
+                                                    address: sandboxSchool.adresse,
+                                                    city: sandboxSchool.ville,
+                                                    postalCode: sandboxSchool.cp,
+                                                    email: sandboxSchool.mail,
+                                                    status: 'ADHERENT',
+                                                    uai: sandboxSchool.uai,
+                                                    adminEmail: "fabrice.dumasdelage@gmail.com" // Explicit Linkage
+                                                });
+                                                console.log("Real DB Write Success.");
+                                            } catch (e) {
+                                                console.error("Real DB Write Failed:", e);
+                                                alert("Erreur lors de l'écriture en base : " + e);
+                                                return;
+                                            }
 
                                             // Repair User
-                                            await forceSandboxUserRole(sandboxSchool.mail);
+                                            try {
+                                                console.log("Forcing User Role...");
+                                                await forceSandboxUserRole(sandboxSchool.mail);
+                                                console.log("User Role Forced.");
+                                            } catch (e) {
+                                                console.error("User Repair Failed:", e);
+                                            }
 
-                                            alert("✅ SANDBOX INITIALISÉE, DONNÉES FORCÉES & PROFIL RÉPARÉ.\n\nLa page va se recharger.");
+                                            alert("✅ SANDBOX INITIALISÉE, DONNÉES FORCÉES EN LIVE.\n\nLa page va se recharger.");
                                             window.location.reload();
                                         }}
                                     >
@@ -362,7 +377,12 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                         <Key className={`w-4 h-4 ${sendingEmailId === school.id ? 'animate-pulse' : ''}`} />
                                                     </button>
                                                     <button
-                                                        onClick={() => removeSchool(school.id)}
+                                                        onClick={async () => {
+                                                            if (confirm(`Supprimer définitivement ${school.name} ?`)) {
+                                                                await removeSchoolAccess(school.id); // Valid DB Delete
+                                                                removeSchool(school.id); // Local update
+                                                            }
+                                                        }}
                                                         className="text-gray-400 hover:text-red-500 transition-colors"
                                                         title="Révoquer l'accès"
                                                     >
