@@ -1,5 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { db } from '@/lib/firebase';
+import { doc, writeBatch, collection } from 'firebase/firestore';
 
 export type CollaboratorRole =
     | 'DDFPT'
@@ -129,7 +131,7 @@ interface SchoolState {
     markCredentialsPrinted: (classId: string, studentIds: string[]) => void;
 
     importGlobalStructure: (structure: { className: string; students: Omit<Student, 'id'>[] }[]) => void;
-    generateTeacherCredentials: (classId: string) => void;
+    generateTeacherCredentials: (classId: string, schoolId: string) => Promise<void>;
 
     schoolName: string;
     schoolAddress: string;
@@ -186,7 +188,7 @@ const createPfmpPeriod = (data: Omit<PfmpPeriod, 'id'>): PfmpPeriod => ({
 
 export const useSchoolStore = create<SchoolState>()(
     persist(
-        (set) => ({
+        (set, get) => ({
             collaborators: [],
 
             generateStudentCredentials: (classId) => set((state) => ({
@@ -267,31 +269,72 @@ export const useSchoolStore = create<SchoolState>()(
                 })
             })),
 
-            generateTeacherCredentials: (classId) => set((state) => ({
-                classes: state.classes.map((c) => {
-                    if (c.id !== classId) return c;
+            generateTeacherCredentials: async (classId, schoolId) => {
+                const state = get();
+                const cls = state.classes.find((c) => c.id === classId);
+                if (!cls) return;
 
-                    const updatedTeachers = c.teachersList.map(teacher => {
-                        const clean = (str: string) => str.toUpperCase()
-                            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
-                            .replace(/[^A-Z0-9]/g, "");
+                const batch = writeBatch(db);
+                let hasUpdates = false;
 
-                        const sLast = clean(teacher.lastName).substring(0, 4).padEnd(4, 'X');
-                        const sFirst = clean(teacher.firstName).substring(0, 4).padEnd(4, 'X');
+                const updatedTeachers = cls.teachersList.map((teacher) => {
+                    const clean = (str: string) => str.toUpperCase()
+                        .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                        .replace(/[^A-Z0-9]/g, "");
 
-                        let tempId = teacher.tempId;
-                        if (!tempId) {
-                            const random3 = Math.floor(100 + Math.random() * 900);
-                            tempId = `${sLast}${sFirst}${random3}`;
-                        }
+                    const sLast = clean(teacher.lastName).substring(0, 4).padEnd(4, 'X');
+                    const sFirst = clean(teacher.firstName).substring(0, 4).padEnd(4, 'X');
 
-                        const tempCode = teacher.tempCode || Math.floor(100000 + Math.random() * 900000).toString();
+                    let tempId = teacher.tempId;
+                    let isNew = false;
 
-                        return { ...teacher, tempId, tempCode };
-                    });
-                    return { ...c, teachersList: updatedTeachers };
-                })
-            })),
+                    if (!tempId) {
+                        const random3 = Math.floor(100 + Math.random() * 900);
+                        tempId = `${sLast}${sFirst}${random3}`;
+                        isNew = true;
+                    }
+
+                    const tempCode = teacher.tempCode || Math.floor(100000 + Math.random() * 900000).toString();
+                    if (!teacher.tempCode) isNew = true;
+
+                    // PERSIST TO FIRESTORE (Idempotent: Overwrite if ID matches, but we keep same ID if exists)
+                    // We only write if we generated something new OR if we want to ensure sync (safer to sync all)
+                    if (tempId && tempCode && schoolId) {
+                        const invRef = doc(collection(db, 'invitations'), tempId);
+                        batch.set(invRef, {
+                            tempId,
+                            tempCode,
+                            email: teacher.email || '',
+                            role: 'teacher',
+                            schoolId: schoolId,
+                            classId: classId,
+                            className: cls.name,
+                            name: `${teacher.firstName} ${teacher.lastName}`,
+                            createdAt: new Date().toISOString()
+                        }, { merge: true }); // Merge to avoid destroying if exists (though tempId should be unique-ish)
+                        hasUpdates = true;
+                    }
+
+                    return { ...teacher, tempId, tempCode };
+                });
+
+                if (hasUpdates) {
+                    try {
+                        await batch.commit();
+                        console.log("Teacher credentials persisted to Firestore.");
+                    } catch (e) {
+                        console.error("Failed to persist teacher credentials:", e);
+                        alert("Erreur lors de la sauvegarde des identifiants (Bdd). Ils fonctionneront en local seulement.");
+                    }
+                }
+
+                set((state) => ({
+                    classes: state.classes.map((c) => {
+                        if (c.id !== classId) return c;
+                        return { ...c, teachersList: updatedTeachers };
+                    })
+                }));
+            },
 
             classes: [
                 {

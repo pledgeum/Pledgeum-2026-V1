@@ -1635,7 +1635,21 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                             {/* Generate Credentials Button */}
                                                             <button
                                                                 onClick={async () => {
-                                                                    generateTeacherCredentials(cls.id);
+                                                                    // We need schoolId. Try from store or fallback to default sandbox if fabrice (should allow admin)
+                                                                    let currentSchoolId = useUserStore.getState().schoolId;
+                                                                    if (!currentSchoolId && email === 'fabrice.dumasdelage@gmail.com') currentSchoolId = "9999999X"; // Fallback explicit
+                                                                    if (!currentSchoolId && useUserStore.getState().role === 'school_head') {
+                                                                        // Try deduce from store if localized
+                                                                        // but usually schoolId is set. If not, alert.
+                                                                    }
+
+                                                                    if (!currentSchoolId) {
+                                                                        alert("Impossible de générer les identifiants : ID établissement manquant.");
+                                                                        return;
+                                                                    }
+
+                                                                    await generateTeacherCredentials(cls.id, currentSchoolId);
+
                                                                     // Wait for state update (next tick) or assume updated
                                                                     setTimeout(async () => {
                                                                         const updatedClass = classes.find(c => c.id === cls.id);
