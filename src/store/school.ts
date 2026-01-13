@@ -154,7 +154,7 @@ interface SchoolState {
     updateStudent: (classId: string, studentId: string, updates: Partial<Student>) => void;
 
     partnerCompanies: PartnerCompany[];
-    importPartners: (partners: PartnerCompany[]) => void;
+    importPartners: (partners: PartnerCompany[], schoolId?: string) => Promise<void>;
     removePartner: (siret: string) => void;
 
     // Visibility Configuration
