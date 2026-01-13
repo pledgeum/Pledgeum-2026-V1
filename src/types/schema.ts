@@ -77,6 +77,9 @@ export const conventionSchema = z.object({
     })).optional(),
 
     signatures: z.any().optional(), // Allow passing signatures during creation
+
+    // Sécurité / Cloisonnement
+    schoolId: z.string().optional(),
 });
 
 export type ConventionData = z.infer<typeof conventionSchema>;

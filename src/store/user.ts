@@ -20,6 +20,7 @@ interface UserState {
     name: string;
     role: UserRole;
     email: string;
+    schoolId?: string; // NEW: For data isolation
     birthDate?: string; // NEW
     profileData: Record<string, any>; // NEW
     monitoringTeacher?: { id: string, name: string, email: string }; // For students
@@ -27,7 +28,7 @@ interface UserState {
     unreadCount: number;
     hasAcceptedTos: boolean | null; // (null = loading/unknown)
     isLoadingProfile: boolean; // Syncs with fetchUserProfile
-    setUser: (name: string, role: UserRole, email: string) => void;
+    setUser: (name: string, role: UserRole, email: string, schoolId?: string) => void;
     setRole: (role: UserRole) => void;
     addNotification: (notification: Omit<Notification, 'id' | 'read' | 'date'>) => void;
     markAsRead: (id: string) => void;
@@ -46,13 +47,14 @@ export const useUserStore = create<UserState>((set, get) => ({
     name: '',
     role: null as unknown as UserRole, // Initialize as null to prevent premature role assumption
     email: '',
+    schoolId: undefined,
     profileData: {}, // NEW
     monitoringTeacher: undefined,
     notifications: [],
     unreadCount: 0,
     hasAcceptedTos: null,
     isLoadingProfile: false,
-    setUser: (name, role, email) => set({ name, role, email }),
+    setUser: (name, role, email, schoolId) => set({ name, role, email, schoolId }),
     setRole: (role) => set({ role }),
     addNotification: (notif) => set((state) => {
         const newNotif: Notification = {
@@ -126,6 +128,7 @@ export const useUserStore = create<UserState>((set, get) => ({
                             firstName: "Élève",
                             lastName: "Démo",
                             email: "demo+student@pledgeum.fr",
+                            schoolId: "9999999X", // Mock School ID
                             birthDate: "2005-06-15",
                             classe: "2NDE 1",
                             address: "10 Rue de la Paix",
@@ -299,6 +302,7 @@ export const useUserStore = create<UserState>((set, get) => ({
                     name: data.name || '',
                     email: data.email || '',
                     role: data.role as UserRole,
+                    schoolId: data.schoolId, // Load schoolId
                     birthDate: data.birthDate,
                     profileData: data.profileData || {},
                     hasAcceptedTos: data.hasAcceptedTos || false,
@@ -383,6 +387,7 @@ export const useUserStore = create<UserState>((set, get) => ({
                 name: data.name,
                 email: data.email,
                 role: data.role,
+                schoolId: (data as any).schoolId || existingData.schoolId, // Persist if present
                 birthDate: finalData.birthDate,
                 profileData: finalData.profileData,
                 hasAcceptedTos: false
@@ -551,6 +556,7 @@ export const useUserStore = create<UserState>((set, get) => ({
         name: '',
         role: null as unknown as UserRole, // Reset to null instead of 'student' to prevent false role assumption
         email: '',
+        schoolId: undefined,
         profileData: {},
         notifications: [],
         unreadCount: 0,

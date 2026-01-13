@@ -6,7 +6,7 @@ import { collection, addDoc, query, where, getDocs, updateDoc, doc, setDoc, arra
 import { sendNotification } from '@/lib/notification';
 import { generateVerificationUrl } from '@/app/actions/sign';
 import { sha256 } from 'js-sha256';
-import { UserRole } from './user';
+import { UserRole, useUserStore } from './user';
 import { useDemoStore } from './demo';
 
 export type ConventionStatus =
@@ -112,7 +112,9 @@ interface ConventionState {
     validateAttestation: (conventionId: string, finalAbsences: number, signatureImg?: string, signerName?: string, signerFunction?: string) => Promise<void>;
     verifySignature: (code: string) => Promise<Convention | null>;
     updateEmail: (id: string, role: string, newEmail: string) => Promise<void>;
+    updateEmail: (id: string, role: string, newEmail: string) => Promise<void>;
     updateAbsence: (conventionId: string, absenceId: string, reason: string) => Promise<void>;
+    reset: () => void;
 }
 
 const generateSignatureCode = () => {
@@ -248,7 +250,12 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
 
     fetchConventions: async (userId: string, userEmail?: string) => {
         try {
-            // Super Admin Bypass
+            const { schoolId, role: userRole } = useUserStore.getState();
+
+            // Super Admin Bypass REMOVED for Strict Isolation
+            // If Super Admin needs to see all, they must use the Admin Console (not this store)
+            // or switch context to a specific school.
+
             // --- DEMO MODE SIMULATION ---
             // --- DEMO MODE SIMULATION ---
             // Super Admin Bypass
@@ -401,35 +408,26 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 return;
             }
 
-            // Super Admin Bypass
-            if (userEmail === 'pledgeum@gmail.com') {
-                const q = query(collection(db, "conventions"));
-                const snapshot = await getDocs(q);
-                const results: Convention[] = [];
-                snapshot.forEach(doc => {
-                    results.push({ id: doc.id, ...doc.data() } as Convention);
-                });
-                // Ensure Mock Data Exists in DB (Persistence)
-                // Conv Ready: Only create if missing to preserve edits
-                if (!results.find(r => r.id === MOCK_CONVENTION_READY.id)) {
-                    await setDoc(doc(db, "conventions", MOCK_CONVENTION_READY.id), MOCK_CONVENTION_READY);
-                    results.push(MOCK_CONVENTION_READY);
-                }
-
-                // Conv Simulation: ALWAYS OVERWRITE to reset state for demo
-                await setDoc(doc(db, "conventions", MOCK_CONVENTION.id), MOCK_CONVENTION);
-                // Replace in results
-                const finalResults = results.filter(r => r.id !== MOCK_CONVENTION.id);
-                finalResults.push(MOCK_CONVENTION);
-
-                set({ conventions: finalResults });
-                return;
+            if (userEmail === 'pledgeum@gmail.com' && !schoolId) {
+                // Legacy support/Safety net: If "pledgeum" logs in WITHOUT a schoolId (e.g. not initialized),
+                // we might want to show nothing or everything?
+                // User requirement: "Sépare strictement... ne doit pas mélanger".
+                // So showing nothing is safer than showing all.
+                // However, to allow "Global Management", we might allow it ONLY if explicitly requested, but here is "User Dashboard".
+                // We will Fallback to fetching ONLY their own test conventions (userId check below).
+                console.log("Super Admin logged in without School Context - Showing strictly owned conventions.");
+                // Proceed to standard queries below...
             }
 
             const queries = [];
 
-            // 1. Created by user
-            queries.push(query(collection(db, "conventions"), where("userId", "==", userId)));
+            // 1. Created by user (Owner)
+            // Always filter by schoolId if present!
+            const baseConstraints = schoolId ? [where("schoolId", "==", schoolId)] : [];
+
+            if (userId) {
+                queries.push(query(collection(db, "conventions"), where("userId", "==", userId), ...baseConstraints));
+            }
 
             // 2. Referenced by email (if email is provided)
             if (userEmail) {
@@ -449,15 +447,15 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 // SINCE WE CAN'T CHANGE SIGNATURE EASILY:
                 // We will add specific queries for ALL standard roles.
 
-                // Standard Roles
-                queries.push(query(collection(db, "conventions"), where("studentId", "==", userEmail)));
-                queries.push(query(collection(db, "conventions"), where("prof_email", "==", userEmail)));
-                queries.push(query(collection(db, "conventions"), where("rep_legal_email", "==", userEmail)));
-                queries.push(query(collection(db, "conventions"), where("tuteur_email", "==", userEmail)));
-                queries.push(query(collection(db, "conventions"), where("ent_rep_email", "==", userEmail)));
+                // Standard Roles - Filtered by schoolId if available
+                queries.push(query(collection(db, "conventions"), where("studentId", "==", userEmail), ...baseConstraints));
+                queries.push(query(collection(db, "conventions"), where("prof_email", "==", userEmail), ...baseConstraints));
+                queries.push(query(collection(db, "conventions"), where("rep_legal_email", "==", userEmail), ...baseConstraints));
+                queries.push(query(collection(db, "conventions"), where("tuteur_email", "==", userEmail), ...baseConstraints));
+                queries.push(query(collection(db, "conventions"), where("ent_rep_email", "==", userEmail), ...baseConstraints));
 
                 // For School Head (legacy)
-                queries.push(query(collection(db, "conventions"), where("ecole_chef_email", "==", userEmail)));
+                queries.push(query(collection(db, "conventions"), where("ecole_chef_email", "==", userEmail), ...baseConstraints));
 
                 // --- NEW: Broader Query for School Staff ---
                 // If the user is DDFPT/Secretary etc, their EMAIL is likely NOT in the convention fields directly.
@@ -472,10 +470,16 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                         const adminRoles = ['school_head', 'ddfpt', 'business_manager', 'assistant_manager', 'stewardship_secretary', 'at_ddfpt'];
 
                         if (adminRoles.includes(r)) {
-                            const schoolName = userData.profileData?.ecole_nom || userData.schoolName; // normalize field
-                            if (schoolName) {
-                                console.log(`[ConventionStore] Fetching school-wide for ${schoolName} (Role: ${r})`);
-                                queries.push(query(collection(db, "conventions"), where("ecole_nom", "==", schoolName)));
+                            // IF schoolId is present, use IT. Else fallback to name.
+                            if (schoolId) {
+                                console.log(`[ConventionStore] Fetching by schoolId ${schoolId}`);
+                                queries.push(query(collection(db, "conventions"), where("schoolId", "==", schoolId)));
+                            } else {
+                                const schoolName = userData.profileData?.ecole_nom || userData.schoolName; // normalize field
+                                if (schoolName) {
+                                    console.log(`[ConventionStore] Fetching school-wide for ${schoolName} (Role: ${r})`);
+                                    queries.push(query(collection(db, "conventions"), where("ecole_nom", "==", schoolName)));
+                                }
                             }
                         }
                     }
@@ -487,15 +491,18 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             // Execute all queries
             const results = await Promise.all(queries.map(q => getDocs(q)));
 
-            // Deduplicate by ID
+            // Deduplicate by ID and final CLIENT-SIDE SchoolId Check (for robustness)
             const conventionsMap = new Map<string, Convention>();
             results.forEach(snapshot => {
                 snapshot.forEach(doc => {
-                    conventionsMap.set(doc.id, { id: doc.id, ...doc.data() } as Convention);
+                    const data = doc.data() as Convention;
+                    // Secondary Safety Net: If schoolId is set in store, strictly enforce it
+                    if (schoolId && data.schoolId && data.schoolId !== schoolId) {
+                        return; // Skip mismatch
+                    }
+                    conventionsMap.set(doc.id, { id: doc.id, ...data });
                 });
             });
-
-
 
             set({ conventions: Array.from(conventionsMap.values()) });
         } catch (error) {
@@ -529,6 +536,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             ...data,
             id: Math.random().toString(36).substr(2, 9),
             studentId,
+            schoolId: useUserStore.getState().schoolId, // Inject School ID
             userId: 'temp_user_id',
             status: 'SUBMITTED', // Starts at submitted for simplicity in this demo
             createdAt: new Date().toISOString(),
@@ -815,14 +823,12 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 // Send in parallel
                 await Promise.all(recipients.map(email => sendNotification(email, subject, msg)));
             }
-
-            console.log(`Convention ${id} signed by ${role}. New status: ${newStatus}`);
-
         } catch (error) {
             console.error("Error signing convention:", error);
-            throw error; // Re-throw to UI
+            throw error;
         }
     },
+
 
     addFeedback: (id, author, message) => set((state) => ({
         conventions: state.conventions.map(c =>
@@ -1360,6 +1366,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             console.error("Error updating email:", error);
             throw error;
         }
-    }
+    },
 
+    reset: () => set({ conventions: [] })
 }));

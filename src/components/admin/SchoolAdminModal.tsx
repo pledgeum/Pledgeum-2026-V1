@@ -207,7 +207,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
         });
     }, [partnerCompanies, hiddenActivities, hiddenJobs, hiddenClasses, classesBySiret]);
 
-    const { email, role } = useUserStore();
+    const { email, role, schoolId } = useUserStore();
 
     // Permissions
     // "Head" check remains for identity strictness, but "Admin" capability is broader.
@@ -675,7 +675,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                             name: `${student.firstName} ${student.lastName}`,
                             role: 'student',
                             birthDate: student.birthDate || null,
-                            schoolId: schoolName,
+                            schoolId: schoolId || schoolName, // Prefer ID, fallback to name if missing (legacy)
                             createdAt: new Date().toISOString(),
                             createdBy: currentUser?.uid || "system",
                             status: 'pending',

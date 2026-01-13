@@ -17,24 +17,38 @@ service cloud.firestore {
       allow read, write: if false;
     }
 
+    // Helper to get user data
+    function getUserData() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
+    }
+
+    // Helper to check Super Admin
+    function isSuperAdmin() {
+      return request.auth.token.email == 'pledgeum@gmail.com';
+    }
+
     // Users: Users can read/write only their own profile
     match /users/{userId} {
       allow read, write: if isOwner(userId);
     }
 
-    // Conventions: Authenticated users only
-    // Ideally should be role-based, but starting with Auth-only as Step 1
+    // Conventions: Strict Data Isolation
     match /conventions/{conventionId} {
-      allow read, write: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow read, update, delete: if isAuthenticated() && (
+        isSuperAdmin()
+        || resource.data.userId == request.auth.uid
+        || resource.data.schoolId == getUserData().schoolId
+      );
     }
 
-    // Notifications: Authenticated users only
-    // Needed for Client-side 'createInAppNotification' and reading
+    // Notifications: Recipient Only for Read/Update
     match /notifications/{notificationId} {
-      allow read, write: if isAuthenticated();
+      allow create: if isAuthenticated();
+      allow read, update, delete: if isAuthenticated() && resource.data.recipientEmail == request.auth.token.email;
     }
 
-    // Mission Orders: Authenticated users only
+    // Mission Orders: Authenticated users only (Improve this later)
     match /missionOrders/{orderId} {
       allow read, write: if isAuthenticated();
     }

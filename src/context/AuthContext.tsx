@@ -41,6 +41,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             // Better to clean up via store directly if imported.
             const { useUserStore } = await import('@/store/user');
             useUserStore.getState().reset();
+
+            const { useSchoolStore } = await import('@/store/school');
+            useSchoolStore.getState().reset();
+
+            const { useConventionStore } = await import('@/store/convention');
+            useConventionStore.getState().reset();
+
+            const { useDemoStore } = await import('@/store/demo');
+            useDemoStore.getState().reset();
         } catch (error) {
             console.error("Logout error:", error);
             // Even if firebase fails (network?), we should clear local state & redirect

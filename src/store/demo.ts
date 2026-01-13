@@ -15,6 +15,7 @@ interface DemoState {
     setDemoRole: (role: UserRole) => void;
     openEmailModal: (email: SimulatedEmail) => void;
     closeEmailModal: () => void;
+    reset: () => void;
 }
 
 export const useDemoStore = create<DemoState>((set) => ({
@@ -25,4 +26,5 @@ export const useDemoStore = create<DemoState>((set) => ({
     setDemoRole: (role) => set({ demoRole: role }),
     openEmailModal: (email) => set({ simulatedEmail: email }),
     closeEmailModal: () => set({ simulatedEmail: null }),
+    reset: () => set({ isDemoMode: false, simulatedEmail: null })
 }));
