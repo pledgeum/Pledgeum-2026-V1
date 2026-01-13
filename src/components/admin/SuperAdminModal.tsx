@@ -185,18 +185,18 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                 status: 'ADHERENT'
                                             });
 
-                                            // Persist Identity Explicitly with UAI and Admin Email
+                                            // 1. Persist Identity Explicitly with UAI and Admin Email (Firestore)
                                             try {
                                                 console.log("Starting Real DB Write for Sandbox...");
                                                 await initializeSchoolIdentity(sandboxSchool.id, {
                                                     name: sandboxSchool.nom,
-                                                    address: sandboxSchool.adresse,
+                                                    address: "12 Rue Ampère, 76500 Elbeuf", // Full Address forced
                                                     city: sandboxSchool.ville,
                                                     postalCode: sandboxSchool.cp,
                                                     email: sandboxSchool.mail,
                                                     status: 'ADHERENT',
-                                                    uai: sandboxSchool.uai,
-                                                    adminEmail: "fabrice.dumasdelage@gmail.com" // Explicit Linkage
+                                                    uai: "9999999X", // Strict
+                                                    adminEmail: "fabrice.dumasdelage@gmail.com"
                                                 });
                                                 console.log("Real DB Write Success.");
                                             } catch (e) {
@@ -205,7 +205,29 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                 return;
                                             }
 
-                                            // Repair User
+                                            // 2. HYDRATE LOCAL STORES IMMEDIATELY (For Automatic Filling without reload if possible)
+
+                                            // School Store
+                                            useSchoolStore.getState().updateSchoolIdentity({
+                                                schoolName: "Mon LYCEE TOUTFAUX",
+                                                schoolAddress: "12 Rue Ampère, 76500 Elbeuf",
+                                                schoolHeadEmail: "fabrice.dumasdelage@gmail.com",
+                                                schoolPhone: ""
+                                            });
+
+                                            // User Store (Update Profile Data to reflect School connection)
+                                            useUserStore.setState((state) => ({
+                                                ...state,
+                                                schoolId: "9999999X",
+                                                profileData: {
+                                                    ...state.profileData,
+                                                    ecole_nom: "Mon LYCEE TOUTFAUX",
+                                                    ecole_ville: "Elbeuf",
+                                                    uai: "9999999X"
+                                                }
+                                            }));
+
+                                            // 3. Repair User Role on Server
                                             try {
                                                 console.log("Forcing User Role...");
                                                 await forceSandboxUserRole(sandboxSchool.mail);
@@ -214,7 +236,7 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                 console.error("User Repair Failed:", e);
                                             }
 
-                                            alert("✅ SANDBOX INITIALISÉE, DONNÉES FORCÉES EN LIVE.\n\nLa page va se recharger.");
+                                            alert("✅ LYCÉE SANDBOX INITIALISÉ & REMPLI AUTOMATIQUEMENT.\n\nLa page va se recharger pour finaliser.");
                                             window.location.reload();
                                         }}
                                     >

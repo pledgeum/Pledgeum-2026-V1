@@ -12,7 +12,7 @@ export async function initializeSchoolIdentity(schoolId: string, data: {
     phone?: string;
     status: 'BETA' | 'ADHERENT';
     uai?: string;
-    adminEmail?: string; // NEW: Explicit admin email for linkage
+    adminEmail?: string;
 }) {
     try {
         console.log(`[Initialize School] Starting for ${data.name} (${schoolId}) - Status: ${data.status} - UAI: ${data.uai}`);
@@ -20,14 +20,14 @@ export async function initializeSchoolIdentity(schoolId: string, data: {
         await adminFirestore.collection('schools').doc(schoolId).set({
             schoolName: data.name,
             schoolAddress: data.address,
-            schoolCity: data.city,
+            schoolCity: data.city, // If address is full string, this might be redundant but keeping for schema consistency
             schoolPostalCode: data.postalCode,
-            schoolHeadEmail: data.adminEmail || data.email, // Prefer explicit adminEmail
+            schoolHeadEmail: data.adminEmail || data.email, // Priority to explicit adminEmail
             schoolPhone: data.phone || '',
             schoolUai: data.uai || schoolId,
             updatedAt: new Date().toISOString(),
             isAuthorized: true,
-            schoolStatus: data.status
+            schoolStatus: data.status // 'validated' from prompt maps to 'ADHERENT' here
         }, { merge: true });
 
         console.log(`[Initialize School] Success for ${schoolId}`);
