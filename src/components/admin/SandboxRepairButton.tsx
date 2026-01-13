@@ -5,10 +5,10 @@ import { useAdminStore } from '@/store/admin';
 import { forceSandboxUserRole } from '@/app/actions/schoolAdmin';
 
 export function SandboxRepairButton() {
-    const { user } = useUserStore();
+    const { email } = useUserStore();
 
     // STRICT CHECK: Only for this email
-    if (user?.email !== 'fabrice.dumasdelage@gmail.com') return null;
+    if (email !== 'fabrice.dumasdelage@gmail.com') return null;
 
     const forceSandboxAccess = async () => {
         if (!confirm("⚠️ Action 'Nucléaire' : Réparer le profil et forcer les droits ?")) return;
@@ -18,29 +18,22 @@ export function SandboxRepairButton() {
         // 1. FORCE CLIENT STORE UPDATE
         // We use setState to bypass any logic and write directly to the store state
         useUserStore.setState((state) => {
-            const updatedUser = {
-                ...state.user!,
-                displayName: "Fabrice Dumasdelage",
-                role: 'school_head', // FORCE ROLE
-                schoolId: '9999999X', // FORCE SCHOOL
-            };
-
-            const updatedProfile = {
-                firstName: 'Fabrice',
-                lastName: 'Dumasdelage',
-                email: 'fabrice.dumasdelage@gmail.com',
-                role: 'Proviseur',
-                function: 'Proviseur',
-                ecole_nom: 'Mon LYCEE TOUTFAUX',
-                ecole_ville: 'Elbeuf',
-                phone: '0600000000'
-            };
-
             return {
                 ...state,
-                user: updatedUser,
-                profileData: updatedProfile,
-                role: 'school_head', // Validated role state
+                name: "Fabrice Dumasdelage",
+                role: 'school_head', // FORCE ROLE
+                email: 'fabrice.dumasdelage@gmail.com', // FORCE EMAIL
+                schoolId: '9999999X', // FORCE SCHOOL
+                profileData: {
+                    firstName: 'Fabrice',
+                    lastName: 'Dumasdelage',
+                    email: 'fabrice.dumasdelage@gmail.com',
+                    role: 'Proviseur',
+                    function: 'Proviseur',
+                    ecole_nom: 'Mon LYCEE TOUTFAUX',
+                    ecole_ville: 'Elbeuf',
+                    phone: '0600000000'
+                },
                 isLoadingProfile: false
             };
         });
