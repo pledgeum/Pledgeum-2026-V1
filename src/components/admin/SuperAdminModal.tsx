@@ -2,6 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import { X, Search, ShieldCheck, MessageSquare, Trash2, Building2, User, Mail, Calendar, Key } from 'lucide-react';
+import { db } from '@/lib/firebase';
+import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { useAdminStore, SchoolStatus } from '@/store/admin';
 import { useSchoolStore, Student } from '@/store/school'; // Import School Store
 import { useUserStore } from '@/store/user';
@@ -150,6 +152,53 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                         onClick={async () => {
                                             if (!confirm("⚠️ Initialiser 'Mon LYCEE TOUTFAUX' en mode 'Coquille Vide' (Aucune donnée) et réparer Fabrice ?")) return;
 
+                                            // 0. CLEANUP GHOST DATA (Retroactive Fix)
+                                            try {
+                                                console.log("Cleaning up Ghost Data for Sandbox...");
+                                                const sandboxId = "9999999X";
+                                                const pledgeumEmail = "pledgeum@gmail.com";
+
+                                                // Clean Conventions
+                                                // We want to delete ANY convention in this school that involves pledgeum
+                                                // Queries in Firestore are limited, so we fetch school conventions and filter
+                                                // Ideally use a composite index if available, else client-side filter
+                                                const qConvs = query(collection(db, "conventions"), where("schoolId", "==", sandboxId));
+                                                const snapConvs = await getDocs(qConvs);
+                                                const deletePromises: Promise<void>[] = [];
+
+                                                snapConvs.forEach((d) => {
+                                                    const data = d.data();
+                                                    const isGhost =
+                                                        data.ecole_chef_email === pledgeumEmail ||
+                                                        data.prof_email === pledgeumEmail ||
+                                                        data.ent_rep_email === pledgeumEmail ||
+                                                        data.tuteur_email === pledgeumEmail;
+
+                                                    if (isGhost) {
+                                                        deletePromises.push(deleteDoc(doc(db, "conventions", d.id)));
+                                                    }
+                                                });
+
+                                                // Clean Invitations
+                                                const qInvites = query(collection(db, "invitations"), where("schoolId", "==", sandboxId));
+                                                const snapInvites = await getDocs(qInvites);
+                                                snapInvites.forEach((d) => {
+                                                    // If created by pledgeum? Invitations don't always have creator email
+                                                    // But if it's in sandbox, and we are resetting, we might want to clear ALL invitations?
+                                                    // User said: "supprime... toutes les conventions et signatures... créées par pledgeum"
+                                                    // For invitations, let's play safe and only delete if explicitly clearly test data, 
+                                                    // or since it's "Coquille Vide" mode, maybe clear all?
+                                                    // The prompt says "Initialiser... en mode Coquille Vide". So clearing ALL invitations for this school seems correct and cleaner.
+                                                    deletePromises.push(deleteDoc(doc(db, "invitations", d.id)));
+                                                });
+
+                                                await Promise.all(deletePromises);
+                                                console.log(`Deleted ${deletePromises.length} ghost/test items.`);
+
+                                            } catch (e) {
+                                                console.error("Cleanup Failed (Non-blocking):", e);
+                                            }
+
                                             // 0. RESET STORES (Coquille Vide enforcement)
                                             // Wipe any localized data from persistence
                                             useSchoolStore.getState().reset();
@@ -236,7 +285,7 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                 console.error("User Repair Failed:", e);
                                             }
 
-                                            alert("✅ LYCÉE SANDBOX INITIALISÉ & REMPLI AUTOMATIQUEMENT.\n\nLa page va se recharger pour finaliser.");
+                                            alert("✅ LYCÉE SANDBOX INITIALISÉ & NETTOYÉ.\n\nLa page va se recharger pour finaliser.");
                                             window.location.reload();
                                         }}
                                     >

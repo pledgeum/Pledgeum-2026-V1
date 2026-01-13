@@ -423,12 +423,11 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
 
             // 1. Created by user (Owner)
             // Always filter by schoolId if present!
-            // EXCEPTION: Students should see their history across schools.
-            const isStudent = userRole === 'student';
-            const baseConstraints = (schoolId && !isStudent) ? [where("schoolId", "==", schoolId)] : [];
+            // Strict Isolation requested by User: No cross-school history for conventions.
+            // const isStudent = userRole === 'student'; // History removed
+            const baseConstraints = schoolId ? [where("schoolId", "==", schoolId)] : [];
 
             if (userId) {
-                // Students see all their own conventions (cross-school)
                 queries.push(query(collection(db, "conventions"), where("userId", "==", userId), ...baseConstraints));
             }
 
@@ -500,8 +499,10 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 snapshot.forEach(doc => {
                     const data = doc.data() as Convention;
 
-                    // Secondary Safety Net: If schoolId is set in store, strictly enforce it UNLESS Student
-                    if (schoolId && !isStudent && data.schoolId && data.schoolId !== schoolId) {
+                    // STRICT ISOLATION: Check schoolId for ALL roles, including students
+                    // The user explicitly requested to prevent "ghost" data leakage between schools.
+                    // "L'étanchéité doit se faire sur les Conventions et les Signatures"
+                    if (schoolId && data.schoolId && data.schoolId !== schoolId) {
                         return; // Skip mismatch
                     }
 
@@ -513,7 +514,8 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                         data.prof_email === 'pledgeum@gmail.com' ||
                         data.ent_rep_email === 'pledgeum@gmail.com' ||
                         data.tuteur_email === 'pledgeum@gmail.com' ||
-                        (data.userId && data.userId.includes('pledgeum_test')); // Hypothetical
+                        (data.userId && data.userId.includes('pledgeum_test')) ||
+                        (data as any).isTestData === true;
 
                     if (isTestConvention) return;
                     // ----------------------------------
@@ -549,20 +551,27 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
         }
     },
 
-    addConvention: (data, studentId) => set((state) => ({
-        conventions: [...state.conventions, {
-            ...data,
-            id: Math.random().toString(36).substr(2, 9),
-            studentId,
-            schoolId: useUserStore.getState().schoolId, // Inject School ID
-            userId: 'temp_user_id',
-            status: 'SUBMITTED', // Starts at submitted for simplicity in this demo
-            createdAt: new Date().toISOString(),
-            updatedAt: new Date().toISOString(),
-            signatures: {},
-            feedbacks: []
-        }]
-    })),
+    addConvention: (data, studentId) => {
+        const { schoolId, email } = useUserStore.getState();
+        const isSandbox = schoolId === '9999999X';
+        const isSuperAdmin = email === 'pledgeum@gmail.com';
+
+        set((state) => ({
+            conventions: [...state.conventions, {
+                ...data,
+                id: Math.random().toString(36).substr(2, 9),
+                studentId,
+                schoolId: schoolId, // Inject School ID
+                userId: 'temp_user_id',
+                status: 'SUBMITTED', // Starts at submitted for simplicity in this demo
+                createdAt: new Date().toISOString(),
+                updatedAt: new Date().toISOString(),
+                signatures: {},
+                feedbacks: [],
+                isTestData: isSandbox || isSuperAdmin
+            }]
+        }))
+    },
 
     updateStatus: (id, newStatus) => set((state) => ({
         conventions: state.conventions.map(c =>
