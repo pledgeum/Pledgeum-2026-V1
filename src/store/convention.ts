@@ -500,7 +500,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                     if (schoolId && data.schoolId && data.schoolId !== schoolId) {
                         return; // Skip mismatch
                     }
-                    conventionsMap.set(doc.id, { id: doc.id, ...data });
+                    conventionsMap.set(doc.id, { ...data, id: doc.id });
                 });
             });
 
