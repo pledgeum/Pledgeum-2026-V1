@@ -423,9 +423,12 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
 
             // 1. Created by user (Owner)
             // Always filter by schoolId if present!
-            const baseConstraints = schoolId ? [where("schoolId", "==", schoolId)] : [];
+            // EXCEPTION: Students should see their history across schools.
+            const isStudent = userRole === 'student';
+            const baseConstraints = (schoolId && !isStudent) ? [where("schoolId", "==", schoolId)] : [];
 
             if (userId) {
+                // Students see all their own conventions (cross-school)
                 queries.push(query(collection(db, "conventions"), where("userId", "==", userId), ...baseConstraints));
             }
 
@@ -447,7 +450,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 // SINCE WE CAN'T CHANGE SIGNATURE EASILY:
                 // We will add specific queries for ALL standard roles.
 
-                // Standard Roles - Filtered by schoolId if available
+                // Standard Roles - Filtered by schoolId if available (except for students)
                 queries.push(query(collection(db, "conventions"), where("studentId", "==", userEmail), ...baseConstraints));
                 queries.push(query(collection(db, "conventions"), where("prof_email", "==", userEmail), ...baseConstraints));
                 queries.push(query(collection(db, "conventions"), where("rep_legal_email", "==", userEmail), ...baseConstraints));
@@ -496,10 +499,25 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             results.forEach(snapshot => {
                 snapshot.forEach(doc => {
                     const data = doc.data() as Convention;
-                    // Secondary Safety Net: If schoolId is set in store, strictly enforce it
-                    if (schoolId && data.schoolId && data.schoolId !== schoolId) {
+
+                    // Secondary Safety Net: If schoolId is set in store, strictly enforce it UNLESS Student
+                    if (schoolId && !isStudent && data.schoolId && data.schoolId !== schoolId) {
                         return; // Skip mismatch
                     }
+
+                    // --- FILTER OUT GHOST/TEST DATA ---
+                    // Hide conventions linked to superadmin testing email 'pledgeum@gmail.com'
+                    // Check fields that might define the 'context' of the convention (not the student themselves)
+                    const isTestConvention =
+                        data.ecole_chef_email === 'pledgeum@gmail.com' ||
+                        data.prof_email === 'pledgeum@gmail.com' ||
+                        data.ent_rep_email === 'pledgeum@gmail.com' ||
+                        data.tuteur_email === 'pledgeum@gmail.com' ||
+                        (data.userId && data.userId.includes('pledgeum_test')); // Hypothetical
+
+                    if (isTestConvention) return;
+                    // ----------------------------------
+
                     conventionsMap.set(doc.id, { ...data, id: doc.id });
                 });
             });
