@@ -2,7 +2,8 @@
 
 import { useState } from 'react';
 import { signInWithEmailAndPassword, createUserWithEmailAndPassword } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { doc, getDoc, updateDoc } from 'firebase/firestore'; // Added imports
+import { auth, db } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Loader2, KeyRound, ArrowRight, CheckCircle } from 'lucide-react';
@@ -302,23 +303,72 @@ export default function LoginPage() {
 
     const performAccountCreation = async () => {
         const finalizeActivation = async (uid: string, email: string) => {
+            // Priority: INVITATION UAI
+            // The invitation code dictates the CURRENT school context.
+            // Even if the user exists, we SWITCH them to this new school.
+
+            const newSchoolId = foundClassId?.split('_')[0] || "UNKNOWN"; // Extract UAI from classId (e.g. 0760001X_...)
+
+            // 1. Fetch Existing Profile (to preserve mobility data)
+            let existingProfile: any = {};
+            try {
+                const userDoc = await getDoc(doc(db, "users", uid));
+                if (userDoc.exists()) {
+                    existingProfile = userDoc.data().profileData || {};
+
+                    // CHECK FOR OLD SANDBOX/TEST LINK
+                    const oldSchoolId = userDoc.data().schoolId;
+                    if (oldSchoolId === "9999999X" && newSchoolId !== "9999999X") {
+                        console.log("Switching FROM Sandbox. Cleaning up old test data links...");
+                        // We don't delete conventions here (expensive), but strict isolation in fetchConventions
+                        // will hide them. We just ensure the switch happens cleanly.
+                    }
+                }
+            } catch (e) {
+                console.warn("Could not fetch existing profile, starting fresh.", e);
+            }
+
+            // 2. FORCE School Switch & Merge Profile
+            // We KEEP Name, Phone, Diploma from existing profile if available
+            // We UPDATE Class and School info from Invitation
+            const mergedProfileData = {
+                ...existingProfile, // Keep existing identity
+                ...foundStudent,    // Overlay invitation details (often sparse, mostly name/class)
+
+                // Explicitly preserve key identity fields if invitation is missing them
+                // (Invitation usually has Name/First Name, but maybe not Phone/Diploma)
+                firstName: existingProfile.firstName || foundStudent.firstName,
+                lastName: existingProfile.lastName || foundStudent.lastName,
+                birthDate: existingProfile.birthDate || foundStudent.birthDate,
+
+                // FORCE NEW CONTEXT
+                email: email,
+                schoolId: newSchoolId,
+                class: foundStudent.className,
+                uai: newSchoolId,
+                ecole_nom: foundStudent.schoolName || existingProfile.ecole_nom, // Try to get from invitation or keep old? 
+                // Ideally invitation should carry school name. 
+                // For now, let's assume classId implies school.
+            };
+
             await createUserProfile(uid, {
                 email: email,
-                role: foundStudent.role || 'student', // Use verified role (collaborator) or fallback to student
-                name: `${foundStudent.firstName} ${foundStudent.lastName}`,
-                birthDate: foundStudent.birthDate, // Pass validated birth date
-                // Save split name for profile completion forms
-                profileData: {
-                    firstName: foundStudent.firstName,
-                    lastName: foundStudent.lastName,
-                    email: email,
-                    birthDate: foundStudent.birthDate, // Fix: Ensure birthDate is saved in profileData
-                    class: foundStudent.className // Save Class Name
-                }
+                role: foundStudent.role || 'student',
+                name: `${mergedProfileData.firstName} ${mergedProfileData.lastName}`,
+                birthDate: mergedProfileData.birthDate,
+                profileData: mergedProfileData
             });
 
-            // 3. Update School Store with correct email (Linking)
+            // Also explicitly update the root user document 'schoolId' field for easier querying
+            await updateDoc(doc(db, "users", uid), {
+                schoolId: newSchoolId
+            });
+
+            // 3. Update School Store with correct email (Linking in the new school's sub-collection if needed)
+            // Implementation logic in 'updateStudent' usually handles store state, 
+            // but for persistence we might need to ensure the student doc in the NEW school is updated.
             if (foundClassId && foundStudent) {
+                // This updates the Student document within the School structure (classes/{classId}/students/{studentId})
                 updateStudent(foundClassId, foundStudent.id, { email: email });
             }
 

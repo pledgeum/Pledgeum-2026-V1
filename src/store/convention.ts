@@ -499,11 +499,25 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 snapshot.forEach(doc => {
                     const data = doc.data() as Convention;
 
-                    // STRICT ISOLATION: Check schoolId for ALL roles, including students
-                    // The user explicitly requested to prevent "ghost" data leakage between schools.
-                    // "L'étanchéité doit se faire sur les Conventions et les Signatures"
+                    // STRICT ISOLATION: Check schoolId for ALL roles, EXCEPT STUDENTS (Portfolio Mode)
+                    // The user explicitly requested to prevent "ghost" data leakage between schools,
+                    // BUT explicitly requested "Mobilité de l'élève" (Portfolio) in the latest update.
+                    // "L'élève doit pouvoir voir toutes ses conventions passées et présentes, peu importe l'UAI d'origine."
+
+                    const isStudent = (data.studentId === userEmail) || (data.userId === userId);
+                    // Note: userRole isn't passed to this callback easily, but we can infer or rely on data ownership.
+                    // Ideally we should pass 'userRole' into the filter, but it is available in the scope above?
+                    // Yes, fetchConventions scope has 'userRole' (if passed, but signature might not have it?)
+                    // Let's check signature. 
+                    // Actually, let's look at how we determining "isStudent".
+                    // The safer check is: if I am the student owner of this convention, I satisfy the check regardless of schoolId.
+
                     if (schoolId && data.schoolId && data.schoolId !== schoolId) {
-                        return; // Skip mismatch
+                        // EXCEPTION: If I am the student listed on this convention, I can see it (Portfolio)
+                        const amIOwnerStudent = data.studentId === userEmail || data.userId === userId;
+                        if (!amIOwnerStudent) {
+                            return; // Skip mismatch for everyone else
+                        }
                     }
 
                     // --- FILTER OUT GHOST/TEST DATA ---

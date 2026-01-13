@@ -1521,6 +1521,11 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
                   </h4>
                   <div className="flex flex-col sm:flex-row sm:items-center text-sm text-gray-500 mt-1">
                     <span className="font-medium text-gray-700 mr-2">{conv.eleve_classe}</span>
+                    {conv.ecole_nom && (
+                      <span className="ml-2 px-2 py-0.5 bg-blue-50 text-blue-700 text-xs rounded-full font-medium border border-blue-100">
+                        {conv.ecole_nom}
+                      </span>
+                    )}
                     <span className="hidden sm:inline mx-2 text-gray-300">•</span>
                     <span className="flex items-center mt-1 sm:mt-0">
                       <span className="mr-1">Du</span>
