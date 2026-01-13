@@ -497,7 +497,7 @@ export default function LoginPage() {
                         <div className="text-center">
                             <h2 className="mt-2 text-2xl font-bold text-indigo-900 flex justify-center items-center">
                                 <KeyRound className="w-6 h-6 mr-2" />
-                                Activation Compte Élève
+                                Activer mon compte
                             </h2>
                             {activationStep === 1 && (
                                 <p className="mt-2 text-sm text-gray-600">Entrez les identifiants reçus</p>
