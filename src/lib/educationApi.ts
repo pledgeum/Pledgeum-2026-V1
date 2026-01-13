@@ -12,6 +12,23 @@ export interface SchoolResult {
 }
 
 export async function searchSchools(query: string, city?: string, type?: string): Promise<SchoolResult[]> {
+    // --- SANDBOX API BYPASS ---
+    // Strict isolation for the Sandbox UAI to prevent any calls to the national API
+    if (query === '9999999X' || query === 'Mon LYCEE TOUTFAUX') {
+        return [{
+            id: "9999999X",
+            nom: "Mon LYCEE TOUTFAUX",
+            type: "Lycée Polyvalent",
+            adresse: "12 Rue Ampère",
+            ville: "Elbeuf",
+            cp: "76500",
+            mail: "fabrice.dumasdelage@gmail.com",
+            telephone: "0102030405",
+            lat: 49.2906,
+            lng: 1.0083
+        }];
+    }
+    // --------------------------
     const baseUrl = 'https://data.education.gouv.fr/api/explore/v2.1/catalog/datasets/fr-en-annuaire-education/records';
 
     // Construct filter query
