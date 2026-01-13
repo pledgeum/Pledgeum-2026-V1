@@ -112,7 +112,7 @@ interface ConventionState {
     validateAttestation: (conventionId: string, finalAbsences: number, signatureImg?: string, signerName?: string, signerFunction?: string) => Promise<void>;
     verifySignature: (code: string) => Promise<Convention | null>;
     updateEmail: (id: string, role: string, newEmail: string) => Promise<void>;
-    updateEmail: (id: string, role: string, newEmail: string) => Promise<void>;
+
     updateAbsence: (conventionId: string, absenceId: string, reason: string) => Promise<void>;
     reset: () => void;
 }
