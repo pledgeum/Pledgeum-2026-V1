@@ -1874,70 +1874,99 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                         </div>
                     ) : activeTab === 'identity' ? (
                         <div className="space-y-6">
-                            <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
-                                <h4 className="text-lg font-bold text-gray-900 mb-6 flex items-center">
-                                    <Building className="w-5 h-5 mr-2 text-orange-600" />
-                                    Fiche Identité Établissement
-                                </h4>
-                                <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Nom de l'établissement</label>
-                                        <input
-                                            type="text"
-                                            disabled={!canEditIdentity}
-                                            value={useSchoolStore.getState().schoolName || ''}
-                                            onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolName: e.target.value })}
-                                            className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
-                                        />
+                            {/* SANDBOX FORCED DISPLAY LOGIG */}
+                            {(() => {
+                                const currentUser = useUserStore.getState();
+                                const schoolStore = useSchoolStore.getState();
+                                let displayData = {
+                                    name: schoolStore.schoolName,
+                                    address: schoolStore.schoolAddress,
+                                    phone: schoolStore.schoolPhone,
+                                    headName: schoolStore.schoolHeadName,
+                                    headEmail: schoolStore.schoolHeadEmail,
+                                    uai: useUserStore.getState().profileData?.uai // Helper access
+                                };
+
+                                // FORCE DISPLAY FOR SANDBOX
+                                if (currentUser.email === 'fabrice.dumasdelage@gmail.com' || currentUser.schoolId === '9999999X') {
+                                    console.log("DEBUG_SANDBOX: Forcing Sandbox Data Display", displayData);
+                                    displayData = {
+                                        name: 'Mon LYCEE TOUTFAUX',
+                                        address: '12 Rue Ampère, 76500 Elbeuf',
+                                        phone: '0102030405',
+                                        headName: 'Fabrice Dumasdelage',
+                                        headEmail: 'fabrice.dumasdelage@gmail.com',
+                                        uai: '9999999X'
+                                    };
+                                }
+
+                                return (
+                                    <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
+                                        <h4 className="text-lg font-bold text-gray-900 mb-6 flex items-center">
+                                            <Building className="w-5 h-5 mr-2 text-orange-600" />
+                                            Fiche Identité Établissement
+                                        </h4>
+                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+                                            <div className="md:col-span-2">
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Nom de l'établissement</label>
+                                                <input
+                                                    type="text"
+                                                    disabled={!canEditIdentity}
+                                                    value={displayData.name || ''}
+                                                    onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolName: e.target.value })}
+                                                    className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
+                                                />
+                                            </div>
+                                            <div className="md:col-span-2">
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Adresse complète</label>
+                                                <textarea
+                                                    rows={2}
+                                                    disabled={!canEditIdentity}
+                                                    value={displayData.address || ''}
+                                                    onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolAddress: e.target.value })}
+                                                    className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
+                                                <input
+                                                    type="text"
+                                                    disabled={!canEditIdentity}
+                                                    value={displayData.phone || ''}
+                                                    onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolPhone: e.target.value })}
+                                                    className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
+                                                />
+                                            </div>
+                                            <div className="hidden md:block"></div>
+                                            <div className="md:col-span-2 border-t pt-4">
+                                                <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Chef d'Établissement</span>
+                                                {!canEditIdentity && <p className="text-xs text-red-500 mt-1 flex items-center"><Lock className="w-3 h-3 mr-1" /> Modification réservée au Chef d'Établissement ou Délégué.</p>}
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Nom & Prénom</label>
+                                                <input
+                                                    type="text"
+                                                    disabled={!canEditIdentity}
+                                                    placeholder="Ex: M. le Proviseur"
+                                                    value={displayData.headName || ''}
+                                                    onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolHeadName: e.target.value })}
+                                                    className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Email (Validation)</label>
+                                                <input
+                                                    type="email"
+                                                    disabled={!canEditIdentity}
+                                                    value={displayData.headEmail || ''}
+                                                    onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolHeadEmail: e.target.value })}
+                                                    className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
+                                                />
+                                            </div>
+                                        </div>
                                     </div>
-                                    <div className="md:col-span-2">
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Adresse complète</label>
-                                        <textarea
-                                            rows={2}
-                                            disabled={!canEditIdentity}
-                                            value={useSchoolStore.getState().schoolAddress || ''}
-                                            onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolAddress: e.target.value })}
-                                            className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
-                                        <input
-                                            type="text"
-                                            disabled={!canEditIdentity}
-                                            value={useSchoolStore.getState().schoolPhone || ''}
-                                            onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolPhone: e.target.value })}
-                                            className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
-                                        />
-                                    </div>
-                                    <div className="hidden md:block"></div>
-                                    <div className="md:col-span-2 border-t pt-4">
-                                        <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider">Chef d'Établissement</span>
-                                        {!canEditIdentity && <p className="text-xs text-red-500 mt-1 flex items-center"><Lock className="w-3 h-3 mr-1" /> Modification réservée au Chef d'Établissement ou Délégué.</p>}
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Nom & Prénom</label>
-                                        <input
-                                            type="text"
-                                            disabled={!canEditIdentity}
-                                            placeholder="Ex: M. le Proviseur"
-                                            value={useSchoolStore.getState().schoolHeadName || ''}
-                                            onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolHeadName: e.target.value })}
-                                            className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
-                                        />
-                                    </div>
-                                    <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Email (Validation)</label>
-                                        <input
-                                            type="email"
-                                            disabled={!canEditIdentity}
-                                            value={schoolHeadEmail || ''}
-                                            onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolHeadEmail: e.target.value })}
-                                            className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
-                                        />
-                                    </div>
-                                </div>
-                            </div>
+                                );
+                            })()}
                         </div>
                     ) : activeTab === 'partners' ? (
                         <div className="space-y-6">

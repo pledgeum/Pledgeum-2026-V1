@@ -144,6 +144,14 @@ export async function forceSandboxUserRole(email: string) {
             email: email,
             role: 'school_head', // App level role
             schoolId: schoolId, // Direct link
+            // New Requirement: Explicit simplified schoolData for redundency/display speed
+            schoolData: {
+                name: schoolName,
+                uai: schoolId,
+                address: "12 Rue Ampère, 76500 Elbeuf",
+                email: email,
+                status: 'validated'
+            },
             profileData: {
                 firstName: "Fabrice",
                 lastName: "Dumasdelage",
