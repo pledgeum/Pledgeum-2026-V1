@@ -11,17 +11,19 @@ export async function initializeSchoolIdentity(schoolId: string, data: {
     email: string;
     phone?: string;
     status: 'BETA' | 'ADHERENT'; // NEW: Status
+    uai?: string; // NEW: Specific UAI
 }) {
     try {
-        console.log(`[Initialize School] Starting for ${data.name} (${schoolId}) - Status: ${data.status}`);
+        console.log(`[Initialize School] Starting for ${data.name} (${schoolId}) - Status: ${data.status} - UAI: ${data.uai}`);
 
         await adminFirestore.collection('schools').doc(schoolId).set({
             schoolName: data.name,
-            schoolAddress: data.address,
+            schoolAddress: data.address, // Expected to be full address if passed
             schoolCity: data.city,
             schoolPostalCode: data.postalCode,
             schoolHeadEmail: data.email,
             schoolPhone: data.phone || '',
+            schoolUai: data.uai || schoolId, // Persist UAI
             updatedAt: new Date().toISOString(),
             isAuthorized: true,
             schoolStatus: data.status // Persist specific status

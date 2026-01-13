@@ -160,7 +160,8 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                 ville: "Elbeuf",
                                                 mail: "fabrice.dumasdelage@gmail.com",
                                                 adresse: "12 Rue Ampère",
-                                                cp: "76500"
+                                                cp: "76500",
+                                                uai: "9999999X"
                                             };
 
                                             const sandboxSchoolResult: SchoolResult = {
@@ -175,24 +176,31 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                 lng: 0
                                             };
 
-                                            // Authorize & Persist
-                                            await handleAuthorize(sandboxSchoolResult, 'ADHERENT');
+                                            // Authorize Local Admin Store (Update Status)
+                                            authorizeSchool({
+                                                id: sandboxSchool.id,
+                                                name: sandboxSchool.nom,
+                                                city: sandboxSchool.ville,
+                                                email: sandboxSchool.mail,
+                                                status: 'ADHERENT'
+                                            });
 
-                                            // Persist Identity Explicitly
+                                            // Persist Identity Explicitly with UAI
                                             await initializeSchoolIdentity(sandboxSchool.id, {
                                                 name: sandboxSchool.nom,
                                                 address: sandboxSchool.adresse,
                                                 city: sandboxSchool.ville,
                                                 postalCode: sandboxSchool.cp,
                                                 email: sandboxSchool.mail,
-                                                status: 'ADHERENT'
+                                                status: 'ADHERENT',
+                                                uai: sandboxSchool.uai
                                             });
 
                                             // Repair User
                                             await forceSandboxUserRole(sandboxSchool.mail);
 
-                                            alert("✅ SANDBOX INITIALISÉE & RÉPARÉE");
-                                            useAdminStore.getState().fetchAuthorizedSchools();
+                                            alert("✅ SANDBOX INITIALISÉE, DONNÉES FORCÉES & PROFIL RÉPARÉ.\n\nLa page va se recharger.");
+                                            window.location.reload();
                                         }}
                                     >
                                         <div className="flex items-center justify-center gap-2">
