@@ -921,14 +921,10 @@ export const useSchoolStore = create<SchoolState>()(
                         schoolHeadEmail: "fabrice.dumasdelage@gmail.com"
                     };
 
-                    // CRITICAL: Suffix IDs to avoid stealing Demo data (collision on same doc IDs)
-                    const suffix = "_9999999X";
-                    testClasses.forEach(cls => {
-                        cls.id = cls.id + suffix;
-                        cls.teachersList?.forEach(t => t.id = t.id + suffix);
-                        cls.studentsList?.forEach(s => s.id = s.id + suffix);
-                    });
-                    testCollaborators.forEach(c => c.id = c.id + suffix);
+                    // CLEAN SLATE: User requested NO test data for this sandbox.
+                    // We empty the arrays so no classes/collaborators are injected or persisted.
+                    testClasses.length = 0;
+                    testCollaborators.length = 0;
                 }
 
                 const newState = {
