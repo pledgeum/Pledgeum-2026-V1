@@ -32,7 +32,7 @@ type Step1Data = z.infer<typeof stepSchema>;
 export function Step1School() {
     const { setData, nextStep } = useWizardStore();
     const { profileData, role, email } = useUserStore();
-    const { allowedConventionTypes } = useSchoolStore();
+    const { allowedConventionTypes, schoolName, schoolAddress, schoolPhone, schoolHeadName, schoolHeadEmail, classes } = useSchoolStore();
     const [cityQuery, setCityQuery] = useState('');
     const [schoolQuery, setSchoolQuery] = useState('');
     const [results, setResults] = useState<SchoolResult[]>([]);
@@ -78,7 +78,8 @@ export function Step1School() {
             {(form) => {
                 // Compute derived state for Teacher Locking
                 const studentClass = role === 'student' ? (profileData.class || profileData.classe) : null;
-                const targetClass = studentClass ? useSchoolStore.getState().classes.find(c => c.name === studentClass) : null;
+                // Use reactive 'classes' from the hook above
+                const targetClass = studentClass ? classes.find(c => c.name === studentClass) : null;
                 const lockedMainTeacher = targetClass?.mainTeacher;
 
                 // Explicit Lock for School Data (Student view OR Demo mode)
@@ -86,10 +87,8 @@ export function Step1School() {
                 const isSchoolLocked = role === 'student' || email === 'pledgeum@gmail.com' || email === 'demo_access@pledgeum.fr';
 
                 useEffect(() => {
-                    // Pre-fill from School Store (Single Source of Truth)
-                    const { schoolName, schoolAddress, schoolPhone, schoolHeadName, schoolHeadEmail } = useSchoolStore.getState();
-
                     // Always overwrite if locked to ensure consistency with admin settings
+                    // Use reactive variables directly
                     if (isSchoolLocked || !form.getValues('ecole_nom')) {
                         if (schoolName) form.setValue('ecole_nom', schoolName);
                         if (schoolAddress) form.setValue('ecole_adresse', schoolAddress);
@@ -103,7 +102,7 @@ export function Step1School() {
                         form.setValue('prof_nom', `${lockedMainTeacher.firstName} ${lockedMainTeacher.lastName}`);
                         form.setValue('prof_email', lockedMainTeacher.email);
                     }
-                }, [form, useSchoolStore.getState().schoolName, lockedMainTeacher, isSchoolLocked]); // Trigger on mount or name change
+                }, [form, schoolName, schoolAddress, schoolPhone, schoolHeadName, schoolHeadEmail, lockedMainTeacher, isSchoolLocked]); // Full reactivity
 
                 // Auto-reset convention type if current value is not allowed
                 useEffect(() => {
