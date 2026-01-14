@@ -324,15 +324,15 @@ export default function LoginPage() {
             // We KEEP Name, Phone, Address, Diploma from existing profile if available (Identity Persistence)
             // We OVERWRITE Class and School info from Invitation (Context Switch)
 
-            // Helper to get non-empty value
-            const pick = (a: any, b: any) => (a !== undefined && a !== null && a !== '') ? a : b;
+            // Helper to get non-empty value and ensure no undefined
+            const pick = (a: any, b: any) => {
+                const val = (a !== undefined && a !== null && a !== '') ? a : b;
+                return val === undefined ? "" : val;
+            };
 
             const mergedProfileData = {
-                ...existingProfile, // Start with existing
-                ...foundStudent,    // Overlay invitation (mostly name/class)
-
-                // CRITICAL: Explicitly preserve identity fields if they exist in profile, 
-                // because invitation 'foundStudent' usually lacks them (creates nulls).
+                // We construct the object explicitly to avoid purely spreading potential undefineds
+                // Identity
                 firstName: pick(existingProfile.firstName, foundStudent.firstName),
                 lastName: pick(existingProfile.lastName, foundStudent.lastName),
                 birthDate: pick(existingProfile.birthDate, foundStudent.birthDate),
@@ -348,16 +348,26 @@ export default function LoginPage() {
                 diploma: pick(existingProfile.diploma, foundStudent.diploma),
 
                 // FORCE NEW SCHOOL CONTEXT
-                email: email,
-                schoolId: newSchoolId,
-                class: foundStudent.className || existingProfile.class, // Prefer new class
-                uai: newSchoolId,
+                email: email || "",
+                schoolId: newSchoolId || "",
+                class: foundStudent.className || existingProfile.class || "",
+                uai: newSchoolId || "",
                 ecole_nom: foundStudent.schoolName || existingProfile.ecole_nom || '',
+
+                // Role
+                role: foundStudent.role || existingProfile.role || 'student',
             };
+
+            // Final safety net: Ensure no undefined values remain in the object (Firestore hates undefined)
+            Object.keys(mergedProfileData).forEach(key => {
+                if ((mergedProfileData as any)[key] === undefined) {
+                    (mergedProfileData as any)[key] = "";
+                }
+            });
 
             await createUserProfile(uid, {
                 email: email,
-                role: foundStudent.role || 'student',
+                role: mergedProfileData.role,
                 name: `${mergedProfileData.firstName} ${mergedProfileData.lastName}`,
                 birthDate: mergedProfileData.birthDate,
                 profileData: mergedProfileData
