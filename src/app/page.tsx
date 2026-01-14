@@ -264,33 +264,13 @@ export default function Home() {
         }
         initializedUserRef.current = user.uid;
 
-        // If profileData is already loaded (by ProfileGuard), don't fetch again purely for existence check
-        // unless strictly necessary. ProfileGuard ensures we have data or redirect.
+        // ProfileFetch is handled by ProfileGuard. We do not need to fetch again to avoid infinite loops.
+        // We only trigger side effects here (Conventions, Notifications, Tracking).
 
-        // Check local profileData or Store state to avoid stale closure issues
-        const currentProfileData = useUserStore.getState().profileData;
-
-        if (Object.keys(currentProfileData || {}).length > 0) {
-          // Already have data.
-          trackConnection(user.uid);
-          fetchConventions(user.uid, user.email || undefined);
-          if (user.email) {
-            useUserStore.getState().fetchNotifications(user.email);
-          }
-          return;
-        }
-
-        // Fallback: Fetch profile
-        const hasProfile = await fetchUserProfile(user.uid);
-        if (!hasProfile) {
-          // No profile yet, TosModal will trigger due to hasAcceptedTos: false
-          // router.push('/onboarding');
-        } else {
-          trackConnection(user.uid);
-          fetchConventions(user.uid, user.email || undefined);
-          if (user.email) {
-            useUserStore.getState().fetchNotifications(user.email);
-          }
+        trackConnection(user.uid);
+        fetchConventions(user.uid, user.email || undefined);
+        if (user.email) {
+          useUserStore.getState().fetchNotifications(user.email);
         }
       }
     }
@@ -301,7 +281,7 @@ export default function Home() {
       // Logic for user presence
       checkProfile();
     }
-  }, [user, loading, router, fetchConventions, fetchUserProfile]); // Removed profileData from deps
+  }, [user, loading, router, fetchConventions]); // Removed fetchUserProfile from deps
 
   if (loading) {
     return (
