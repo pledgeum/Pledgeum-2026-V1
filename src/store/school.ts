@@ -904,14 +904,37 @@ export const useSchoolStore = create<SchoolState>()(
                     { id: 'c2', name: 'Paul Lefebvre', email: 'paul.lefebvre@ecole.fr', role: 'DDFPT' }
                 ];
 
-                const newState = {
-                    classes: testClasses,
-                    collaborators: testCollaborators,
+                let schoolIdentity = {
                     schoolName: "Lycée d'Excellence Démo",
                     schoolAddress: "1 Avenue de la République, 75001 Paris",
                     schoolPhone: "01 23 45 67 89",
                     schoolHeadName: "M. le Proviseur Démo",
                     schoolHeadEmail: "demo@pledgeum.fr"
+                };
+
+                if (schoolId === '9999999X') {
+                    schoolIdentity = {
+                        schoolName: "Mon LYCEE TOUTFAUX",
+                        schoolAddress: "12 Rue Ampère, 76500 Elbeuf",
+                        schoolPhone: "02 35 77 00 00",
+                        schoolHeadName: "Fabrice Dumasdelage",
+                        schoolHeadEmail: "fabrice.dumasdelage@gmail.com"
+                    };
+
+                    // CRITICAL: Suffix IDs to avoid stealing Demo data (collision on same doc IDs)
+                    const suffix = "_9999999X";
+                    testClasses.forEach(cls => {
+                        cls.id = cls.id + suffix;
+                        cls.teachersList?.forEach(t => t.id = t.id + suffix);
+                        cls.studentsList?.forEach(s => s.id = s.id + suffix);
+                    });
+                    testCollaborators.forEach(c => c.id = c.id + suffix);
+                }
+
+                const newState = {
+                    classes: testClasses,
+                    collaborators: testCollaborators,
+                    ...schoolIdentity
                 };
 
                 if (schoolId) {
