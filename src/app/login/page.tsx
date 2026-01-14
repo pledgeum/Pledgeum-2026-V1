@@ -129,10 +129,10 @@ export default function LoginPage() {
                 setFoundStudent({
                     firstName: data.user.name?.split(' ')[0] || 'Utilisateur',
                     lastName: data.user.name?.split(' ').slice(1).join(' ') || '',
-                    role: data.user.role, // Store role for later use if needed
-                    birthDate: data.user.birthDate,
-                    className: data.user.className,
-                    classId: data.user.classId
+                    role: data.user.role || null, // Store role for later use if needed
+                    birthDate: data.user.birthDate || null,
+                    className: data.user.className || null,
+                    classId: data.user.classId || null
                 });
                 setFoundClassId(data.schoolId || 'global-school'); // Use dummy or real ID
 
@@ -346,7 +346,7 @@ export default function LoginPage() {
                 schoolId: newSchoolId,
                 class: foundStudent.className,
                 uai: newSchoolId,
-                ecole_nom: foundStudent.schoolName || existingProfile.ecole_nom, // Try to get from invitation or keep old? 
+                ecole_nom: foundStudent.schoolName || existingProfile.ecole_nom || '', // Try to get from invitation or keep old? 
                 // Ideally invitation should carry school name. 
                 // For now, let's assume classId implies school.
             };
