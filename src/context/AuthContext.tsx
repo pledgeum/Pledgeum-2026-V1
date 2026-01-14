@@ -25,9 +25,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     const router = useRouter();
 
     useEffect(() => {
-        const unsubscribe = onAuthStateChanged(auth, (user) => {
+        const unsubscribe = onAuthStateChanged(auth, async (user) => {
             setUser(user);
             setLoading(false);
+            if (user) {
+                // Ensure profile is loaded immediately
+                const { useUserStore } = await import('@/store/user');
+                useUserStore.getState().fetchUserProfile(user.uid);
+            }
         });
 
         return () => unsubscribe();

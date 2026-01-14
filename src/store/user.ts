@@ -294,11 +294,37 @@ export const useUserStore = create<UserState>((set, get) => ({
         // ---------------------------
 
         try {
-            const docRef = doc(db, "users", uid);
-            const docSnap = await getDoc(docRef);
-            if (docSnap.exists()) {
-                const data = docSnap.data();
+            console.log(`[USER_STORE] AUTH_UID: ${uid} | STARTING FETCH`);
 
+            const docRef = doc(db, "users", uid);
+            let docSnap = await getDoc(docRef);
+            let data = docSnap.exists() ? docSnap.data() : null;
+
+            // 2. Fallback: Search by Email (Legacy/Migration)
+            // Only if UID lookup failed and we have an email to check
+            if (!data && currentUser?.email) {
+                console.log(`[USER_STORE] UID lookup failed. Trying Email Fallback for: ${currentUser.email}`);
+                // Import query/collection/where/getDocs/setDoc if not available in scope, but they seem to be imported at top level.
+                // Re-verifying imports: they are at top level.
+                const q = query(collection(db, "users"), where("email", "==", currentUser.email));
+                const querySnapshot = await getDocs(q);
+
+                if (!querySnapshot.empty) {
+                    const fallbackDoc = querySnapshot.docs[0];
+                    console.log(`[USER_STORE] Found profile by Email (Legacy ID: ${fallbackDoc.id}). MIGRATING TO UID...`);
+
+                    data = fallbackDoc.data();
+
+                    // 3. Migration: Copy to UID document
+                    // we use merge: true to be safe, though this is a new doc so it acts as set
+                    await setDoc(docRef, { ...data, migre_depuis_email_id: fallbackDoc.id, updatedAt: new Date().toISOString() }, { merge: true });
+                    console.log(`[USER_STORE] MIGRATION SUCCESS. Profile secured at ${uid}`);
+                }
+            }
+
+            console.log(`[USER_STORE] AUTH_UID: ${uid} | PROFILE_FOUND: ${!!data}`);
+
+            if (data) {
                 console.log("USER_DATA_LOADED:", data);
 
                 const profileData = data.profileData || {};
