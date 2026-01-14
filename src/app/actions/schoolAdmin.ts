@@ -139,28 +139,24 @@ export async function forceSandboxUserRole(email: string) {
 
         // 2. Overwrite Firestore Profile (The Source of Truth for App Logic)
         // We use merge: true to keep system fields, but we overwrite all app logic fields
+        // 2. Overwrite Firestore Profile (The Source of Truth for App Logic)
+        // We use merge: true to keep system fields, but we overwrite all app logic fields
         await adminFirestore.collection('users').doc(user.uid).set({
             name: "Fabrice Dumasdelage",
             email: email,
-            role: 'school_head', // App level role
-            schoolId: schoolId, // Direct link
-            // New Requirement: Explicit simplified schoolData for redundency/display speed
-            schoolData: {
-                name: schoolName,
-                uai: schoolId,
-                address: "12 Rue Ampère, 76500 Elbeuf",
-                email: email,
-                status: 'validated'
-            },
+            role: 'school_head',
+            schoolId: '9999999X', // Strict casing matching establishment ID
+            status: 'active', // Explicit active status
             profileData: {
                 firstName: "Fabrice",
                 lastName: "Dumasdelage",
                 email: email,
-                phone: "0102030405", // Required for profile completion
+                phone: "0102030405",
+                address: "12 Rue Ampère, 76500 Elbeuf", // As requested
                 ecole_nom: schoolName,
                 ecole_ville: "Elbeuf",
                 role: "Proviseur",
-                function: "Proviseur" // Often checked for checking profile completion
+                function: "Proviseur"
             },
             hasAcceptedTos: true,
             updatedAt: new Date().toISOString()
