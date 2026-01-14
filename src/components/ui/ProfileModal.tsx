@@ -22,8 +22,8 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
     if (!isOpen) return null;
 
     const { user, logout } = useAuth();
-    const { role, profileData, updateProfileData, name, birthDate } = useUserStore();
-    const { schoolName, schoolAddress, schoolId: storeSchoolId } = useSchoolStore();
+    const { role, profileData, updateProfileData, name, birthDate, schoolId: storeSchoolId } = useUserStore();
+    const { schoolName, schoolAddress } = useSchoolStore();
     const [formData, setFormData] = useState<Record<string, string>>({});
 
     const [loading, setLoading] = useState(false);
