@@ -315,40 +315,44 @@ export default function LoginPage() {
                 const userDoc = await getDoc(doc(db, "users", uid));
                 if (userDoc.exists()) {
                     existingProfile = userDoc.data().profileData || {};
-
-                    // CHECK FOR OLD SANDBOX/TEST LINK
-                    const oldSchoolId = userDoc.data().schoolId;
-                    if (oldSchoolId === "9999999X" && newSchoolId !== "9999999X") {
-                        console.log("Switching FROM Sandbox. Cleaning up old test data links...");
-                        // We don't delete conventions here (expensive), but strict isolation in fetchConventions
-                        // will hide them. We just ensure the switch happens cleanly.
-                    }
                 }
             } catch (e) {
                 console.warn("Could not fetch existing profile, starting fresh.", e);
             }
 
             // 2. FORCE School Switch & Merge Profile
-            // We KEEP Name, Phone, Diploma from existing profile if available
-            // We UPDATE Class and School info from Invitation
+            // We KEEP Name, Phone, Address, Diploma from existing profile if available (Identity Persistence)
+            // We OVERWRITE Class and School info from Invitation (Context Switch)
+
+            // Helper to get non-empty value
+            const pick = (a: any, b: any) => (a !== undefined && a !== null && a !== '') ? a : b;
+
             const mergedProfileData = {
-                ...existingProfile, // Keep existing identity
-                ...foundStudent,    // Overlay invitation details (often sparse, mostly name/class)
+                ...existingProfile, // Start with existing
+                ...foundStudent,    // Overlay invitation (mostly name/class)
 
-                // Explicitly preserve key identity fields if invitation is missing them
-                // (Invitation usually has Name/First Name, but maybe not Phone/Diploma)
-                firstName: existingProfile.firstName || foundStudent.firstName,
-                lastName: existingProfile.lastName || foundStudent.lastName,
-                birthDate: existingProfile.birthDate || foundStudent.birthDate,
+                // CRITICAL: Explicitly preserve identity fields if they exist in profile, 
+                // because invitation 'foundStudent' usually lacks them (creates nulls).
+                firstName: pick(existingProfile.firstName, foundStudent.firstName),
+                lastName: pick(existingProfile.lastName, foundStudent.lastName),
+                birthDate: pick(existingProfile.birthDate, foundStudent.birthDate),
 
-                // FORCE NEW CONTEXT
+                // Address & Contact - Persist from old profile if not provided by new
+                address: pick(existingProfile.address, foundStudent.address),
+                postalCode: pick(existingProfile.postalCode, foundStudent.postalCode),
+                zipCode: pick(existingProfile.zipCode, foundStudent.zipCode),
+                city: pick(existingProfile.city, foundStudent.city),
+                phone: pick(existingProfile.phone, foundStudent.phone),
+
+                // Academic - Persist Diploma
+                diploma: pick(existingProfile.diploma, foundStudent.diploma),
+
+                // FORCE NEW SCHOOL CONTEXT
                 email: email,
                 schoolId: newSchoolId,
-                class: foundStudent.className,
+                class: foundStudent.className || existingProfile.class, // Prefer new class
                 uai: newSchoolId,
-                ecole_nom: foundStudent.schoolName || existingProfile.ecole_nom || '', // Try to get from invitation or keep old? 
-                // Ideally invitation should carry school name. 
-                // For now, let's assume classId implies school.
+                ecole_nom: foundStudent.schoolName || existingProfile.ecole_nom || '',
             };
 
             await createUserProfile(uid, {
@@ -360,14 +364,13 @@ export default function LoginPage() {
             });
 
             // Also explicitly update the root user document 'schoolId' field for easier querying
+            // This enables the "Strict Filtering" in Convention Store to work immediately
             await updateDoc(doc(db, "users", uid), {
                 schoolId: newSchoolId
             });
 
-            // 3. Update School Store with correct email (Linking in the new school's sub-collection if needed)
-            // Implementation logic in 'updateStudent' usually handles store state, 
-            // but for persistence we might need to ensure the student doc in the NEW school is updated.
-            if (foundClassId && foundStudent) {
+            // 3. Update School Store with correct email (Linking in the new school's sub-collection)
+            if (foundClassId && foundStudent && foundStudent.id) {
                 // This updates the Student document within the School structure (classes/{classId}/students/{studentId})
                 updateStudent(foundClassId, foundStudent.id, { email: email });
             }
