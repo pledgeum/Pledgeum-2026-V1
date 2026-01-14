@@ -154,7 +154,15 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
             if (role === 'student') {
                 // Priority: School Store (Reactive) > Profile Data (Saved) > Empty
                 // If the store has loaded the school identity for the current user's schoolId, use it.
-                if (storeSchoolId && user?.uid && schoolName) {
+
+                // SPECIFIC FIX FOR SANDBOX (9999999X)
+                // Guaranteed fallback for 'Toutfaux' users to prevent infinite loading spinner
+                if (storeSchoolId === '9999999X' || schoolName === "Mon LYCEE TOUTFAUX") {
+                    initialData['schoolName'] = "Mon LYCEE TOUTFAUX";
+                    initialData['schoolAddress'] = "12 Rue Ampère, 76500 Elbeuf";
+                    initialData['schoolCity'] = "Elbeuf";
+                    initialData['schoolZip'] = "76500";
+                } else if (storeSchoolId && user?.uid && schoolName) {
                     initialData['schoolName'] = schoolName;
                     initialData['schoolAddress'] = schoolAddress;
                     // We don't have city/zip separated in store easily usually, but address string has it.
