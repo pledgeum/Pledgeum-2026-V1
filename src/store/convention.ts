@@ -172,7 +172,7 @@ const MOCK_CONVENTION: Convention = {
     ecole_adresse: "123 Avenue de la République, 75011 Paris",
     ecole_tel: "0143123456",
     ecole_chef_nom: "Mme Martin",
-    ecole_chef_email: "demo@pledgeum.fr",
+    ecole_chef_email: "demo_access@pledgeum.fr",
     prof_nom: "M. Dupont",
     prof_email: "demo+teacher@pledgeum.fr",
     cpe_email: "vie-scolaire@lycee-jaures.fr",
@@ -261,8 +261,8 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             // Super Admin Bypass
             // --- DEMO MODE SIMULATION ---
             // --- DEMO MODE SIMULATION ---
-            // Catch any email starting with demo... or specifically demo@pledgeum.fr
-            if (userEmail && (userEmail === 'demo@pledgeum.fr' || (userEmail.startsWith('demo') && userEmail.endsWith('@pledgeum.fr')))) {
+            // Catch any email starting with demo... or specifically demo_access@pledgeum.fr
+            if (userEmail && (userEmail === 'demo_access@pledgeum.fr' || (userEmail.startsWith('demo') && userEmail.endsWith('@pledgeum.fr')))) { // Fixed check
                 console.log("[DEMO] Fetching Simulated Conventions for:", userEmail);
 
                 // Import demo store dynamically
@@ -276,7 +276,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 else if (userEmail.includes('+tutor')) demoRole = 'tutor';
                 else if (userEmail.includes('+parent')) demoRole = 'parent';
                 else if (userEmail.includes('+company_head')) demoRole = 'company_head';
-                else if (userEmail === 'demo@pledgeum.fr') demoRole = 'school_head';
+                else if (userEmail === 'demo_access@pledgeum.fr') demoRole = 'school_head';
 
                 // Ensure store reflects this role (optional, but good for UI consistency)
                 useDemoStore.getState().setDemoRole(demoRole);

@@ -42,7 +42,7 @@ export default function LoginPage() {
     const handleDemoLogin = async () => {
         setLoading(true);
         setError(null);
-        const demoEmail = 'demo@pledgeum.fr';
+        const demoEmail = 'demo_access@pledgeum.fr';
         const demoPass = 'demo1234';
 
         try {

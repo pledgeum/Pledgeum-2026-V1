@@ -106,7 +106,7 @@ export function DemoUI() {
                 else if (email.to.includes('demo+teacher')) notificationTarget = 'Enseignant';
                 else if (email.to.includes('demo+company')) notificationTarget = 'Entreprise';
                 else if (email.to.includes('demo+student')) notificationTarget = 'Élève';
-                else if (email.to === 'demo@pledgeum.fr') notificationTarget = 'Proviseur';
+                else if (email.to === 'demo_access@pledgeum.fr') notificationTarget = 'Proviseur';
 
                 // If the notification targets the CURRENT role, hide it (they are already here)
                 // Wait, we need to check if the current user email MATCHES the target.
@@ -202,8 +202,8 @@ export function DemoUI() {
 
                                     // Check if NOT logged in (Login Page scenario)
                                     if (!auth.currentUser) {
-                                        const emailPrefix = newRole === 'school_head' ? 'demo' : `demo+${newRole}`;
-                                        const email = newRole === 'school_head' ? 'demo@pledgeum.fr' : `${emailPrefix}@pledgeum.fr`;
+                                        const emailPrefix = newRole === 'school_head' ? 'demo_access' : `demo+${newRole}`;
+                                        const email = newRole === 'school_head' ? 'demo_access@pledgeum.fr' : `${emailPrefix}@pledgeum.fr`;
                                         const password = 'demo1234';
 
                                         try {

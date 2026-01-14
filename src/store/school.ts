@@ -884,16 +884,16 @@ export const useSchoolStore = create<SchoolState>()(
                     {
                         id: 'demo-class-2nde1',
                         name: '2NDE 1',
-                        mainTeacher: { firstName: 'Professeur', lastName: 'Démo', email: 'demo@pledgeum.fr' },
+                        mainTeacher: { firstName: 'Professeur', lastName: 'Démo', email: 'demo_access@pledgeum.fr' },
                         cpe: { firstName: 'Marie', lastName: 'Durand', email: 'marie.durand@ecole.fr' },
                         mef: '22830023003', // Fictitious but consistent
                         label: 'SECONDE PRO METIERS DU PILOTAGE',
                         diploma: 'BAC PRO MSPC',
                         teachersList: [
-                            { id: 't_demo', firstName: 'Professeur', lastName: 'Démo', email: 'demo@pledgeum.fr' }
+                            { id: 't_demo', firstName: 'Professeur', lastName: 'Démo', email: 'demo_access@pledgeum.fr' }
                         ],
                         studentsList: [
-                            { id: 's_demo', firstName: 'Élève', lastName: 'Démo', email: 'demo@pledgeum.fr', birthDate: '2005-06-15' }
+                            { id: 's_demo', firstName: 'Élève', lastName: 'Démo', email: 'demo_access@pledgeum.fr', birthDate: '2005-06-15' }
                         ],
                         pfmpPeriods: []
                     }
@@ -909,7 +909,7 @@ export const useSchoolStore = create<SchoolState>()(
                     schoolAddress: "1 Avenue de la République, 75001 Paris",
                     schoolPhone: "01 23 45 67 89",
                     schoolHeadName: "M. le Proviseur Démo",
-                    schoolHeadEmail: "demo@pledgeum.fr"
+                    schoolHeadEmail: "demo_access@pledgeum.fr"
                 };
 
                 if (schoolId === '9999999X') {

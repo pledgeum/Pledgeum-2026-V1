@@ -17,8 +17,8 @@ export async function sendEmail({ to, subject, text, attachments }: EmailOptions
     const port = Number(process.env.EMAIL_PORT);
     const isSecure = port === 465;
 
-    if (to.includes('demo@pledgeum.fr')) {
-        console.log('[DEMO] Intercepting email to demo@pledgeum.fr');
+    if (to.includes('demo_access@pledgeum.fr')) {
+        console.log('[DEMO] Intercepting email to demo_access@pledgeum.fr');
         try {
             // Import dynamically to avoid build-time issues if possible, or use the imported adminDb
             // We need to import adminDb at the top.

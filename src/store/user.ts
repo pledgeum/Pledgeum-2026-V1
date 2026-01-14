@@ -107,7 +107,7 @@ export const useUserStore = create<UserState>((set, get) => ({
 
             let mockProfile: Partial<UserState> = {
                 name: "Utilisateur Démo",
-                email: "demo@pledgeum.fr",
+                email: "demo_access@pledgeum.fr",
                 role: 'school_head',
                 birthDate: "1980-01-01",
                 profileData: { ecole_nom: "Lycée d'Excellence Démo", ecole_ville: "Paris" },
@@ -128,7 +128,7 @@ export const useUserStore = create<UserState>((set, get) => ({
                             firstName: "Élève",
                             lastName: "Démo",
                             email: "demo+student@pledgeum.fr",
-                            schoolId: "9999999X", // Mock School ID
+                            schoolId: "DEMO-SCHOOL-01", // Mock School ID for Demo
                             birthDate: "2005-06-15",
                             classe: "2NDE 1",
                             address: "10 Rue de la Paix",

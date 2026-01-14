@@ -15,7 +15,7 @@ export function TosModal({ isOpen = false, onClose }: TosModalProps) {
 
     // Admin Bypass Logic: Admin is considered to have accepted TOS to avoid blocking, 
     // but the modal can still be opened manually (view-only mode).
-    const isAdmin = user?.email === 'pledgeum@gmail.com' || user?.email === 'demo@pledgeum.fr';
+    const isAdmin = user?.email === 'pledgeum@gmail.com' || user?.email === 'demo_access@pledgeum.fr';
     const effectiveAccepted = isAdmin ? true : hasAcceptedTos;
 
     // If status is unknown (loading), do not render yet

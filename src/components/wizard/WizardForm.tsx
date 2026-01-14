@@ -167,7 +167,7 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
             <div className="w-full max-w-4xl">
                 <div className="flex justify-between items-center mb-8">
                     <h1 className="text-3xl font-extrabold text-blue-900 tracking-tight">Convention PFMP</h1>
-                    {(email === 'demo@pledgeum.fr' || email === 'pledgeum@gmail.com') && (
+                    {(email === 'demo_access@pledgeum.fr' || email === 'pledgeum@gmail.com') && (
                         <button
                             onClick={loadDemoData}
                             className="flex items-center text-sm text-blue-600 hover:text-blue-800 transition-colors"

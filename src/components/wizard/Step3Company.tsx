@@ -75,14 +75,14 @@ export function Step3Company() {
                         if (!currentRep) {
                             form.setValue('ent_rep_nom', "Directeur Entreprise Démo");
                             form.setValue('ent_rep_fonction', "Gérant");
-                            form.setValue('ent_rep_email', "demo@pledgeum.fr");
+                            form.setValue('ent_rep_email', "demo_access@pledgeum.fr");
 
                             // Only set tutor if "same person" is not checked (logic elsewhere handles sync if checked)
                             // But usually we can just set them, and if user checks box, it overwrites.
                             if (!form.getValues('tuteur_nom')) {
                                 form.setValue('tuteur_nom', "Tuteur Entreprise Démo");
                                 form.setValue('tuteur_fonction', "Technicien Expert");
-                                form.setValue('tuteur_email', "demo@pledgeum.fr");
+                                form.setValue('tuteur_email', "demo_access@pledgeum.fr");
                             }
                         }
                     }

@@ -82,8 +82,8 @@ export function Step1School() {
                 const lockedMainTeacher = targetClass?.mainTeacher;
 
                 // Explicit Lock for School Data (Student view OR Demo mode)
-                // We treat 'demo@pledgeum.fr' as a student to demonstrate the UI locking
-                const isSchoolLocked = role === 'student' || email === 'pledgeum@gmail.com' || email === 'demo@pledgeum.fr';
+                // We treat 'demo_access@pledgeum.fr' as a student to demonstrate the UI locking
+                const isSchoolLocked = role === 'student' || email === 'pledgeum@gmail.com' || email === 'demo_access@pledgeum.fr';
 
                 useEffect(() => {
                     // Pre-fill from School Store (Single Source of Truth)
