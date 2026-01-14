@@ -1649,8 +1649,12 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                                     await generateTeacherCredentials(cls.id, currentSchoolId);
 
                                                                     // Wait for state update (next tick) or assume updated
+                                                                    // Wait for state update (next tick) or assume updated
                                                                     setTimeout(async () => {
-                                                                        const updatedClass = classes.find(c => c.id === cls.id);
+                                                                        // FIX: Fetch fresh state directly from store to avoid stale closure "classes"
+                                                                        const freshClasses = useSchoolStore.getState().classes;
+                                                                        const updatedClass = freshClasses.find(c => c.id === cls.id);
+
                                                                         if (updatedClass && updatedClass.teachersList.length > 0) {
                                                                             const blob = await pdf(
                                                                                 <TeacherCredentialsPdf
