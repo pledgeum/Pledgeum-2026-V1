@@ -380,17 +380,45 @@ export default function LoginPage() {
         };
 
         try {
-            // 1. Create Firebase Auth User
-            const userCredential = await createUserWithEmailAndPassword(auth, newEmail, newPassword);
-            const user = userCredential.user;
+            // 1. Unified Account Logic: Try to Login FIRST
+            // If the user exists, we just want to switch their context (School Switch).
+            // If they don't exist, we create them.
+
+            let user = auth.currentUser;
+            let isExistingUser = false;
+
+            try {
+                // Attempt Login with provided credentials
+                const userCredential = await signInWithEmailAndPassword(auth, newEmail, newPassword);
+                user = userCredential.user;
+                isExistingUser = true;
+                console.log("Existing user identified and authenticated. Proceeding to context switch.");
+            } catch (loginErr: any) {
+                if (loginErr.code === 'auth/user-not-found' || loginErr.code === 'auth/invalid-credential') {
+                    // Not found -> Create New
+                    const userCredential = await createUserWithEmailAndPassword(auth, newEmail, newPassword);
+                    user = userCredential.user;
+                } else if (loginErr.code === 'auth/wrong-password') {
+                    // Account exists but wrong password
+                    setError("Un compte existe déjà avec cet email mais le mot de passe est incorrect. Veuillez utiliser votre mot de passe habituel si vous avez déjà un compte.");
+                    setLoading(false);
+                    return;
+                } else {
+                    throw loginErr; // Re-throw other errors
+                }
+            }
+
+            if (!user) throw new Error("Authentication failed");
+
             await finalizeActivation(user.uid, user.email || newEmail);
 
         } catch (err: any) {
             console.error(err);
             if (err.code === 'auth/email-already-in-use') {
-                setError("Un compte existe déjà avec cet email. Veuillez vous connecter via l'écran d'accueil avec vos identifiants existants.");
+                // Should be caught by login attempt, but safety net
+                setError("Un compte existe déjà avec cet email. Veuillez utiliser votre mot de passe habituel.");
             } else {
-                setError("Erreur lors de la création du compte : " + err.message);
+                setError("Erreur lors de la finalisation du compte : " + err.message);
             }
         } finally {
             setLoading(false);
