@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 
 import { StudentDocumentButton } from '@/components/ui/StudentDocumentButton';
 import { WizardForm } from '@/components/wizard/WizardForm';
@@ -252,15 +252,25 @@ export default function Home() {
   // Profile Enforcement Disabled as per user request
   // The modal will no longer auto-open.
 
+  // Ref to track if we've already initialized data for the current user
+  const initializedUserRef = useRef<string | null>(null);
+
   useEffect(() => {
     async function checkProfile() {
       if (user) {
+        // Prevent double-init for the same user
+        if (initializedUserRef.current === user.uid) {
+          return;
+        }
+        initializedUserRef.current = user.uid;
+
         // If profileData is already loaded (by ProfileGuard), don't fetch again purely for existence check
         // unless strictly necessary. ProfileGuard ensures we have data or redirect.
-        // We can trust specific fields like 'role' or keys in profileData.
 
-        // If strictly need to check existence for /onboarding redirect:
-        if (Object.keys(profileData || {}).length > 0) {
+        // Check local profileData or Store state to avoid stale closure issues
+        const currentProfileData = useUserStore.getState().profileData;
+
+        if (Object.keys(currentProfileData || {}).length > 0) {
           // Already have data.
           trackConnection(user.uid);
           fetchConventions(user.uid, user.email || undefined);
@@ -270,8 +280,7 @@ export default function Home() {
           return;
         }
 
-        // Fallback: If for some reason data is empty (and Guard let us through? unlikely for dashboard)
-        // verify one last time without triggering global loading if possible, or just trust the flow.
+        // Fallback: Fetch profile
         const hasProfile = await fetchUserProfile(user.uid);
         if (!hasProfile) {
           // No profile yet, TosModal will trigger due to hasAcceptedTos: false
@@ -289,9 +298,10 @@ export default function Home() {
     if (!loading && !user) {
       router.push('/login');
     } else if (user) {
+      // Logic for user presence
       checkProfile();
     }
-  }, [user, loading, router, fetchConventions, fetchUserProfile, profileData]);
+  }, [user, loading, router, fetchConventions, fetchUserProfile]); // Removed profileData from deps
 
   if (loading) {
     return (
