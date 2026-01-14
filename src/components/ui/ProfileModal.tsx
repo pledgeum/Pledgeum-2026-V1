@@ -482,53 +482,68 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                                             </div>
                                         ) : (
                                             <div className="space-y-3 relative">
-                                                <p className="text-sm text-gray-500">Recherchez votre établissement.</p>
-                                                <div className="grid grid-cols-2 gap-2">
-                                                    <div>
-                                                        <label className="text-xs font-medium text-gray-500">Ville</label>
-                                                        <input
-                                                            type="text"
-                                                            value={cityQuery}
-                                                            onChange={(e) => setCityQuery(e.target.value)}
-                                                            placeholder="Ex: Lyon"
-                                                            className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500 placeholder:text-gray-500 text-gray-900"
-                                                        />
+                                                {role === 'student' ? (
+                                                    <div className="bg-yellow-50 p-4 rounded-md border border-yellow-200 text-sm text-yellow-800">
+                                                        <p className="font-semibold flex items-center gap-2">
+                                                            <Loader2 className="w-4 h-4 animate-spin" />
+                                                            Recherche de votre établissement...
+                                                        </p>
+                                                        <p className="mt-1 text-xs">
+                                                            Votre établissement est défini automatiquement par votre code d'invitation.
+                                                            Si rien ne s'affiche, veuillez vérifier votre connexion ou contacter votre professeur.
+                                                        </p>
                                                     </div>
-                                                    <div className="relative">
-                                                        <label className="text-xs font-medium text-gray-500">Nom de l'école</label>
-                                                        <div className="relative">
-                                                            <Search className="absolute left-2 top-2.5 w-4 h-4 text-gray-400" />
-                                                            <input
-                                                                type="text"
-                                                                value={schoolQuery}
-                                                                onChange={(e) => {
-                                                                    setSchoolQuery(e.target.value);
-                                                                    setShowSchoolResults(true);
-                                                                }}
-                                                                placeholder="Ex: Jules Ferry"
-                                                                className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500 placeholder:text-gray-500 text-gray-900"
-                                                            />
-                                                            {isSearchingSchool && <Loader2 className="absolute right-2 top-2.5 w-4 h-4 animate-spin text-blue-500" />}
-                                                        </div>
-
-                                                        {/* Results Dropdown */}
-                                                        {showSchoolResults && schoolResults.length > 0 && (
-                                                            <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto">
-                                                                {schoolResults.map((school) => (
-                                                                    <button
-                                                                        key={school.id}
-                                                                        type="button"
-                                                                        onClick={() => handleSelectSchool(school)}
-                                                                        className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-0"
-                                                                    >
-                                                                        <div className="font-medium text-gray-900">{school.nom}</div>
-                                                                        <div className="text-xs text-gray-500">{school.ville} ({school.type})</div>
-                                                                    </button>
-                                                                ))}
+                                                ) : (
+                                                    <>
+                                                        <p className="text-sm text-gray-500">Recherchez votre établissement.</p>
+                                                        <div className="grid grid-cols-2 gap-2">
+                                                            <div>
+                                                                <label className="text-xs font-medium text-gray-500">Ville</label>
+                                                                <input
+                                                                    type="text"
+                                                                    value={cityQuery}
+                                                                    onChange={(e) => setCityQuery(e.target.value)}
+                                                                    placeholder="Ex: Lyon"
+                                                                    className="w-full px-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500 placeholder:text-gray-500 text-gray-900"
+                                                                />
                                                             </div>
-                                                        )}
-                                                    </div>
-                                                </div>
+                                                            <div className="relative">
+                                                                <label className="text-xs font-medium text-gray-500">Nom de l'école</label>
+                                                                <div className="relative">
+                                                                    <Search className="absolute left-2 top-2.5 w-4 h-4 text-gray-400" />
+                                                                    <input
+                                                                        type="text"
+                                                                        value={schoolQuery}
+                                                                        onChange={(e) => {
+                                                                            setSchoolQuery(e.target.value);
+                                                                            setShowSchoolResults(true);
+                                                                        }}
+                                                                        placeholder="Ex: Jules Ferry"
+                                                                        className="w-full pl-8 pr-3 py-2 border border-gray-300 rounded text-sm focus:ring-2 focus:ring-blue-200 focus:border-blue-500 placeholder:text-gray-500 text-gray-900"
+                                                                    />
+                                                                    {isSearchingSchool && <Loader2 className="absolute right-2 top-2.5 w-4 h-4 animate-spin text-blue-500" />}
+                                                                </div>
+
+                                                                {/* Results Dropdown */}
+                                                                {showSchoolResults && schoolResults.length > 0 && (
+                                                                    <div className="absolute z-50 w-full mt-1 bg-white border border-gray-200 rounded-lg shadow-lg max-h-80 overflow-y-auto">
+                                                                        {schoolResults.map((school) => (
+                                                                            <button
+                                                                                key={school.id}
+                                                                                type="button"
+                                                                                onClick={() => handleSelectSchool(school)}
+                                                                                className="w-full text-left px-4 py-3 hover:bg-gray-50 text-sm border-b border-gray-100 last:border-0"
+                                                                            >
+                                                                                <div className="font-medium text-gray-900">{school.nom}</div>
+                                                                                <div className="text-xs text-gray-500">{school.ville} ({school.type})</div>
+                                                                            </button>
+                                                                        ))}
+                                                                    </div>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </>
+                                                )}
                                             </div>
                                         )}
                                     </div>
