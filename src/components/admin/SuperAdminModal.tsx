@@ -145,7 +145,7 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
 
                                 {/* URGENT: FLASHY SANDBOX BUTTON FOR PLEDGEUM */}
-                                {useUserStore.getState().email === 'pledgeum@gmail.com' && (
+                                {(useUserStore.getState().email === 'pledgeum@gmail.com' || useUserStore.getState().role === 'super_admin' as any) && (
                                     <button
                                         type="button"
                                         className="relative z-[9999] bg-orange-600 hover:bg-orange-700 text-white font-bold text-lg p-4 block w-full mb-6 rounded-lg shadow-2xl border-4 border-white animate-pulse"
