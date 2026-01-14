@@ -298,13 +298,23 @@ export const useUserStore = create<UserState>((set, get) => ({
             const docSnap = await getDoc(docRef);
             if (docSnap.exists()) {
                 const data = docSnap.data();
+
+                console.log("USER_DATA_LOADED:", data);
+
+                const profileData = data.profileData || {};
+
+                // Robustness: Check root fields first, then fallback to profileData
+                const resolvedRole = (data.role || profileData.role) as UserRole;
+                const resolvedName = data.name || (profileData.firstName && profileData.lastName ? `${profileData.firstName} ${profileData.lastName}` : '') || data.email || '';
+                const resolvedSchoolId = data.schoolId || profileData.schoolId;
+
                 set({
-                    name: data.name || '',
-                    email: data.email || '',
-                    role: data.role as UserRole,
-                    schoolId: data.schoolId, // Load schoolId
-                    birthDate: data.birthDate,
-                    profileData: data.profileData || {},
+                    name: resolvedName,
+                    email: data.email || profileData.email || '',
+                    role: resolvedRole,
+                    schoolId: resolvedSchoolId,
+                    birthDate: data.birthDate || profileData.birthDate,
+                    profileData: profileData,
                     hasAcceptedTos: data.hasAcceptedTos || false,
                     isLoadingProfile: false
                 });
