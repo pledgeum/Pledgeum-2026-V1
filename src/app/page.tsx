@@ -1039,7 +1039,7 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
   const router = useRouter();
   const { getConventionsByRole, signConvention, sendReminder, bulkSignConventions, updateEmail, assignTrackingTeacher } = useConventionStore();
   const { classes } = useSchoolStore();
-  const { addNotification, name } = useUserStore();
+  const { addNotification, name, schoolId } = useUserStore();
   const conventions = getConventionsByRole(role, userEmail, userId);
   const [selectedConventionId, setSelectedConventionId] = useState<string | null>(null);
   const [isSigModalOpen, setIsSigModalOpen] = useState(false);
@@ -1215,6 +1215,20 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
     const dateB = new Date(b.createdAt).getTime();
     return dateB - dateA;
   });
+
+  // STUDENT PORTFOLIO LOGIC: Separate Current vs History
+  const finalDisplayList = (() => {
+    if (role !== 'student' || !schoolId) return sortedConventions;
+
+    const current = sortedConventions.filter(c => c.schoolId === schoolId);
+    const past = sortedConventions.filter(c => c.schoolId !== schoolId);
+
+    if (past.length === 0) return current;
+
+    // Insert Separator (We'll handle this 'fake' convention in the map)
+    const separator = { id: 'SEPARATOR_HISTORY', isSeparator: true } as any;
+    return [...current, separator, ...past];
+  })();
 
   // Bulk Selection Helpers
   const toggleSelection = (id: string) => {
@@ -1461,7 +1475,19 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
         </div>
       </div>
 
-      {sortedConventions.map((conv) => {
+      {finalDisplayList.map((item) => {
+        if ('isSeparator' in item) {
+          return (
+            <div key="separator-history" className="flex items-center my-8">
+              <div className="flex-grow border-t border-gray-300"></div>
+              <span className="flex-shrink-0 mx-4 text-gray-500 font-bold uppercase tracking-wider text-sm">
+                Établissements Précédents (Historique)
+              </span>
+              <div className="flex-grow border-t border-gray-300"></div>
+            </div>
+          );
+        }
+        const conv = item as Convention;
         const actionable = isActionable(conv, role);
 
         // Find assigned evaluation for this convention's class

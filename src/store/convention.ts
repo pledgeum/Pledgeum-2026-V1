@@ -513,10 +513,14 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                     // The safer check is: if I am the student owner of this convention, I satisfy the check regardless of schoolId.
 
                     if (schoolId && data.schoolId && data.schoolId !== schoolId) {
-                        // STRICT ISOLATION APPLIED: 
-                        // Even for students, we hide conventions from previous schools as per "Nettoyage des données" request.
-                        // Ideally, we would allow a "History" view later, but for now, strict filter cleans the dashboard.
-                        return;
+                        // PORTFOLIO MODE: Check if I am the student owner
+                        const amIOwnerStudent = data.studentId === userEmail || data.userId === userId;
+
+                        if (!amIOwnerStudent) {
+                            // Strict Isolation for everyone else
+                            return;
+                        }
+                        // Students pass here -> allows Multi-School View
                     }
 
                     // --- FILTER OUT GHOST/TEST DATA ---
