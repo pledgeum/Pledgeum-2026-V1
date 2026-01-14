@@ -256,6 +256,13 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                             }
 
                                             // 2. HYDRATE LOCAL STORES IMMEDIATELY (For Automatic Filling without reload if possible)
+                                            // Inject Test Classes & Collaborators (and persist them)
+                                            try {
+                                                console.log("Restoring Sandbox Test Data...");
+                                                await useSchoolStore.getState().restoreTestData("9999999X");
+                                            } catch (e) {
+                                                console.error("Failed to restore test data:", e);
+                                            }
 
                                             // School Store
                                             useSchoolStore.getState().updateSchoolIdentity({

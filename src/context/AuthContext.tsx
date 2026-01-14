@@ -31,7 +31,14 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             if (user) {
                 // Ensure profile is loaded immediately
                 const { useUserStore } = await import('@/store/user');
-                useUserStore.getState().fetchUserProfile(user.uid);
+                const { useSchoolStore } = await import('@/store/school');
+
+                await useUserStore.getState().fetchUserProfile(user.uid);
+
+                const schoolId = useUserStore.getState().schoolId;
+                if (schoolId) {
+                    useSchoolStore.getState().fetchSchoolData(schoolId);
+                }
             }
         });
 

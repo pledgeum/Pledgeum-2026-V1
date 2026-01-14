@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { db } from '@/lib/firebase';
-import { doc, writeBatch, collection, setDoc } from 'firebase/firestore';
+import { doc, writeBatch, collection, setDoc, query, where, getDocs, deleteDoc } from 'firebase/firestore';
 
 export type CollaboratorRole =
     | 'DDFPT'
@@ -155,7 +155,7 @@ interface SchoolState {
 
     partnerCompanies: PartnerCompany[];
     importPartners: (partners: PartnerCompany[], schoolId?: string) => Promise<void>;
-    removePartner: (siret: string) => void;
+    removePartner: (siret: string) => Promise<void>;
 
     // Visibility Configuration
     hiddenActivities: string[];
@@ -166,7 +166,10 @@ interface SchoolState {
     setHiddenClasses: (classes: string[]) => void;
 
     reset: () => void;
-    restoreTestData: () => void;
+    restoreTestData: (schoolId?: string) => Promise<void>;
+
+    // FETCH METHOD
+    fetchSchoolData: (schoolId: string) => Promise<void>;
 }
 
 
@@ -186,9 +189,80 @@ const createPfmpPeriod = (data: Omit<PfmpPeriod, 'id'>): PfmpPeriod => ({
     id: Math.random().toString(36).substr(2, 9)
 });
 
+
+
 export const useSchoolStore = create<SchoolState>()(
     persist(
         (set, get) => ({
+            classes: [],
+
+            fetchSchoolData: async (schoolId: string) => {
+                if (!schoolId) return;
+
+                try {
+                    console.log(`[SCHOOL_STORE] Fetching data for school: ${schoolId}`);
+
+                    // 1. Fetch Classes (Root Collection 'classes' filtered by schoolId)
+                    const classesQ = query(collection(db, "classes"), where("schoolId", "==", schoolId));
+                    const classesSnap = await getDocs(classesQ);
+                    const loadedClasses: ClassDefinition[] = [];
+                    classesSnap.forEach(doc => {
+                        loadedClasses.push(doc.data() as ClassDefinition);
+                    });
+
+                    // 2. Fetch Users (for Collaborators)
+                    const usersQ = query(collection(db, "users"), where("schoolId", "==", schoolId));
+                    const usersSnap = await getDocs(usersQ);
+
+                    const collaborators: Collaborator[] = [];
+                    usersSnap.forEach(doc => {
+                        const userData = doc.data();
+                        const role = userData.role;
+                        if (['ddfpt', 'business_manager', 'school_head', 'cpe', 'assistant_manager'].includes(role)) {
+                            collaborators.push({
+                                id: doc.id,
+                                name: userData.name || `${userData.profileData?.firstName || ''} ${userData.profileData?.lastName || ''}`,
+                                email: userData.email,
+                                role: role.toUpperCase() as any
+                            });
+                        }
+                    });
+
+                    // 3. Fetch Partner Companies (Collection 'companies' filtered by schoolId)
+                    const companiesQ = query(collection(db, "companies"), where("schoolId", "==", schoolId));
+                    const companiesSnap = await getDocs(companiesQ);
+                    const loadedPartners: PartnerCompany[] = [];
+                    companiesSnap.forEach(doc => {
+                        // Ensure we map Firestore document data to PartnerCompany interface
+                        // We assume the document contains compatible fields.
+                        // We assign the Firestore doc ID as 'siret' if we want to use it as key, 
+                        // but usually SIRET is the business key. Ideally we stored with SIRET as ID.
+                        const data = doc.data();
+                        loadedPartners.push({
+                            siret: data.siret || doc.id,
+                            name: data.name,
+                            address: data.address,
+                            city: data.city,
+                            postalCode: data.postalCode,
+                            activity: data.activity,
+                            jobs: data.jobs || [],
+                            coordinates: data.coordinates
+                        });
+                    });
+
+                    console.log(`[SCHOOL_STORE] Loaded ${loadedClasses.length} classes, ${collaborators.length} collaborators, and ${loadedPartners.length} partners.`);
+
+                    set((state) => ({
+                        classes: loadedClasses.sort((a, b) => a.name.localeCompare(b.name)),
+                        collaborators: collaborators.length > 0 ? collaborators : state.collaborators,
+                        partnerCompanies: loadedPartners
+                    }));
+
+                } catch (e) {
+                    console.error("Error fetching school data:", e);
+                }
+            },
+
             collaborators: [],
 
             generateStudentCredentials: (classId) => set((state) => ({
@@ -336,20 +410,7 @@ export const useSchoolStore = create<SchoolState>()(
                 }));
             },
 
-            classes: [
-                {
-                    id: 'test-class-mef',
-                    name: 'T.ASSP 1',
-                    mainTeacher: { firstName: 'Jean', lastName: 'Dupont', email: 'jean.dupont@ecole.fr' },
-                    cpe: { firstName: 'Marie', lastName: 'Durand', email: 'marie.durand@ecole.fr' },
-                    mef: '23830033004',
-                    label: 'TLE PRO3 ACC.SOINS-S.PERS. OPT.EN STRUCTUR',
-                    diploma: 'BAC PRO EN 3 ANS : TERMINALE PRO',
-                    teachersList: [],
-                    studentsList: [],
-                    pfmpPeriods: []
-                }
-            ],
+
 
             // Default: Lycée Ferdinand Buisson
             schoolName: "Lycée Polyvalent Ferdinand Buisson",
@@ -706,11 +767,23 @@ export const useSchoolStore = create<SchoolState>()(
                 // --- FIRESTORE PERSISTENCE ---
                 if (schoolId) {
                     try {
-                        await setDoc(doc(db, 'schools', schoolId), {
-                            partnerCompanies: updatedPartners,
-                            updatedAt: new Date().toISOString()
-                        }, { merge: true });
-                        console.log("Partner companies persisted to Firestore.");
+                        const batch = writeBatch(db);
+
+                        toAdd.forEach(partner => {
+                            // Use siret as doc key or generate ID if missing? Siret is usually unique.
+                            // If siret is missing, we should probably generate an ID.
+                            // Assuming siret is present as per interface.
+                            const docId = partner.siret ? partner.siret : Math.random().toString(36).substr(2, 9);
+                            const partnerRef = doc(db, 'companies', docId);
+                            batch.set(partnerRef, {
+                                ...partner,
+                                schoolId,
+                                updatedAt: new Date().toISOString()
+                            }, { merge: true });
+                        });
+
+                        await batch.commit();
+                        console.log("Partner companies persisted to Firestore 'companies' collection.");
                     } catch (e) {
                         console.error("Failed to persist partners:", e);
                     }
@@ -719,9 +792,23 @@ export const useSchoolStore = create<SchoolState>()(
                 set({ partnerCompanies: updatedPartners });
             },
 
-            removePartner: (siret) => set((state) => ({
-                partnerCompanies: (state.partnerCompanies || []).filter(p => p.siret !== siret)
-            })),
+            removePartner: async (siret) => {
+                const state = get();
+                // 1. Local Update
+                set({
+                    partnerCompanies: (state.partnerCompanies || []).filter(p => p.siret !== siret)
+                });
+
+                // 2. Firestore Delete
+                // Ideally we need schoolId to verify ownership or just rely on Siret if used as ID.
+                // Since this is a simple delete by ID, we assume Siret = Doc ID as per import logic.
+                try {
+                    await deleteDoc(doc(db, 'companies', siret));
+                    console.log(`[SCHOOL_STORE] Partner ${siret} deleted from Firestore.`);
+                } catch (e) {
+                    console.error("Failed to delete partner from Firestore:", e);
+                }
+            },
 
             hiddenActivities: [],
             setHiddenActivities: (activities) => set({ hiddenActivities: activities }),
@@ -732,8 +819,8 @@ export const useSchoolStore = create<SchoolState>()(
             hiddenClasses: [],
             setHiddenClasses: (classes) => set({ hiddenClasses: classes }),
 
-            restoreTestData: () => set((state) => ({
-                classes: [
+            restoreTestData: async (schoolId?: string) => {
+                const testClasses: ClassDefinition[] = [
                     {
                         id: 'test-class-mef',
                         name: 'T.ASSP 1',
@@ -789,17 +876,69 @@ export const useSchoolStore = create<SchoolState>()(
                         ],
                         pfmpPeriods: []
                     }
-                ],
-                collaborators: [
+                ];
+
+                const testCollaborators: Collaborator[] = [
                     { id: 'c1', name: 'Marie Durand', email: 'marie.durand@ecole.fr', role: 'CPE' },
                     { id: 'c2', name: 'Paul Lefebvre', email: 'paul.lefebvre@ecole.fr', role: 'DDFPT' }
-                ],
-                schoolName: "Lycée d'Excellence Démo",
-                schoolAddress: "1 Avenue de la République, 75001 Paris",
-                schoolPhone: "01 23 45 67 89",
-                schoolHeadName: "M. le Proviseur Démo",
-                schoolHeadEmail: "demo@pledgeum.fr"
-            })),
+                ];
+
+                const newState = {
+                    classes: testClasses,
+                    collaborators: testCollaborators,
+                    schoolName: "Lycée d'Excellence Démo",
+                    schoolAddress: "1 Avenue de la République, 75001 Paris",
+                    schoolPhone: "01 23 45 67 89",
+                    schoolHeadName: "M. le Proviseur Démo",
+                    schoolHeadEmail: "demo@pledgeum.fr"
+                };
+
+                if (schoolId) {
+                    try {
+                        const batch = writeBatch(db);
+
+                        // 1. Persist Classes
+                        testClasses.forEach(cls => {
+                            const classRef = doc(db, 'classes', cls.id);
+                            batch.set(classRef, { ...cls, schoolId, updatedAt: new Date().toISOString() }, { merge: true });
+                        });
+
+                        // 2. Persist Collaborators (As Users for Persistence)
+                        testCollaborators.forEach(collab => {
+                            // Use email as key or a reliable ID?
+                            // Sandbox IDs are fixed in the array (c1, c2).
+                            // We will use c1, c2 as Doc ID for simplicity in Sandbox.
+                            const userRef = doc(db, 'users', collab.id);
+                            batch.set(userRef, {
+                                uid: collab.id,
+                                email: collab.email,
+                                role: collab.role.toLowerCase(), // Store role in lowercase as per User model usually
+                                schoolId: schoolId,
+                                profileData: {
+                                    firstName: collab.name.split(' ')[0],
+                                    lastName: collab.name.split(' ')[1] || '',
+                                },
+                                createdAt: new Date().toISOString()
+                            }, { merge: true });
+                        });
+
+                        // 3. Persist School Doc
+                        const schoolRef = doc(db, 'schools', schoolId);
+                        batch.set(schoolRef, {
+                            ...newState,
+                            updatedAt: new Date().toISOString()
+                        }, { merge: true });
+
+                        await batch.commit();
+                        console.log(`[SCHOOL_STORE] Sandbox data persisted for school: ${schoolId}`);
+
+                    } catch (e) {
+                        console.error("[SCHOOL_STORE] Failed to persist sandbox data:", e);
+                    }
+                }
+
+                set(newState);
+            },
 
             reset: () => set({
                 collaborators: [],
