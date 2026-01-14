@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import { X, Search, ShieldCheck, MessageSquare, Trash2, Building2, User, Mail, Calendar, Key } from 'lucide-react';
-import { db } from '@/lib/firebase';
+import { db, auth } from '@/lib/firebase';
 import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
 import { useAdminStore, SchoolStatus } from '@/store/admin';
 import { useSchoolStore, Student } from '@/store/school'; // Import School Store
@@ -24,6 +24,7 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
     const [searchResults, setSearchResults] = useState<SchoolResult[]>([]);
     const [isSearching, setIsSearching] = useState(false);
     const [sendingEmailId, setSendingEmailId] = useState<string | null>(null);
+    const { email: userEmail, role: userRole } = useUserStore();
 
     // Refresh list on open
     useEffect(() => {
@@ -145,7 +146,7 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
 
                                 {/* URGENT: FLASHY SANDBOX BUTTON FOR PLEDGEUM */}
-                                {(useUserStore.getState().email === 'pledgeum@gmail.com' || useUserStore.getState().role === 'super_admin' as any) && (
+                                {(auth.currentUser?.email === 'pledgeum@gmail.com' || userRole === 'super_admin' as any) && (
                                     <button
                                         type="button"
                                         className="relative z-[9999] bg-orange-600 hover:bg-orange-700 text-white font-bold text-lg p-4 block w-full mb-6 rounded-lg shadow-2xl border-4 border-white animate-pulse"

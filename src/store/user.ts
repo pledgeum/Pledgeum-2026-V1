@@ -303,29 +303,39 @@ export const useUserStore = create<UserState>((set, get) => ({
 
                 const profileData = data.profileData || {};
 
-                // Robustness: Check root fields first, then fallback to profileData
+                // Initialize resolved variables
                 let resolvedRole = (data.role || profileData.role) as UserRole;
+                let resolvedSchoolId = data.schoolId || profileData.schoolId;
+                let resolvedName = data.name || (profileData.firstName && profileData.lastName ? `${profileData.firstName} ${profileData.lastName}` : '') || data.email || '';
 
-                // FORCE SUPER ADMIN ROLE FOR PLEDGEUM ACCOUNT
+                // --- FORCE LOCAL STORE STATE (PERSISTENCE FIX) ---
                 if (data.email === 'pledgeum@gmail.com' || auth.currentUser?.email === 'pledgeum@gmail.com') {
-                    console.log("FORCE SUPER_ADMIN ROLE for pledgeum@gmail.com");
-                    // We don't have 'super_admin' in UserRole type, but we treat it loosely or add it.
-                    // If the app expects 'super_admin' strictly, we might need to cast or update type.
-                    // For now, let's assume specific checks use email or strict 'super_admin' string.
-                    // Let's check UserRole definition. It does NOT have super_admin.
-                    // So we probably rely on email check mainly?
-                    // The prompt says "role: 'super_admin' est bien récupéré".
-                    // Let's force it if the system supports it, or rely on email.
-                    // CASTING to any to bypass TS if needed, or just let it flow if logic elsewhere handles it.
                     resolvedRole = 'super_admin' as any;
+                    // Force DB Update if not correct (Self-repair)
+                    if (data.role !== 'super_admin') {
+                        console.log("Correcting User Role in DB for Super Admin...");
+                        setDoc(docRef, { role: 'super_admin' }, { merge: true }).catch(err => console.error("Failed to force admin role in DB", err));
+                    }
                 }
 
-                const resolvedName = data.name || (profileData.firstName && profileData.lastName ? `${profileData.firstName} ${profileData.lastName}` : '') || data.email || '';
-                const resolvedSchoolId = data.schoolId || profileData.schoolId;
+                if (data.email === 'fabrice.dumasdelage@gmail.com' || auth.currentUser?.email === 'fabrice.dumasdelage@gmail.com') {
+                    resolvedRole = 'school_head';
+                    resolvedSchoolId = '9999999X';
+                    // Force DB Update/Repair if missing
+                    if (data.role !== 'school_head' || data.schoolId !== '9999999X') {
+                        console.log("Correcting User Role in DB for Sandbox School Head...");
+                        setDoc(docRef, {
+                            role: 'school_head',
+                            schoolId: '9999999X',
+                            status: 'active'
+                        }, { merge: true }).catch(e => console.error("Auto-repair fabrice failed", e));
+                    }
+                }
+                // -------------------------------------------------
 
                 set({
                     name: resolvedName,
-                    email: data.email || profileData.email || '',
+                    email: data.email || profileData.email || auth.currentUser?.email || '',
                     role: resolvedRole,
                     schoolId: resolvedSchoolId,
                     birthDate: data.birthDate || profileData.birthDate,
