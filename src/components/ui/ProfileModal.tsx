@@ -5,6 +5,7 @@ import { X, Save, User, Building2, MapPin, Phone, Briefcase, GraduationCap, Cale
 import { searchSchools, SchoolResult } from '@/lib/educationApi';
 import { fetchCompanyBySiret } from '@/lib/companyApi';
 import { useUserStore, UserRole } from '@/store/user';
+import { useSchoolStore } from '@/store/school';
 import { Convention } from '@/store/convention';
 import { useAuth } from '@/context/AuthContext';
 import { CitySearchResults } from './CitySearchResults';
@@ -22,6 +23,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
 
     const { user, logout } = useAuth();
     const { role, profileData, updateProfileData, name, birthDate } = useUserStore();
+    const { schoolName, schoolAddress, schoolId: storeSchoolId } = useSchoolStore();
     const [formData, setFormData] = useState<Record<string, string>>({});
 
     const [loading, setLoading] = useState(false);
@@ -149,13 +151,18 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                         break;
                 }
             }
-            if (role === 'student' && !initialData.schoolName) {
-                // FALLBACK FOR TEST ACCOUNTS OR DATA ANOMALIES
-                // If student has no school, assign a default "Admin-defined" school so they aren't stuck.
-                initialData['schoolName'] = "Lycée Jean Jaurès (Test)";
-                initialData['schoolAddress'] = "1 Rue de la République";
-                initialData['schoolCity'] = "Paris";
-                initialData['schoolZip'] = "75001";
+            if (role === 'student') {
+                // Priority: School Store (Reactive) > Profile Data (Saved) > Empty
+                // If the store has loaded the school identity for the current user's schoolId, use it.
+                if (storeSchoolId && user?.uid && schoolName) {
+                    initialData['schoolName'] = schoolName;
+                    initialData['schoolAddress'] = schoolAddress;
+                    // We don't have city/zip separated in store easily usually, but address string has it.
+                    // Leave city/zip blank or parse if needed, but display uses 'schoolAddress' mostly.
+                } else if (!initialData.schoolName) {
+                    // No school found. Do NOT use hardcoded test data.
+                    // Leave empty to prompt user to search or wait for fetch.
+                }
             }
 
             setFormData(initialData);
@@ -163,7 +170,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
             // Reset initialization flag when closed
             initializedRef.current = false;
         }
-    }, [isOpen, profileData, conventionDefaults, role, user]); // Added user dependency
+    }, [isOpen, profileData, conventionDefaults, role, user, schoolName, schoolAddress, storeSchoolId]); // Added store dependencies for reactivity
 
     // School Search Effect
     useEffect(() => {

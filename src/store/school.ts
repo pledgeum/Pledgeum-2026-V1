@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { db } from '@/lib/firebase';
-import { doc, writeBatch, collection, setDoc, query, where, getDocs, deleteDoc } from 'firebase/firestore';
+import { doc, writeBatch, collection, setDoc, query, where, getDocs, deleteDoc, getDoc } from 'firebase/firestore';
 
 export type CollaboratorRole =
     | 'DDFPT'
@@ -198,6 +198,7 @@ export const useSchoolStore = create<SchoolState>()(
 
             fetchSchoolData: async (schoolId: string) => {
                 if (!schoolId) return;
+                const state = get();
 
                 try {
                     console.log(`[SCHOOL_STORE] Fetching data for school: ${schoolId}`);
@@ -250,12 +251,32 @@ export const useSchoolStore = create<SchoolState>()(
                         });
                     });
 
+                    // 4. Fetch School Identity (Metadata)
+                    const schoolDocRef = doc(db, "schools", schoolId);
+                    const schoolDocSnap = await getDoc(schoolDocRef);
+                    let identityUpdates = {};
+
+                    if (schoolDocSnap.exists()) {
+                        const sData = schoolDocSnap.data();
+                        identityUpdates = {
+                            schoolName: sData.name || state.schoolName,
+                            schoolAddress: sData.address || state.schoolAddress,
+                            schoolPhone: sData.phone || state.schoolPhone,
+                            schoolHeadName: sData.headName || state.schoolHeadName,
+                            schoolHeadEmail: sData.adminEmail || sData.email || state.schoolHeadEmail
+                        };
+                        console.log(`[SCHOOL_STORE] Loaded School Identity: ${sData.name}`);
+                    } else {
+                        console.warn(`[SCHOOL_STORE] School document not found for ID: ${schoolId}`);
+                    }
+
                     console.log(`[SCHOOL_STORE] Loaded ${loadedClasses.length} classes, ${collaborators.length} collaborators, and ${loadedPartners.length} partners.`);
 
                     set((state) => ({
                         classes: loadedClasses.sort((a, b) => a.name.localeCompare(b.name)),
                         collaborators: collaborators.length > 0 ? collaborators : state.collaborators,
-                        partnerCompanies: loadedPartners
+                        partnerCompanies: loadedPartners,
+                        ...identityUpdates
                     }));
 
                 } catch (e) {
