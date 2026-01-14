@@ -307,7 +307,7 @@ export default function LoginPage() {
             // The invitation code dictates the CURRENT school context.
             // Even if the user exists, we SWITCH them to this new school.
 
-            const newSchoolId = foundClassId?.split('_')[0] || "UNKNOWN"; // Extract UAI from classId (e.g. 0760001X_...)
+            const newSchoolId = foundClassId?.split('_')[0] || "UNKNOWN"; // Extract UAI from classId (e.g. 9999999X_...)
 
             // 1. Fetch Existing Profile (to preserve mobility data)
             let existingProfile: any = {};
@@ -320,31 +320,57 @@ export default function LoginPage() {
                 console.warn("Could not fetch existing profile, starting fresh.", e);
             }
 
-            // 2. FORCE School Switch & Merge Profile
+            // 2. FETCH STRICT SCHOOL IDENTITY (No API Search)
+            // We must rely on the School Document in Firestore which is the single source of truth
+            // for the establishment that issued the codes.
+            let canonicalSchoolData = {
+                name: foundStudent.schoolName || existingProfile.ecole_nom || '',
+                address: foundStudent.address || existingProfile.address || '',
+                city: foundStudent.city || existingProfile.city || '',
+                postalCode: foundStudent.postalCode || existingProfile.postalCode || ''
+            };
+
+            if (newSchoolId && newSchoolId !== 'UNKNOWN') {
+                try {
+                    const schoolDoc = await getDoc(doc(db, "schools", newSchoolId));
+                    if (schoolDoc.exists()) {
+                        const sData = schoolDoc.data();
+                        canonicalSchoolData = {
+                            name: sData.schoolName || canonicalSchoolData.name,
+                            address: sData.schoolAddress || canonicalSchoolData.address,
+                            city: sData.schoolCity || canonicalSchoolData.city,
+                            postalCode: sData.schoolPostalCode || canonicalSchoolData.postalCode
+                        };
+                        console.log(`[Activation] Resolved Canonical School Identity for ${newSchoolId}:`, canonicalSchoolData.name);
+                    }
+                } catch (err) {
+                    console.error("[Activation] Failed to fetch school document:", err);
+                }
+            }
+
+            // 3. FORCE School Switch & Merge Profile
             // We KEEP Name, Phone, Address, Diploma from existing profile if available (Identity Persistence)
             // We OVERWRITE Class and School info from Invitation (Context Switch)
 
-            // Helper to get non-empty value and ensure no undefined
             const pick = (a: any, b: any) => {
                 const val = (a !== undefined && a !== null && a !== '') ? a : b;
                 return val === undefined ? "" : val;
             };
 
             const mergedProfileData = {
-                // We construct the object explicitly to avoid purely spreading potential undefineds
                 // Identity
                 firstName: pick(existingProfile.firstName, foundStudent.firstName),
                 lastName: pick(existingProfile.lastName, foundStudent.lastName),
                 birthDate: pick(existingProfile.birthDate, foundStudent.birthDate),
 
-                // Address & Contact - Persist from old profile if not provided by new
+                // Address & Contact
                 address: pick(existingProfile.address, foundStudent.address),
                 postalCode: pick(existingProfile.postalCode, foundStudent.postalCode),
                 zipCode: pick(existingProfile.zipCode, foundStudent.zipCode),
                 city: pick(existingProfile.city, foundStudent.city),
                 phone: pick(existingProfile.phone, foundStudent.phone),
 
-                // Academic - Persist Diploma
+                // Academic
                 diploma: pick(existingProfile.diploma, foundStudent.diploma),
 
                 // FORCE NEW SCHOOL CONTEXT
@@ -352,13 +378,16 @@ export default function LoginPage() {
                 schoolId: newSchoolId || "",
                 class: foundStudent.className || existingProfile.class || "",
                 uai: newSchoolId || "",
-                ecole_nom: foundStudent.schoolName || existingProfile.ecole_nom || '',
+
+                // STRICT SCHOOL IDENTITY
+                ecole_nom: canonicalSchoolData.name,
+                ecole_ville: canonicalSchoolData.city,
 
                 // Role
                 role: foundStudent.role || existingProfile.role || 'student',
             };
 
-            // Final safety net: Ensure no undefined values remain in the object (Firestore hates undefined)
+            // Final safety net
             Object.keys(mergedProfileData).forEach(key => {
                 if ((mergedProfileData as any)[key] === undefined) {
                     (mergedProfileData as any)[key] = "";
@@ -373,19 +402,17 @@ export default function LoginPage() {
                 profileData: mergedProfileData
             });
 
-            // Also explicitly update the root user document 'schoolId' field for easier querying
-            // This enables the "Strict Filtering" in Convention Store to work immediately
+            // Also explicitly update the root user document 'schoolId' field
             await updateDoc(doc(db, "users", uid), {
                 schoolId: newSchoolId
             });
 
-            // 3. Update School Store with correct email (Linking in the new school's sub-collection)
+            // 4. Update School Store with correct email (Linking in the new school's sub-collection)
             if (foundClassId && foundStudent && foundStudent.id) {
-                // This updates the Student document within the School structure (classes/{classId}/students/{studentId})
                 updateStudent(foundClassId, foundStudent.id, { email: email });
             }
 
-            // 4. Success -> Redirect
+            // 5. Success -> Redirect
             router.push('/');
         };
 
