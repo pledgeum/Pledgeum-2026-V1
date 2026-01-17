@@ -171,9 +171,9 @@ export default function CompleteProfilePage() {
                                         key={field.name}
                                         label={field.label}
                                         value={{
-                                            street: profileData?.address || '',
-                                            postalCode: profileData?.zipCode || '',
-                                            city: profileData?.city || ''
+                                            street: typeof profileData?.address === 'string' ? profileData.address : profileData?.address?.street || '',
+                                            postalCode: profileData?.zipCode || (typeof profileData?.address === 'object' ? profileData?.address?.zipCode : '') || '',
+                                            city: profileData?.city || (typeof profileData?.address === 'object' ? profileData?.address?.city : '') || ''
                                         }}
                                         onChange={(addr) => {
                                             setValue('address', addr.street, { shouldValidate: true });
