@@ -134,13 +134,24 @@ export default function SignupPage() {
             }
 
             if (detectedRole && user) {
+                // Ensure profileData has mandatory fields
+                const displayName = detectedName || (user.email?.split('@')[0] || 'Utilisateur');
+                const [firstName, ...lastNameParts] = displayName.split(' ');
+                const lastName = lastNameParts.join(' ') || '';
+
+                const finalProfileData = {
+                    firstName,
+                    lastName,
+                    ...initialProfileData
+                };
+
                 // Auto-create Profile
                 await createUserProfile(user.uid, {
                     email: user.email || '',
                     role: detectedRole,
-                    name: detectedName || (user.email?.split('@')[0] || 'Utilisateur'),
+                    name: displayName,
                     birthDate: detectedBirthDate,
-                    profileData: initialProfileData
+                    profileData: finalProfileData
                 });
                 router.push('/'); // Go straight to Dashboard
             } else {
