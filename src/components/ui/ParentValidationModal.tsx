@@ -23,12 +23,20 @@ export function ParentValidationModal({ isOpen, onClose, onValidated, convention
 
     useEffect(() => {
         if (isOpen) {
-            // Prioritize Profile Data, fallback to Convention Data
+            let addrStr = '';
+            const addr = profileData?.address;
+            if (typeof addr === 'string') {
+                addrStr = addr;
+            } else if (addr && typeof addr === 'object') {
+                const zip = (addr as any).zipCode || (addr as any).postalCode || '';
+                addrStr = `${addr.street || ''}, ${zip} ${addr.city || ''}`.trim();
+            }
+
             setFormData({
                 rep_legal_nom: name || convention.rep_legal_nom || '',
                 rep_legal_email: email || convention.rep_legal_email || '',
                 rep_legal_tel: profileData?.phone || convention.rep_legal_tel || '',
-                rep_legal_adresse: profileData?.address || convention.rep_legal_adresse || ''
+                rep_legal_adresse: addrStr || convention.rep_legal_adresse || ''
             });
         }
     }, [isOpen, convention, name, email, profileData]);
@@ -41,9 +49,7 @@ export function ParentValidationModal({ isOpen, onClose, onValidated, convention
             if (auth.currentUser) {
                 await updateProfileData(auth.currentUser.uid, {
                     phone: formData.rep_legal_tel,
-                    address: formData.rep_legal_adresse,
-                    // Note: name/email updates might require specific handling or are read-only from Auth in some flows,
-                    // but we pass them to profileData just in case for consistency.
+                    // address: formData.rep_legal_adresse, // Cannot update structured address from string
                     name: formData.rep_legal_nom,
                     email: formData.rep_legal_email
                 });
