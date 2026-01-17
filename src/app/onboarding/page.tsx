@@ -186,10 +186,14 @@ export default function OnboardingPage() {
             const legalReps = [finalRep1];
             if (finalRep2) legalReps.push(finalRep2);
 
+            const mapAddr = (a: Address) => ({ street: a.street, city: a.city, zipCode: a.postalCode });
+
             const profilePayload = {
+                firstName: profileData?.firstName || (currentName || user?.displayName || '').split(' ')[0] || 'Prénom',
+                lastName: profileData?.lastName || (currentName || user?.displayName || '').split(' ').slice(1).join(' ') || 'Nom',
                 phone,
-                address,
-                legalRepresentatives: legalReps
+                address: mapAddr(address),
+                legalRepresentatives: legalReps.map(lr => ({ ...lr, address: mapAddr(lr.address) }))
             };
 
             if (user) {
