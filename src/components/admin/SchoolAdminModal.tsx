@@ -2254,7 +2254,9 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                         onClose={() => setImportReviewData(null)}
                         data={importReviewData}
                         onConfirm={(selectedData) => {
-                            importGlobalStructure(selectedData);
+                            // Robust ID resolution
+                            const targetId = schoolId || (email === 'fabrice.dumasdelage@gmail.com' ? '9999999X' : undefined);
+                            importGlobalStructure(selectedData, targetId);
                             setImportReviewData(null);
                             alert(`${selectedData.length} classes traitées avec succès.`);
                         }}
@@ -2269,7 +2271,8 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                         onClose={() => setTeacherImportReviewData(null)}
                         data={teacherImportReviewData}
                         onConfirm={(selectedData) => {
-                            importGlobalTeachers(selectedData);
+                            const targetId = schoolId || (email === 'fabrice.dumasdelage@gmail.com' ? '9999999X' : undefined);
+                            importGlobalTeachers(selectedData, targetId);
                             setTeacherImportReviewData(null);
                             alert(`${selectedData.length} professeurs importés avec succès.`);
                         }}

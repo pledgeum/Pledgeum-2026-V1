@@ -18,13 +18,14 @@ interface ProfileModalProps {
     blocking?: boolean;
 }
 
+
 export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = false }: ProfileModalProps) {
     if (!isOpen) return null;
 
     const { user, logout } = useAuth();
     const { role, profileData, updateProfileData, name, birthDate, schoolId: storeSchoolId } = useUserStore();
     const { schoolName, schoolAddress } = useSchoolStore();
-    const [formData, setFormData] = useState<Record<string, string>>({});
+    const [formData, setFormData] = useState<Record<string, any>>({});
 
     const [loading, setLoading] = useState(false);
     const [showParent, setShowParent] = useState(false);
@@ -46,7 +47,8 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
 
             initializedRef.current = true; // Mark as initialized
 
-            const initialData: Record<string, string> = { ...profileData };
+            // Allow objects (Address, Arrays) in initial data
+            const initialData: Record<string, any> = { ...profileData };
 
             // Helper to set default if empty
             const setDefault = (key: string, value?: string | number | null) => {
@@ -141,6 +143,9 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                         setDefault('address', conventionDefaults.ent_adresse);
                         setDefault('function', conventionDefaults.ent_rep_fonction);
                         break;
+                    case 'school_head': // Default for School Head function if present (rarely in conventionDefaults but consistency)
+                        setDefault('function', 'Proviseur');
+                        break;
                     case 'tutor':
                         setDefault('function', conventionDefaults.tuteur_fonction);
                         break;
@@ -152,25 +157,33 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                 }
             }
             if (role === 'student') {
-                // Priority: School Store (Reactive) > Profile Data (Saved) > Empty
-                // If the store has loaded the school identity for the current user's schoolId, use it.
+                // STRICT ISOLATION from User Request
+                // 1. Inherit UAI from Profile or Store
+                let uaiToUse = (profileData as any).uai || storeSchoolId || '';
 
-                // SPECIFIC FIX FOR SANDBOX (9999999X)
-                // Guaranteed fallback for 'Toutfaux' users to prevent infinite loading spinner
-                if (storeSchoolId === '9999999X' || schoolName === "Mon LYCEE TOUTFAUX") {
+                // Fallback: Infer from schoolName for Sandbox if UAI is missing
+                if (!uaiToUse && schoolName === "Mon LYCEE TOUTFAUX") {
+                    uaiToUse = "9999999X";
+                }
+
+                // CRITICAL FIX: Handle 'global-school' legacy/default value as Sandbox
+                if (uaiToUse === 'global-school') {
+                    uaiToUse = "9999999X";
+                }
+
+                initialData['uai'] = uaiToUse;
+
+                // 2. Synchronous Fallback for Sandbox (Prevents infinite spinner)
+                // This ensures that for the known Sandbox case, we display data immediately
+                if (uaiToUse === '9999999X') {
                     initialData['schoolName'] = "Mon LYCEE TOUTFAUX";
                     initialData['schoolAddress'] = "12 Rue Ampère, 76500 Elbeuf";
                     initialData['schoolCity'] = "Elbeuf";
                     initialData['schoolZip'] = "76500";
-                } else if (storeSchoolId && user?.uid && schoolName) {
-                    initialData['schoolName'] = schoolName;
-                    initialData['schoolAddress'] = schoolAddress;
-                    // We don't have city/zip separated in store easily usually, but address string has it.
-                    // Leave city/zip blank or parse if needed, but display uses 'schoolAddress' mostly.
-                } else if (!initialData.schoolName) {
-                    // No school found. Do NOT use hardcoded test data.
-                    // Leave empty to prompt user to search or wait for fetch.
                 }
+
+                // 3. Fetch School Data Internally (Async handled in separate effect for real UAIs)
+                // We initially set what we have, but we trigger a fetch if UAI is present
             }
 
             setFormData(initialData);
@@ -180,9 +193,51 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
         }
     }, [isOpen, profileData, conventionDefaults, role, user, schoolName, schoolAddress, storeSchoolId]); // Added store dependencies for reactivity
 
-    // School Search Effect
+    // STRICT ISOLATION: Internal School Fetch for Students
+    useEffect(() => {
+        const fetchInternalSchool = async () => {
+            if (role !== 'student' || !formData.uai || !isOpen) return;
+
+            try {
+                const { doc, getDoc } = await import('firebase/firestore');
+                const { db } = await import('@/lib/firebase');
+
+                const schoolDoc = await getDoc(doc(db, "schools", formData.uai));
+                if (schoolDoc.exists()) {
+                    const data = schoolDoc.data();
+                    setFormData(prev => ({
+                        ...prev,
+                        schoolName: data.schoolName || prev.schoolName,
+                        schoolAddress: data.schoolAddress || prev.schoolAddress,
+                        schoolCity: data.schoolCity || prev.schoolCity,
+                        schoolZip: data.schoolPostalCode || prev.schoolZip,
+                    }));
+                } else {
+                    // Fallback for Sandbox if NOT in DB
+                    if (formData.uai === '9999999X') {
+                        setFormData(prev => ({
+                            ...prev,
+                            schoolName: "Mon LYCEE TOUTFAUX",
+                            schoolAddress: "12 Rue Ampère, 76500 Elbeuf",
+                            schoolCity: "Elbeuf",
+                            schoolZip: "76500",
+                        }));
+                    }
+                }
+            } catch (err) {
+                console.error("Failed to fetch internal school data", err);
+            }
+        };
+
+        fetchInternalSchool();
+    }, [role, formData.uai, isOpen]);
+
+    // School Search Effect (DISABLED FOR STUDENTS)
     useEffect(() => {
         const search = async () => {
+            // STRICT ISOLATION: Students cannot search. They inherit from UAI.
+            if (role === 'student') return;
+
             if (schoolQuery.length > 2 || cityQuery.length > 2) {
                 setIsSearchingSchool(true);
                 try {
@@ -477,6 +532,12 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                                             <div className="bg-blue-50 p-3 rounded-lg border border-blue-100 relative group">
                                                 <h4 className="font-semibold text-blue-900">{formData.schoolName}</h4>
                                                 <p className="text-sm text-blue-700">{formData.schoolAddress}</p>
+                                                {/* UAI Display */}
+                                                <div className="mt-2 flex items-center gap-2 text-xs font-mono text-blue-600 bg-blue-100/50 px-2 py-1 rounded w-fit">
+                                                    <span className="font-bold">UAI / RNE :</span>
+                                                    <span>{formData.uai || 'Non défini'}</span>
+                                                </div>
+
                                                 {/* Only allow removing school if NOT a student (Admins/Teachers might need to change it, but students are assigned) */}
                                                 {role !== 'student' && (
                                                     <button
@@ -658,6 +719,21 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                     {(role === 'company_head' || role === 'company_head_tutor') && (
                         <>
                             {renderField("companyName", "Raison Sociale", <Building2 className="w-4 h-4" />)}
+                            {/* ... SIRET block logic is complex, keeping unchanged implies using TargetContent carefully or simpler edits if context allows ... */}
+                            {/* Actually, I am just replacing the condition block to include school_head or add a new block */}
+                        </>
+                    )}
+
+                    {/* NEW BLOCK FOR SCHOOL HEAD */}
+                    {role === 'school_head' && (
+                        <>
+                            {renderField("function", "Titre / Fonction (ex: Proviseur)", <Briefcase className="w-4 h-4" />)}
+                        </>
+                    )}
+
+                    {(role === 'company_head' || role === 'company_head_tutor') && (
+                        <>
+                            {/* ... SIRET Code ... */}
                             <div className="space-y-1 relative">
                                 <label className="text-sm font-medium text-gray-700 flex items-center gap-2">
                                     <Building2 className="w-4 h-4" />

@@ -872,17 +872,19 @@ export default function Home() {
             </div>
           </div>
         )}
-        <ProfileModal
-          isOpen={isProfileModalOpen}
-          onClose={() => {
-            console.log("Home: onClose triggered from ProfileModal");
-            setIsProfileModalOpen(false);
-            setHasDismissedProfileModal(true);
-            console.log("Home: Modal closed and dismissed set to true");
-          }}
-          conventionDefaults={getConventionsByRole(role, user.email || '', user.uid)[0]}
-          blocking={false} // NEVER BLOCK
-        />
+        {isProfileModalOpen && (
+          <ProfileModal
+            isOpen={true}
+            onClose={() => {
+              console.log("Home: onClose triggered from ProfileModal");
+              setIsProfileModalOpen(false);
+              setHasDismissedProfileModal(true);
+              console.log("Home: Modal closed and dismissed set to true");
+            }}
+            conventionDefaults={getConventionsByRole(role, user.email || '', user.uid)[0]}
+            blocking={false} // NEVER BLOCK
+          />
+        )}
 
         {/* Helper to find the class managed by this teacher */}
         <TrackingMatrixModal

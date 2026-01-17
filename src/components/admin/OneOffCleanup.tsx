@@ -3,7 +3,8 @@
 import { useState, useEffect } from 'react';
 import { collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-import { Loader2, Trash2, AlertTriangle, CheckCircle, RefreshCw } from 'lucide-react';
+import { Loader2, Trash2, AlertTriangle, CheckCircle, RefreshCw, Hammer } from 'lucide-react';
+import { migrateAllUsers } from '@/lib/migrations/migrateUsers';
 
 interface DuplicateGroup {
     email: string;
@@ -12,6 +13,21 @@ interface DuplicateGroup {
 
 export default function OneOffCleanup() {
     const [loading, setLoading] = useState(false);
+
+    const handleSchemaMigration = async () => {
+        if (!confirm("⚠️ ACTION IRRÉVERSIBLE : Restructuration complète vers le nouveau schéma User. Continuer ?")) return;
+        setLoading(true);
+        setStatus("Migration en cours...");
+        try {
+            await migrateAllUsers();
+            setStatus("Migration terminée avec succès !");
+        } catch (e: any) {
+            setStatus("Erreur: " + e.message);
+        } finally {
+            setLoading(false);
+        }
+    };
+
     const [duplicates, setDuplicates] = useState<DuplicateGroup[]>([]);
     const [status, setStatus] = useState<string>('');
     const [deletedCount, setDeletedCount] = useState(0);
@@ -132,6 +148,15 @@ export default function OneOffCleanup() {
                 >
                     {loading ? <Loader2 className="animate-spin mr-2" /> : <RefreshCw className="mr-2" />}
                     Scanner les doublons
+                </button>
+
+                <button
+                    onClick={handleSchemaMigration}
+                    disabled={loading}
+                    className="px-4 py-2 bg-purple-600 text-white rounded hover:bg-purple-700 flex items-center"
+                >
+                    {loading ? <Loader2 className="animate-spin mr-2" /> : <Hammer className="mr-2" />}
+                    MIGRATE SCHEMA
                 </button>
             </div>
 

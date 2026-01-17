@@ -31,7 +31,7 @@ type Step1Data = z.infer<typeof stepSchema>;
 
 export function Step1School() {
     const { setData, nextStep } = useWizardStore();
-    const { profileData, role, email } = useUserStore();
+    const { profileData, role, email, uai: userUai } = useUserStore();
     const { allowedConventionTypes, schoolName, schoolAddress, schoolPhone, schoolHeadName, schoolHeadEmail, classes } = useSchoolStore();
     const [cityQuery, setCityQuery] = useState('');
     const [schoolQuery, setSchoolQuery] = useState('');
@@ -86,23 +86,87 @@ export function Step1School() {
                 // We treat 'demo_access@pledgeum.fr' as a student to demonstrate the UI locking
                 const isSchoolLocked = role === 'student' || email === 'pledgeum@gmail.com' || email === 'demo_access@pledgeum.fr';
 
-                useEffect(() => {
-                    // Always overwrite if locked to ensure consistency with admin settings
-                    // Use reactive variables directly
-                    if (isSchoolLocked || !form.getValues('ecole_nom')) {
-                        if (schoolName) form.setValue('ecole_nom', schoolName);
-                        if (schoolAddress) form.setValue('ecole_adresse', schoolAddress);
-                        if (schoolPhone) form.setValue('ecole_tel', schoolPhone);
-                        if (schoolHeadName) form.setValue('ecole_chef_nom', schoolHeadName);
-                        if (schoolHeadEmail) form.setValue('ecole_chef_email', schoolHeadEmail);
-                    }
+                // DEBUG: Inspect Store State for Step 1 Issue
+                console.log("[Step1School] Debug:", {
+                    schoolName,
+                    schoolAddress,
+                    isSchoolLocked,
+                    role,
+                    email
+                });
 
-                    // Auto-fill Teacher if locked
+                useEffect(() => {
+                    const syncSchoolData = async () => {
+                        // 1. Identify UAI from Profile (Source of Truth)
+                        const uai = userUai || (profileData as any).uai || (profileData as any).schoolId || '';
+                        console.log("CONVENTION_DEBUG: UAI trouvé =", uai);
+
+                        // Only fetch/overwrite if we are in a locked mode (Student) or if the form is empty
+                        // if (!isSchoolLocked && form.getValues('ecole_nom')) return; 
+                        // Note: For students (isSchoolLocked), we ALWAYS run this to ensure correctness.
+
+                        let fetchedData: any = null;
+
+                        // 2. Handle Sandbox / Legacy
+                        // Normalize 'global-school' or explicit Sandbox UAI
+                        if (uai === '9999999X' || uai === 'global-school' || schoolName === 'Mon LYCEE TOUTFAUX') {
+                            fetchedData = {
+                                name: "Mon LYCEE TOUTFAUX",
+                                address: "12 Rue Ampère, 76500 Elbeuf",
+                                phone: "02 35 77 77 77",
+                                headName: "Proviseur Sandbox",
+                                email: "admin@toutfaux.fr"
+                            };
+                        } else if (uai) {
+                            try {
+                                const { doc, getDoc } = await import('firebase/firestore');
+                                const { db } = await import('@/lib/firebase');
+                                const snap = await getDoc(doc(db, "schools", uai));
+                                if (snap.exists()) fetchedData = snap.data();
+                            } catch (err) {
+                                console.error("CONVENTION_DEBUG: Error fetching school", err);
+                            }
+                        }
+
+                        console.log("CONVENTION_DEBUG: Données reçues =", fetchedData);
+
+                        // 3. Apply Data
+                        if (fetchedData) {
+                            // Map Firestore 'schools' schema to Wizard Form
+                            // We handle multiple potential field names from the DB schema
+                            const name = fetchedData.name || fetchedData.schoolName;
+                            const address = fetchedData.address || fetchedData.schoolAddress || `${fetchedData.street || ''} ${fetchedData.zipCode || ''} ${fetchedData.city || ''}`;
+                            const phone = fetchedData.phone || fetchedData.schoolPhone;
+                            const headName = fetchedData.headName || fetchedData.principalName || fetchedData.schoolHeadName;
+                            const headEmail = fetchedData.email || fetchedData.adminEmail || fetchedData.schoolHeadEmail;
+
+                            // Force update if locked, or if empty
+                            if (isSchoolLocked || !form.getValues('ecole_nom')) {
+                                if (name) form.setValue('ecole_nom', name);
+                                if (address) form.setValue('ecole_adresse', address);
+                                if (phone) form.setValue('ecole_tel', phone);
+                                if (headName) form.setValue('ecole_chef_nom', headName);
+                                if (headEmail) form.setValue('ecole_chef_email', headEmail);
+                            }
+                        } else if (schoolName && (!form.getValues('ecole_nom') || isSchoolLocked)) {
+                            // Fallback to Store if direct fetch returned nothing (e.g. invalid UAI) but Store has data
+                            // This covers cases where 'uai' might be missing but 'schoolName' is in store.
+                            form.setValue('ecole_nom', schoolName);
+                            if (schoolAddress) form.setValue('ecole_adresse', schoolAddress);
+                            if (schoolPhone) form.setValue('ecole_tel', schoolPhone);
+                            if (schoolHeadName) form.setValue('ecole_chef_nom', schoolHeadName);
+                            if (schoolHeadEmail) form.setValue('ecole_chef_email', schoolHeadEmail);
+                        }
+                    };
+
+                    syncSchoolData();
+
+                    // Auto-fill Teacher if locked (Keep existing logic)
                     if (lockedMainTeacher) {
                         form.setValue('prof_nom', `${lockedMainTeacher.firstName} ${lockedMainTeacher.lastName}`);
                         form.setValue('prof_email', lockedMainTeacher.email);
                     }
-                }, [form, schoolName, schoolAddress, schoolPhone, schoolHeadName, schoolHeadEmail, lockedMainTeacher, isSchoolLocked]); // Full reactivity
+                }, [form, isSchoolLocked, profileData, schoolName, schoolAddress, schoolPhone, schoolHeadName, schoolHeadEmail, lockedMainTeacher]);
 
                 // Auto-reset convention type if current value is not allowed
                 useEffect(() => {
@@ -207,6 +271,7 @@ export function Step1School() {
                                 type="text"
                                 disabled={isSchoolLocked}
                                 readOnly={isSchoolLocked}
+                                style={isSchoolLocked ? { opacity: 1, WebkitTextFillColor: '#111827', color: '#111827' } : {}}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-400 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500 disabled:opacity-100 disabled:text-gray-900 read-only:text-gray-900",
                                     isSchoolLocked && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed",
@@ -223,6 +288,7 @@ export function Step1School() {
                                 rows={2}
                                 disabled={isSchoolLocked}
                                 readOnly={isSchoolLocked}
+                                style={isSchoolLocked ? { opacity: 1, WebkitTextFillColor: '#111827', color: '#111827' } : {}}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-400 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500 disabled:opacity-100 disabled:text-gray-900 read-only:text-gray-900",
                                     isSchoolLocked && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed",
@@ -239,6 +305,7 @@ export function Step1School() {
                                 type="tel"
                                 disabled={isSchoolLocked}
                                 readOnly={isSchoolLocked}
+                                style={isSchoolLocked ? { opacity: 1, WebkitTextFillColor: '#111827', color: '#111827' } : {}}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-400 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500 disabled:opacity-100 disabled:text-gray-900 read-only:text-gray-900",
                                     isSchoolLocked && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed",
@@ -260,6 +327,7 @@ export function Step1School() {
                                 type="text"
                                 disabled={isSchoolLocked}
                                 readOnly={isSchoolLocked}
+                                style={isSchoolLocked ? { opacity: 1, WebkitTextFillColor: '#111827', color: '#111827' } : {}}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-400 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500 disabled:opacity-100 disabled:text-gray-900 read-only:text-gray-900",
                                     isSchoolLocked && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed",
@@ -275,6 +343,7 @@ export function Step1School() {
                                 type="email"
                                 disabled={isSchoolLocked}
                                 readOnly={isSchoolLocked}
+                                style={isSchoolLocked ? { opacity: 1, WebkitTextFillColor: '#111827', color: '#111827' } : {}}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-400 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500 disabled:opacity-100 disabled:text-gray-900 read-only:text-gray-900",
                                     isSchoolLocked && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed",

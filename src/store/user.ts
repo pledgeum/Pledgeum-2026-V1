@@ -1,10 +1,9 @@
-
 import { create } from 'zustand';
 import { db, auth } from '@/lib/firebase';
 import { doc, getDoc, setDoc, updateDoc, collection, query, where, getDocs } from 'firebase/firestore';
-import { useAdminStore } from './admin';
+import { User, UserRole, UserProfileData, LegalRepresentative } from '@/types/user';
 
-export type UserRole = 'student' | 'teacher' | 'teacher_tracker' | 'school_head' | 'company_head' | 'tutor' | 'parent' | 'company_head_tutor' | 'ddfpt' | 'business_manager' | 'assistant_manager' | 'stewardship_secretary' | 'at_ddfpt';
+export type { UserRole };
 
 export interface Notification {
     id: string;
@@ -17,26 +16,38 @@ export interface Notification {
 }
 
 interface UserState {
+    // Flattened convenient accessors (Derived from User doc)
     name: string;
     role: UserRole;
     email: string;
-    schoolId?: string; // NEW: For data isolation
-    birthDate?: string; // NEW
-    profileData: Record<string, any>; // NEW
-    monitoringTeacher?: { id: string, name: string, email: string }; // For students
+    uai?: string; // Replaces 'schoolId' as the primary link key
+    schoolId?: string; // Alias for uai for backward compatibility
+
+    // Structured Data
+    profileData: UserProfileData;
+    legalRepresentatives: LegalRepresentative[];
+
+    // Metadata
+    birthDate?: string; // Convenience accessor
+    hasAcceptedTos: boolean | null;
+
+    monitoringTeacher?: { id: string, name: string, email: string };
     notifications: Notification[];
     unreadCount: number;
-    hasAcceptedTos: boolean | null; // (null = loading/unknown)
-    isLoadingProfile: boolean; // Syncs with fetchUserProfile
-    setUser: (name: string, role: UserRole, email: string, schoolId?: string) => void;
+    isLoadingProfile: boolean;
+
+    // Actions
+    setUser: (name: string, role: UserRole, email: string, uai?: string) => void;
     setRole: (role: UserRole) => void;
     addNotification: (notification: Omit<Notification, 'id' | 'read' | 'date'>) => void;
     markAsRead: (id: string) => void;
     clearNotifications: () => void;
+
     fetchNotifications: (userEmail: string) => Promise<void>;
     fetchUserProfile: (uid: string) => Promise<boolean>;
-    createUserProfile: (uid: string, data: { email: string, role: UserRole, name: string, birthDate?: string, profileData?: Record<string, any> }) => Promise<void>;
-    updateProfileData: (uid: string, data: Record<string, any>) => Promise<void>;
+    createUserProfile: (uid: string, data: Partial<User> & { name?: string, schoolId?: string, birthDate?: string }) => Promise<void>;
+    updateProfileData: (uid: string, data: Partial<UserProfileData>) => Promise<void>;
+    updateLegalRepresentatives: (uid: string, reps: LegalRepresentative[]) => Promise<void>;
     acceptTos: (uid: string) => Promise<void>;
     trackConnection: (uid: string) => Promise<void>;
     anonymizeAccount: (uid: string) => Promise<void>;
@@ -45,17 +56,24 @@ interface UserState {
 
 export const useUserStore = create<UserState>((set, get) => ({
     name: '',
-    role: null as unknown as UserRole, // Initialize as null to prevent premature role assumption
+    role: null as unknown as UserRole,
     email: '',
+    uai: undefined,
     schoolId: undefined,
-    profileData: {}, // NEW
+    profileData: {
+        firstName: '',
+        lastName: '',
+    },
+    legalRepresentatives: [],
     monitoringTeacher: undefined,
     notifications: [],
     unreadCount: 0,
     hasAcceptedTos: null,
     isLoadingProfile: false,
-    setUser: (name, role, email, schoolId) => set({ name, role, email, schoolId }),
+
+    setUser: (name, role, email, uai) => set({ name, role, email, uai, schoolId: uai }),
     setRole: (role) => set({ role }),
+
     addNotification: (notif) => set((state) => {
         const newNotif: Notification = {
             ...notif,
@@ -68,356 +86,126 @@ export const useUserStore = create<UserState>((set, get) => ({
             unreadCount: state.unreadCount + 1
         };
     }),
+
     clearNotifications: () => set({ notifications: [], unreadCount: 0 }),
 
     fetchUserProfile: async (uid: string) => {
         console.log("UserStore: fetchUserProfile called for", uid);
         set({ isLoadingProfile: true });
-
-        // --- DEMO MODE INJECTION ---
-        // If the authenticated user is the demo account, we inject a mock profile
-        // and bypass Firestore completely.
         const currentUser = auth.currentUser;
-        console.log("UserStore: currentUser in store is", currentUser?.email);
-
-        if (currentUser?.email?.startsWith('demo') && currentUser?.email?.endsWith('@pledgeum.fr')) {
-            console.log("[DEMO] Loading Mock Profile for Demo User:", currentUser.email);
-
-            // Import demo store dynamically
-            const { useDemoStore } = await import('./demo');
-            useDemoStore.getState().setDemoMode(true);
-
-            // Derive role from email if present (robustness across refreshes)
-            let currentDemoRole = useDemoStore.getState().demoRole;
-            const email = currentUser.email;
-
-            if (email.includes('+student')) currentDemoRole = 'student';
-            else if (email.includes('+teacher')) currentDemoRole = 'teacher';
-            else if (email.includes('+tutor')) currentDemoRole = 'tutor';
-            else if (email.includes('+bde')) currentDemoRole = 'business_manager';
-            else if (email.includes('+ddfpt')) currentDemoRole = 'ddfpt';
-            else if (email.includes('+head')) currentDemoRole = 'school_head';
-
-            // Sync store with derived role
-            if (currentDemoRole !== useDemoStore.getState().demoRole) {
-                useDemoStore.getState().setDemoRole(currentDemoRole);
-            }
-
-            console.log("[DEMO] Selected Role:", currentDemoRole);
-
-            let mockProfile: Partial<UserState> = {
-                name: "Utilisateur Démo",
-                email: "demo_access@pledgeum.fr",
-                role: 'school_head',
-                birthDate: "1980-01-01",
-                profileData: { ecole_nom: "Lycée d'Excellence Démo", ecole_ville: "Paris" },
-                hasAcceptedTos: true
-            };
-
-            switch (currentDemoRole) {
-                case 'student':
-                    mockProfile = {
-                        ...mockProfile,
-                        name: "Élève Démo",
-                        email: "demo+student@pledgeum.fr",
-                        role: 'student',
-                        birthDate: "2005-06-15",
-                        profileData: {
-                            ...mockProfile.profileData,
-                            class: "2NDE 1", // Matches a likely existing class or one we should ensure exists
-                            firstName: "Élève",
-                            lastName: "Démo",
-                            email: "demo+student@pledgeum.fr",
-                            schoolId: "DEMO-SCHOOL-01", // Mock School ID for Demo
-                            birthDate: "2005-06-15",
-                            classe: "2NDE 1",
-                            address: "10 Rue de la Paix",
-                            postalCode: "75002",
-                            zipCode: "75002",
-                            city: "Paris",
-                            phone: "0612345678",
-                            diploma: "Bac pro MSPC",
-                            legalRepresentatives: [
-                                {
-                                    firstName: "Jean",
-                                    lastName: "Dupont",
-                                    email: "demo+parent@pledgeum.fr",
-                                    phone: "0699887766",
-                                    address: {
-                                        street: "10 Rue de la Paix",
-                                        postalCode: "75002",
-                                        city: "Paris"
-                                    },
-                                    role: "Responsable Légal 1"
-                                }
-                            ]
-                        }
-                    };
-                    break;
-                case 'teacher':
-                    mockProfile = {
-                        ...mockProfile,
-                        name: "Professeur Démo",
-                        email: "demo+teacher@pledgeum.fr",
-                        role: 'teacher',
-                        profileData: {
-                            ...mockProfile.profileData,
-                            firstName: "Professeur",
-                            lastName: "Démo",
-                            email: "demo+teacher@pledgeum.fr",
-                            subjects: ["Mathématiques", "Sciences"]
-                        }
-                    };
-                    break;
-                case 'tutor':
-                    mockProfile = {
-                        ...mockProfile,
-                        name: "Tuteur Démo",
-                        email: "demo+tutor@pledgeum.fr",
-                        role: 'tutor',
-                        profileData: {
-                            ...mockProfile.profileData,
-                            firstName: "Tuteur",
-                            lastName: "Démo",
-                            email: "demo+tutor@pledgeum.fr",
-                            companyName: "Entreprise Partenaire (Démo)",
-                            jobTitle: "Maître de Stage"
-                        }
-                    };
-                    break;
-                case 'business_manager':
-                    mockProfile = {
-                        ...mockProfile,
-                        name: "Responsable BDE Démo",
-                        email: "demo+bde@pledgeum.fr",
-                        role: 'business_manager',
-                        profileData: {
-                            ...mockProfile.profileData,
-                            email: "demo+bde@pledgeum.fr"
-                        }
-                    };
-                    break;
-                case 'ddfpt':
-                    mockProfile = {
-                        ...mockProfile,
-                        name: "DDFPT Démo",
-                        email: "demo+ddfpt@pledgeum.fr",
-                        role: 'ddfpt',
-                        profileData: {
-                            ...mockProfile.profileData,
-                            email: "demo+ddfpt@pledgeum.fr"
-                        }
-                    };
-                    break;
-                case 'school_head':
-                default:
-                    mockProfile = {
-                        ...mockProfile,
-                        name: "Proviseur Démo",
-                        email: "demo+head@pledgeum.fr",
-                        role: 'school_head',
-                        profileData: {
-                            ...mockProfile.profileData,
-                            email: "demo+head@pledgeum.fr"
-                        }
-                    };
-                    break;
-            }
-
-            set({
-                ...mockProfile,
-                isLoadingProfile: false
-            } as any);
-
-            return true;
-        }
-
-
-        // --- SANDBOX USER HANDLING ---
-        // Specific hardcoded handling for the sandbox test user to ensure they are always School Head of the Sandbox School
-        if (currentUser?.email === 'fabrice.dumasdelage@gmail.com') {
-            console.log("[SANDBOX] Initializing Sandbox User: Fabrice Dumasdelage");
-
-            // Force Authorization in Admin Store so buttons appear
-            useAdminStore.getState().authorizeSchool({
-                id: "9999999X",
-                name: "Mon LYCEE TOUTFAUX",
-                city: "Elbeuf",
-                status: 'ADHERENT',
-                email: "fabrice.dumasdelage@gmail.com"
-            });
-
-            const sandboxData = {
-                name: "Fabrice Dumasdelage",
-                email: "fabrice.dumasdelage@gmail.com",
-                role: 'school_head' as UserRole,
-                schoolId: "9999999X",
-                birthDate: "1980-01-01",
-                profileData: {
-                    firstName: "Fabrice",
-                    lastName: "Dumasdelage",
-                    email: "fabrice.dumasdelage@gmail.com",
-                    phone: "0102030405",
-                    ecole_nom: "Mon LYCEE TOUTFAUX",
-                    ecole_ville: "Elbeuf",
-                    role: "Proviseur",
-                    function: "Proviseur"
-                },
-                hasAcceptedTos: true
-            };
-
-            // Force update/create in Firestore to ensure persistence for real login flows
-            try {
-                const userRef = doc(db, "users", uid);
-                await setDoc(userRef, {
-                    ...sandboxData,
-                    lastConnectionAt: new Date().toISOString()
-                }, { merge: true });
-
-                set({
-                    ...sandboxData,
-                    isLoadingProfile: false
-                });
-                return true;
-            } catch (e) {
-                console.error("Error initializing sandbox user:", e);
-                // Fallback to local set if DB fails (shouldn't happen often)
-                set({
-                    ...sandboxData,
-                    isLoadingProfile: false
-                });
-                return true;
-            }
-        }
-        // -----------------------------
-
-        // ---------------------------
 
         try {
-            console.log(`[USER_STORE] AUTH_UID: ${uid} | STARTING FETCH`);
-
             const docRef = doc(db, "users", uid);
-            let docSnap = await getDoc(docRef);
-            let data = docSnap.exists() ? docSnap.data() : null;
+            const docSnap = await getDoc(docRef);
 
-            // 2. Fallback: Search by Email (Legacy/Migration)
-            // Only if UID lookup failed and we have an email to check
-            if (!data && currentUser?.email) {
-                console.log(`[USER_STORE] UID lookup failed. Trying Email Fallback for: ${currentUser.email}`);
-                // Import query/collection/where/getDocs/setDoc if not available in scope, but they seem to be imported at top level.
-                // Re-verifying imports: they are at top level.
-                const q = query(collection(db, "users"), where("email", "==", currentUser.email));
-                const querySnapshot = await getDocs(q);
-
-                if (!querySnapshot.empty) {
-                    const fallbackDoc = querySnapshot.docs[0];
-                    console.log(`[USER_STORE] Found profile by Email (Legacy ID: ${fallbackDoc.id}). MIGRATING TO UID...`);
-
-                    data = fallbackDoc.data();
-
-                    // 3. Migration: Copy to UID document
-                    // we use merge: true to be safe, though this is a new doc so it acts as set
-                    await setDoc(docRef, { ...data, migre_depuis_email_id: fallbackDoc.id, updatedAt: new Date().toISOString() }, { merge: true });
-                    console.log(`[USER_STORE] MIGRATION SUCCESS. Profile secured at ${uid}`);
-                }
-            }
-
-            console.log(`[USER_STORE] AUTH_UID: ${uid} | PROFILE_FOUND: ${!!data}`);
-
-            if (data) {
+            if (docSnap.exists()) {
+                const data = docSnap.data() as User;
                 console.log("USER_DATA_LOADED:", data);
 
-                const profileData = data.profileData || {};
+                // Map Firestore User to Store State
+                const profile = data.profileData || { firstName: '', lastName: '' };
 
-                // Initialize resolved variables
-                let resolvedRole = (data.role || profileData.role) as UserRole;
-                let resolvedSchoolId = data.schoolId || profileData.schoolId;
-                let resolvedName = data.name || (profileData.firstName && profileData.lastName ? `${profileData.firstName} ${profileData.lastName}` : '') || data.email || '';
+                // Fallback for Name if not in profile
+                const displayName = (profile.firstName && profile.lastName)
+                    ? `${profile.firstName} ${profile.lastName}`
+                    : (data as any).name || currentUser?.displayName || '';
 
-                // --- FORCE LOCAL STORE STATE (PERSISTENCE FIX) ---
-                if (data.email === 'pledgeum@gmail.com' || auth.currentUser?.email === 'pledgeum@gmail.com') {
-                    resolvedRole = 'super_admin' as any;
-                    // Force DB Update if not correct (Self-repair)
-                    if (data.role !== 'super_admin') {
-                        console.log("Correcting User Role in DB for Super Admin...");
-                        setDoc(docRef, { role: 'super_admin' }, { merge: true }).catch(err => console.error("Failed to force admin role in DB", err));
-                    }
-                }
+                // SANDBOX AUTO-REPAIR (STRICT)
+                if (data.email === 'fabrice.dumasdelage@gmail.com') {
+                    const needsRepair = data.uai !== '9999999X' || data.role !== 'school_head' || !data.profileData?.function;
 
-                if (data.email === 'fabrice.dumasdelage@gmail.com' || auth.currentUser?.email === 'fabrice.dumasdelage@gmail.com') {
-                    resolvedRole = 'school_head';
-                    resolvedSchoolId = '9999999X';
-                    // Force DB Update/Repair if missing
-                    if (data.role !== 'school_head' || data.schoolId !== '9999999X') {
-                        console.log("Correcting User Role in DB for Sandbox School Head...");
-                        setDoc(docRef, {
+                    if (needsRepair) {
+                        console.log("Auto-repairing Sandbox User to Strict Schema...");
+                        const strictProfile = {
+                            firstName: data.profileData?.firstName || 'Fabrice',
+                            lastName: data.profileData?.lastName || 'Dumasdelage',
+                            phone: data.profileData?.phone || '0600000000',
+                            function: 'Proviseur',
+                            address: {
+                                street: "12 Rue Ampère",
+                                zipCode: "76500",
+                                city: "Elbeuf"
+                            }
+                            // No ecole_nom
+                        };
+
+                        const updates = {
+                            uai: '9999999X',
                             role: 'school_head',
-                            schoolId: '9999999X',
-                            status: 'active'
-                        }, { merge: true }).catch(e => console.error("Auto-repair fabrice failed", e));
+                            profileData: strictProfile,
+                            // Ensure schoolId alias is set too just in case
+                            schoolId: '9999999X'
+                        };
+
+                        // We use updateDoc (or set merge)
+                        await setDoc(docRef, updates, { merge: true });
+
+                        // Locally update 'data' so the store gets the clean version immediately
+                        data.uai = '9999999X';
+                        data.role = 'school_head';
+                        data.profileData = strictProfile as any;
                     }
                 }
-                // -------------------------------------------------
 
                 set({
-                    name: resolvedName,
-                    email: data.email || profileData.email || auth.currentUser?.email || '',
-                    role: resolvedRole,
-                    schoolId: resolvedSchoolId,
-                    birthDate: data.birthDate || profileData.birthDate,
-                    profileData: profileData,
-                    hasAcceptedTos: data.hasAcceptedTos || false,
+                    name: displayName,
+                    email: data.email,
+                    role: data.role,
+                    uai: data.uai || (data as any).schoolId, // Fallback to old field if migration incomplete
+                    schoolId: data.uai || (data as any).schoolId,
+                    birthDate: profile.birthDate,
+                    profileData: profile,
+                    legalRepresentatives: data.legalRepresentatives || [],
+                    hasAcceptedTos: data.hasAcceptedTos ?? false,
                     isLoadingProfile: false
                 });
+
                 return true;
+            } else {
+                console.log("User profile not found in Firestore.");
+
+                // SANDBOX INITIALIZATION IF MISSING
+                if (currentUser?.email === 'fabrice.dumasdelage@gmail.com') {
+                    console.log("[SANDBOX] Creating Sandbox User (Strict Schema)");
+                    const sandboxUser: User = {
+                        uid,
+                        email: 'fabrice.dumasdelage@gmail.com',
+                        role: 'school_head',
+                        uai: '9999999X', // The crucial link
+                        createdAt: new Date().toISOString(),
+                        lastConnectionAt: new Date().toISOString(),
+                        hasAcceptedTos: true,
+                        profileData: {
+                            firstName: 'Fabrice',
+                            lastName: 'Dumasdelage',
+                            phone: '0600000000',
+                            function: 'Proviseur', // Job Title
+                            address: {
+                                street: "12 Rue Ampère",
+                                zipCode: "76500",
+                                city: "Elbeuf"
+                            }
+                            // NO ecole_nom here!
+                        },
+                        legalRepresentatives: []
+                    };
+                    await setDoc(docRef, sandboxUser);
+                    set({
+                        name: "Fabrice Dumasdelage",
+                        email: sandboxUser.email,
+                        role: sandboxUser.role,
+                        uai: sandboxUser.uai,
+                        schoolId: sandboxUser.uai,
+                        profileData: sandboxUser.profileData,
+                        hasAcceptedTos: true,
+                        isLoadingProfile: false
+                    });
+                    return true;
+                }
+
+                set({ isLoadingProfile: false, hasAcceptedTos: false });
+                return false;
             }
-            // AUTO-CLAIM LOGIC: Check if user is an authorized School Head but hasn't initialized profile
-            const schoolsRef = collection(db, "schools");
-            const q = query(schoolsRef, where("schoolHeadEmail", "==", currentUser.email || ''));
-            const querySnapshot = await getDocs(q);
-
-            if (!querySnapshot.empty) {
-                console.log("[Auto-Claim] Found authorized school for user");
-                const schoolDoc = querySnapshot.docs[0];
-                const schoolData = schoolDoc.data();
-
-                const claimedProfile = {
-                    name: currentUser.displayName || "Chef d'Etablissement",
-                    email: currentUser.email || '',
-                    role: 'school_head' as UserRole,
-                    schoolId: schoolDoc.id,
-                    profileData: {
-                        firstName: (currentUser.displayName || "").split(' ')[0] || "Admin",
-                        lastName: (currentUser.displayName || "").split(' ').slice(1).join(' ') || "Scolaire",
-                        email: currentUser.email || '',
-                        phone: schoolData.schoolPhone || '',
-                        ecole_nom: schoolData.schoolName,
-                        ecole_ville: schoolData.schoolCity,
-                        role: "Proviseur",
-                        function: "Proviseur"
-                    },
-                    hasAcceptedTos: true
-                };
-
-                // Auto-create in Firestore
-                await setDoc(docRef, {
-                    ...claimedProfile,
-                    createdAt: new Date().toISOString(),
-                    lastConnectionAt: new Date().toISOString()
-                });
-
-                set({
-                    ...claimedProfile,
-                    isLoadingProfile: false
-                });
-                return true;
-            }
-
-            set({
-                isLoadingProfile: false,
-                hasAcceptedTos: false
-            });
-            return false;
         } catch (error) {
             console.error("Error fetching user profile:", error);
             set({ isLoadingProfile: false });
@@ -428,29 +216,38 @@ export const useUserStore = create<UserState>((set, get) => ({
     createUserProfile: async (uid: string, data) => {
         try {
             const userRef = doc(db, "users", uid);
-            const userSnap = await getDoc(userRef);
-            const existingData = userSnap.exists() ? userSnap.data() : {};
-            const existingProfileData = existingData.profileData || {};
 
-            const finalData = {
-                ...existingData,
-                ...data,
-                birthDate: data.birthDate || existingData.birthDate || null,
-                profileData: { ...existingProfileData, ...(data.profileData || {}) }, // Merge existing with new
-                createdAt: existingData.createdAt || new Date().toISOString(),
-                lastConnectionAt: new Date().toISOString(), // Track creation as connection
-                hasAcceptedTos: false // Default to false on creation
+            // Construct the strict User object
+            const newUser: User = {
+                uid: uid,
+                email: data.email || '',
+                role: data.role as UserRole,
+                uai: data.uai || data.schoolId || undefined,
+                createdAt: new Date().toISOString(),
+                lastConnectionAt: new Date().toISOString(),
+                hasAcceptedTos: false,
+                profileData: {
+                    firstName: (data.profileData?.firstName) || (data.name?.split(' ')[0]) || '',
+                    lastName: (data.profileData?.lastName) || (data.name?.split(' ').slice(1).join(' ')) || '',
+                    birthDate: data.birthDate || data.profileData?.birthDate,
+                    phone: data.profileData?.phone,
+                    address: data.profileData?.address,
+                    class: data.profileData?.class,
+                    diploma: data.profileData?.diploma,
+                },
+                legalRepresentatives: (data as any).legalRepresentatives || []
             };
 
-            await setDoc(userRef, finalData);
+            await setDoc(userRef, newUser, { merge: true });
 
             set({
-                name: data.name,
-                email: data.email,
-                role: data.role,
-                schoolId: (data as any).schoolId || existingData.schoolId, // Persist if present
-                birthDate: finalData.birthDate,
-                profileData: finalData.profileData,
+                name: data.name || `${newUser.profileData.firstName} ${newUser.profileData.lastName}`,
+                email: newUser.email,
+                role: newUser.role,
+                uai: newUser.uai,
+                schoolId: newUser.uai,
+                profileData: newUser.profileData,
+                legalRepresentatives: newUser.legalRepresentatives,
                 hasAcceptedTos: false
             });
         } catch (error) {
@@ -459,39 +256,37 @@ export const useUserStore = create<UserState>((set, get) => ({
         }
     },
 
-    updateProfileData: async (uid: string, data: Record<string, any>) => {
+    updateProfileData: async (uid: string, data) => {
         try {
-            // Safe merge: Get current data from store to avoid overwriting missing fields
-            const currentProfile = get().profileData || {};
-            const mergedProfileData = { ...currentProfile, ...data };
+            const currentProfile = get().profileData;
+            const updatedProfile = { ...currentProfile, ...data };
 
-            const updates: Record<string, any> = { profileData: mergedProfileData };
+            await updateDoc(doc(db, "users", uid), {
+                profileData: updatedProfile
+            });
 
-            // Sync top-level fields if present in the update
-            if (data.birthDate) {
-                updates.birthDate = data.birthDate;
-            }
-            if (data.email) {
-                updates.email = data.email;
-            }
-
-            await setDoc(doc(db, "users", uid), updates, { merge: true });
-
-            set((state) => ({
-                birthDate: data.birthDate || state.birthDate,
-                email: data.email || state.email,
-                profileData: mergedProfileData
-            }));
+            set({ profileData: updatedProfile });
         } catch (error) {
             console.error("Error updating profile data:", error);
             throw error;
         }
     },
 
+    updateLegalRepresentatives: async (uid: string, reps) => {
+        try {
+            await updateDoc(doc(db, "users", uid), {
+                legalRepresentatives: reps
+            });
+            set({ legalRepresentatives: reps });
+        } catch (error) {
+            console.error("Error updating legal representatives:", error);
+            throw error;
+        }
+    },
+
     acceptTos: async (uid: string) => {
         try {
-            const userRef = doc(db, "users", uid);
-            await setDoc(userRef, { hasAcceptedTos: true, tosAcceptedAt: new Date().toISOString() }, { merge: true });
+            await updateDoc(doc(db, "users", uid), { hasAcceptedTos: true });
             set({ hasAcceptedTos: true });
         } catch (error) {
             console.error("Error accepting TOS:", error);
@@ -509,120 +304,50 @@ export const useUserStore = create<UserState>((set, get) => ({
 
     anonymizeAccount: async (uid: string) => {
         try {
-            const randomId = Math.random().toString(36).substr(2, 6);
-            const anonymizedData = {
-                name: `Anonyme ${randomId} `,
-                email: `anonymized - ${randomId} @pledgeum.deleted`,
-                birthDate: null,
-                profileData: {}, // Clear all profile details
-                hasAcceptedTos: false,
-                isAnonymized: true,
-                anonymizedAt: new Date().toISOString()
-            };
-
-            await setDoc(doc(db, "users", uid), anonymizedData, { merge: true });
-
-            set({
-                name: anonymizedData.name,
-                email: anonymizedData.email,
-                profileData: {},
-                birthDate: undefined
+            await updateDoc(doc(db, "users", uid), {
+                email: `anonymized-${uid}@deleted`,
+                profileData: { firstName: 'Anonyme', lastName: 'Anonyme' },
+                legalRepresentatives: []
             });
+            get().reset();
         } catch (error) {
-            console.error("Error anonymizing account:", error);
-            throw error;
+            console.error("Error anonymizing:", error);
         }
     },
 
     fetchNotifications: async (userEmail: string) => {
         if (!userEmail) return;
-        // Import dynamically to avoid circular dependencies if any, but standard import is fine here
-        const { collection, query, where, getDocs, updateDoc, doc, orderBy } = await import('firebase/firestore');
-
         try {
-            let q;
-            if (userEmail === 'pledgeum@gmail.com') {
-                // Super Admin / Test Account: Fetch ALL recent notifications to monitor system
-                q = query(
-                    collection(db, "notifications"),
-                    orderBy("date", "desc")
-                    // limit(50) // Optional limit
-                );
-            } else {
-                q = query(
-                    collection(db, "notifications"),
-                    where("recipientEmail", "==", userEmail)
-                );
-            }
-
+            const q = query(collection(db, "notifications"), where("recipientEmail", "==", userEmail));
             const snapshot = await getDocs(q);
-            const loadedNotifs: Notification[] = [];
-
-            snapshot.forEach(doc => {
-                const data = doc.data();
-                // For Super Admin, maybe prepend recipient to title?
-                const titlePrefix = (userEmail === 'pledgeum@gmail.com' && data.recipientEmail)
-                    ? `[${data.recipientEmail}]`
-                    : '';
-
-                loadedNotifs.push({
-                    id: doc.id,
-                    title: titlePrefix + data.title,
-                    message: data.message,
-                    read: data.read,
-                    date: data.date,
-                    actionLabel: data.actionLabel,
-                    actionLink: data.actionLink
-                });
-            });
-
-            // Sort manually desc (redundant if using orderBy, but safe)
-            loadedNotifs.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-
-            set({
-                notifications: loadedNotifs,
-                unreadCount: loadedNotifs.filter(n => !n.read).length
-            });
-            console.log(`[STORE] Fetched ${loadedNotifs.length} notifications for ${userEmail}`);
-        } catch (error) {
-            console.error("Error fetching notifications:", error);
-        }
+            const loaded: Notification[] = [];
+            snapshot.forEach(d => loaded.push({ id: d.id, ...d.data() } as Notification));
+            loaded.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+            set({ notifications: loaded, unreadCount: loaded.filter(n => !n.read).length });
+        } catch (e) { console.error(e); }
     },
 
-    // Override markAsRead to persist to DB
     markAsRead: async (id: string) => {
-        // Optimistic update
-        set((state) => {
-            const newNotifs = state.notifications.map(n => n.id === id ? { ...n, read: true } : n);
-            return {
-                notifications: newNotifs,
-                unreadCount: newNotifs.filter(n => !n.read).length
-            };
-        });
-
-        // DB update
+        set(state => ({
+            notifications: state.notifications.map(n => n.id === id ? { ...n, read: true } : n),
+            unreadCount: state.notifications.filter(n => !n.read && n.id !== id).length
+        }));
         try {
-            const { updateDoc, doc } = await import('firebase/firestore');
-            // We assume ID is the DB doc ID. For local notifs (random ID), this will fail silently/catch.
-            // Check if ID is likely a DB ID (usually 20 chars) vs random (variable)
-            if (id.length > 10) {
-                await updateDoc(doc(db, "notifications", id), { read: true });
-            }
-        } catch (e) {
-            console.warn("Could not mark as read in DB (likely local notification)", e);
-        }
+            if (id.length > 10) await updateDoc(doc(db, "notifications", id), { read: true });
+        } catch (e) { }
     },
 
     reset: () => set({
         name: '',
-        role: null as unknown as UserRole, // Reset to null instead of 'student' to prevent false role assumption
+        role: null as unknown as UserRole,
         email: '',
+        uai: undefined,
         schoolId: undefined,
-        profileData: {},
+        profileData: { firstName: '', lastName: '' },
+        legalRepresentatives: [],
         notifications: [],
         unreadCount: 0,
         hasAcceptedTos: null,
-        isLoadingProfile: false,
-        monitoringTeacher: undefined
+        isLoadingProfile: false
     })
 }));

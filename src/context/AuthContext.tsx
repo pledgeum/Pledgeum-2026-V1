@@ -37,7 +37,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
                 const schoolId = useUserStore.getState().schoolId;
                 if (schoolId) {
-                    useSchoolStore.getState().fetchSchoolData(schoolId);
+                    // Patch for legacy Sandbox users: redirect 'global-school' to '9999999X'
+                    const safeSchoolId = schoolId === 'global-school' ? '9999999X' : schoolId;
+                    useSchoolStore.getState().fetchSchoolData(safeSchoolId);
                 }
             }
         });

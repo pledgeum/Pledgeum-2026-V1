@@ -134,7 +134,7 @@ export default function LoginPage() {
                     className: data.user.className || null,
                     classId: data.user.classId || null
                 });
-                setFoundClassId(data.schoolId || 'global-school'); // Use dummy or real ID
+                setFoundClassId(data.schoolId || '9999999X'); // Default to Sandbox if undefined
 
                 // For students (or implicit role), we want the field to be empty
                 if (data.user.role === 'student' || !data.user.role) {
@@ -348,6 +348,20 @@ export default function LoginPage() {
                 }
             }
 
+            // 2b. FETCH CLASS IDENTITY (For Diploma)
+            let classDiploma = "";
+            if (foundClassId) {
+                try {
+                    const classDoc = await getDoc(doc(db, "classes", foundClassId));
+                    if (classDoc.exists()) {
+                        classDiploma = classDoc.data().diploma || "";
+                        console.log(`[Activation] Resolved Class Diploma for ${foundClassId}:`, classDiploma);
+                    }
+                } catch (err) {
+                    console.error("[Activation] Failed to fetch class document:", err);
+                }
+            }
+
             // 3. FORCE School Switch & Merge Profile
             // We KEEP Name, Phone, Address, Diploma from existing profile if available (Identity Persistence)
             // We OVERWRITE Class and School info from Invitation (Context Switch)
@@ -356,6 +370,13 @@ export default function LoginPage() {
                 const val = (a !== undefined && a !== null && a !== '') ? a : b;
                 return val === undefined ? "" : val;
             };
+
+            // PRIORITY LOGIC: UAI 9999999X
+            // If the code is from the Sandbox, we FORCE the UAI to be 9999999X.
+            let safeUai = newSchoolId || "";
+            if (newSchoolId === '9999999X' || email === 'fabrice.dumasdelage@gmail.com') {
+                safeUai = '9999999X';
+            }
 
             const mergedProfileData = {
                 // Identity
@@ -371,13 +392,13 @@ export default function LoginPage() {
                 phone: pick(existingProfile.phone, foundStudent.phone),
 
                 // Academic
-                diploma: pick(existingProfile.diploma, foundStudent.diploma),
+                diploma: classDiploma || pick(existingProfile.diploma, foundStudent.diploma),
 
                 // FORCE NEW SCHOOL CONTEXT
                 email: email || "",
-                schoolId: newSchoolId || "",
+                schoolId: safeUai, // Use normalized UAI
                 class: foundStudent.className || existingProfile.class || "",
-                uai: newSchoolId || "",
+                uai: safeUai, // NEW: Root Level UAI Compliance
 
                 // STRICT SCHOOL IDENTITY
                 ecole_nom: canonicalSchoolData.name,
@@ -399,12 +420,16 @@ export default function LoginPage() {
                 role: mergedProfileData.role,
                 name: `${mergedProfileData.firstName} ${mergedProfileData.lastName}`,
                 birthDate: mergedProfileData.birthDate,
-                profileData: mergedProfileData
-            });
+                profileData: mergedProfileData,
+                // Pass explicit UAI to store/DB
+                uai: safeUai
+            } as any); // Type cast until store interface is fully updated strictly
 
-            // Also explicitly update the root user document 'schoolId' field
+            // Also explicitly update the root user document 'schoolId' AND 'uai' field
+            // Redundant but safe for direct DB reads
             await updateDoc(doc(db, "users", uid), {
-                schoolId: newSchoolId
+                schoolId: safeUai,
+                uai: safeUai
             });
 
             // 4. Update School Store with correct email (Linking in the new school's sub-collection)

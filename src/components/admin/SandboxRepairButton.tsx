@@ -24,6 +24,7 @@ export function SandboxRepairButton() {
                 role: 'school_head', // FORCE ROLE
                 email: 'fabrice.dumasdelage@gmail.com', // FORCE EMAIL
                 schoolId: '9999999X', // FORCE SCHOOL
+                uai: '9999999X', // FORCE UAI
                 profileData: {
                     firstName: 'Fabrice',
                     lastName: 'Dumasdelage',

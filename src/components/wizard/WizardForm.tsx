@@ -43,14 +43,14 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
             eleve_nom: "Dubois",
             eleve_prenom: "Thomas",
             eleve_date_naissance: "2007-05-15", // Mineur
-            eleve_adresse: "10 Rue des Lilas, 75020 Paris",
+            eleve_adresse: "", // CLEARED
             eleve_email: "thomas.dubois@email.com",
             eleve_classe: "1ère Bac Pro SN",
             diplome_intitule: "Bac Pro Systèmes Numériques",
 
             rep_legal_nom: "M. Dubois Pierre",
             rep_legal_email: "pierre.dubois@email.com",
-            rep_legal_adresse: "10 Rue des Lilas, 75020 Paris",
+            rep_legal_adresse: "", // CLEARED
             est_mineur: true,
 
             ent_nom: "Tech Solutions SAS",

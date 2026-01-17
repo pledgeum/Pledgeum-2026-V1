@@ -276,6 +276,7 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                             useUserStore.setState((state) => ({
                                                 ...state,
                                                 schoolId: "9999999X",
+                                                uai: "9999999X", // NEW: Explicit UAI
                                                 profileData: {
                                                     ...state.profileData,
                                                     ecole_nom: "Mon LYCEE TOUTFAUX",
