@@ -1,8 +1,6 @@
 
 import { create } from 'zustand';
 import { ConventionData } from '@/types/schema';
-import { db } from '@/lib/firebase';
-import { collection, addDoc, query, where, getDocs, updateDoc, doc, setDoc, arrayUnion } from 'firebase/firestore';
 import { sendNotification } from '@/lib/notification';
 import { generateVerificationUrl } from '@/app/actions/sign';
 import { sha256 } from 'js-sha256';
@@ -127,6 +125,36 @@ const generateSignatureCode = () => {
     return code;
 };
 
+// --- DUAL WRITE HELPER ---
+const syncToPostgres = async (convention: any) => {
+    try {
+        // Do not sync in Demo Mode (Client-side check)
+        // Actually, store manages demo mode, but here we can check if ID looks like demo?
+        // Or better: The caller checks it.
+        // But for safety:
+        if ((convention.id && convention.id.startsWith('demo_')) || convention.studentId === 'etudiant.simu@email.com') {
+            // console.log("[DUAL_WRITE] Skipping Demo Convention");
+            return;
+        }
+
+        // console.log("[DUAL_WRITE] Syncing to PostgreSQL...", convention.id);
+        const res = await fetch('/api/sync/convention', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(convention)
+        });
+        const json = await res.json();
+        if (!json.success) {
+            console.error("[DUAL_WRITE] API Error:", json.error);
+        } else {
+            // console.log("[DUAL_WRITE] Success for", convention.id);
+        }
+    } catch (e) {
+        console.error("[DUAL_WRITE] Network/Fetch Error (Non-blocking):", e);
+    }
+};
+
+
 // Mock Data
 // Mock Data for Simulation
 const MOCK_CONVENTION: Convention = {
@@ -249,323 +277,59 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
     conventions: [], // Start empty, fetch on load
 
     fetchConventions: async (userId: string, userEmail?: string) => {
+        const { role, schoolId } = useUserStore.getState();
+
         try {
-            const { schoolId, role: userRole } = useUserStore.getState();
+            let url = '/api/conventions?limit=100';
 
-            // Super Admin Bypass REMOVED for Strict Isolation
-            // If Super Admin needs to see all, they must use the Admin Console (not this store)
-            // or switch context to a specific school.
-
-            // --- DEMO MODE SIMULATION ---
-            // --- DEMO MODE SIMULATION ---
-            // Super Admin Bypass
-            // --- DEMO MODE SIMULATION ---
-            // --- DEMO MODE SIMULATION ---
-            // Catch any email starting with demo... or specifically demo_access@pledgeum.fr
-            if (userEmail && (userEmail === 'demo_access@pledgeum.fr' || (userEmail.startsWith('demo') && userEmail.endsWith('@pledgeum.fr')))) { // Fixed check
-                console.log("[DEMO] Fetching Simulated Conventions for:", userEmail);
-
-                // Import demo store dynamically
-                const { useDemoStore } = await import('./demo');
-                // Infer role from email if possible, otherwise fallback to store
-                let demoRole = useDemoStore.getState().demoRole;
-
-                // If the user email suggests a specific role, prioritize that to ensure consistency
-                if (userEmail.includes('+student')) demoRole = 'student';
-                else if (userEmail.includes('+teacher')) demoRole = 'teacher';
-                else if (userEmail.includes('+tutor')) demoRole = 'tutor';
-                else if (userEmail.includes('+parent')) demoRole = 'parent';
-                else if (userEmail.includes('+company_head')) demoRole = 'company_head';
-                else if (userEmail === 'demo_access@pledgeum.fr') demoRole = 'school_head';
-
-                // Ensure store reflects this role (optional, but good for UI consistency)
-                useDemoStore.getState().setDemoRole(demoRole);
-
-                console.log("[DEMO] Generating conventions for role:", demoRole);
-
-                const demoConvs: Convention[] = [];
-
-                // Base Convention Template
-                const baseConv: Convention = { ...MOCK_CONVENTION, id: `conv_demo_${demoRole}`, studentId: 'demo+student@pledgeum.fr' };
-
-                if (demoRole === 'student') {
-                    // Scenario: Student needs to sign. Convention is validated by teacher but not signed by student yet? 
-                    // No, usually Student signs first. So it's DRAFT or SUBMITTED.
-                    // Let's make it SUBMITTED (created) but unsigned.
-                    demoConvs.push({
-                        ...baseConv,
-                        id: 'conv_student_action',
-                        status: 'SUBMITTED',
-                        signatures: { ...baseConv.signatures, studentAt: undefined, studentImg: undefined, studentCode: undefined }, // Clear student signature
-                    });
-                    // Add a second one: Signed by student/parent, waiting for teacher (ReadOnly view for student)
-                    demoConvs.push({
-                        ...baseConv,
-                        id: 'conv_student_waiting',
-                        status: 'SIGNED_PARENT', // Student & Parent signed
-                        signatures: {
-                            ...baseConv.signatures,
-                            teacherAt: undefined, teacherCode: undefined,
-                            companyAt: undefined, companyCode: undefined,
-                            tutorAt: undefined, tutorCode: undefined,
-                            headAt: undefined, headCode: undefined
-                        }
-                    });
-                }
-                else if (demoRole === 'teacher') {
-                    // Scenario: Teacher needs to validate. Student & Parent signed.
-                    demoConvs.push({
-                        ...baseConv,
-                        id: 'conv_teacher_action',
-                        status: 'SIGNED_PARENT', // Ready for teacher
-                        signatures: {
-                            ...baseConv.signatures,
-                            teacherAt: undefined, teacherCode: undefined,
-                            companyAt: undefined, companyCode: undefined,
-                            tutorAt: undefined, tutorCode: undefined,
-                            headAt: undefined, headCode: undefined
-                        }
-                    });
-
-                    // Add a second one: Validated by teacher, waiting for partners (History view)
-                    demoConvs.push({
-                        ...baseConv,
-                        id: 'conv_teacher_validated',
-                        status: 'VALIDATED_TEACHER', // Validated
-                        signatures: {
-                            ...baseConv.signatures,
-                            companyAt: undefined, companyCode: undefined,
-                            tutorAt: undefined, tutorCode: undefined,
-                            headAt: undefined, headCode: undefined
-                        }
-                    });
-                }
-                else if (demoRole === 'tutor') {
-                    // Scenario: Tutor needs to sign. Teacher Validated.
-                    demoConvs.push({
-                        ...baseConv,
-                        id: 'conv_tutor_action',
-                        status: 'VALIDATED_TEACHER', // Ready for partners
-                        signatures: {
-                            ...baseConv.signatures,
-                            companyAt: undefined, companyCode: undefined,
-                            tutorAt: undefined, tutorCode: undefined,
-                            headAt: undefined, headCode: undefined
-                        }
-                    });
-                }
-                else if (demoRole === 'company_head') {
-                    // Scenario: Company Head needs to sign. Teacher Validated.
-                    demoConvs.push({
-                        ...baseConv,
-                        id: 'conv_company_action',
-                        status: 'VALIDATED_TEACHER',
-                        signatures: {
-                            ...baseConv.signatures,
-                            companyAt: undefined, companyCode: undefined,
-                            tutorAt: undefined, tutorCode: undefined,
-                            headAt: undefined, headCode: undefined
-                        }
-                    });
-                }
-                else if (demoRole === 'parent') {
-                    // Scenario: Parent needs to sign. Student Signed.
-                    demoConvs.push({
-                        ...baseConv,
-                        id: 'conv_parent_action',
-                        status: 'SUBMITTED', // Student Signed, Ready for Parent
-                        signatures: {
-                            ...baseConv.signatures,
-                            parentAt: undefined, parentImg: undefined, parentCode: undefined,
-                            teacherAt: undefined, teacherCode: undefined,
-                            companyAt: undefined, companyCode: undefined,
-                            tutorAt: undefined, tutorCode: undefined,
-                            headAt: undefined, headCode: undefined
-                        }
-                    });
-                }
-                else if (demoRole === 'school_head' || demoRole === 'ddfpt' || demoRole === 'business_manager') {
-                    // Scenario: School Head needs to validate final. All others signed.
-                    demoConvs.push({
-                        ...baseConv,
-                        id: 'conv_head_action',
-                        status: 'SIGNED_TUTOR', // Waiting for Head
-                        signatures: {
-                            ...baseConv.signatures,
-                            headAt: undefined, headCode: undefined
-                        }
-                    });
-
-                    // Also add a completed one for reference
-                    demoConvs.push({
-                        ...baseConv,
-                        id: 'conv_head_completed',
-                        status: 'VALIDATED_HEAD'
-                    });
-                }
-
-                set({ conventions: demoConvs });
-                return;
+            // Filter Logic
+            if (role === 'student') {
+                url += `&studentId=${userId}`;
+            } else if (schoolId) {
+                // Admin / Teacher sees School scope
+                url += `&uai=${schoolId}`;
+            } else if (userEmail === 'pledgeum@gmail.com') {
+                // Fallback for Admin initialization if schoolId missing
+                url += `&uai=9999999X`;
             }
 
-            if (userEmail === 'pledgeum@gmail.com' && !schoolId) {
-                // Legacy support/Safety net: If "pledgeum" logs in WITHOUT a schoolId (e.g. not initialized),
-                // we might want to show nothing or everything?
-                // User requirement: "Sépare strictement... ne doit pas mélanger".
-                // So showing nothing is safer than showing all.
-                // However, to allow "Global Management", we might allow it ONLY if explicitly requested, but here is "User Dashboard".
-                // We will Fallback to fetching ONLY their own test conventions (userId check below).
-                console.log("Super Admin logged in without School Context - Showing strictly owned conventions.");
-                // Proceed to standard queries below...
+            console.log(`[ConventionStore] Fetching from: ${url}`);
+            const res = await fetch(url);
+
+            if (!res.ok) throw new Error('Failed to fetch conventions');
+
+            const data = await res.json();
+            if (data.success && Array.isArray(data.conventions)) {
+                const mappedConventions = data.conventions.map((c: any) => ({
+                    ...c,
+                    // Flatten metadata to top-level fields (e.g. ent_nom, eleve_nom)
+                    ...(c.metadata || {}),
+
+                    // Map specific DB columns to Frontend Conventions interface
+                    stage_date_debut: c.date_start,
+                    stage_date_fin: c.date_end,
+                    studentId: c.student_uid,
+                    schoolId: c.establishment_uai,
+
+                    // Ensure dates are stringified if needed (though API JSON does this)
+                    createdAt: c.created_at,
+                    updatedAt: c.updated_at,
+                }));
+
+                set({ conventions: mappedConventions });
+            } else {
+                set({ conventions: [] });
             }
 
-            const queries = [];
-
-            // 1. Created by user (Owner)
-            // Always filter by schoolId if present!
-            // Strict Isolation requested by User: No cross-school history for conventions.
-            // const isStudent = userRole === 'student'; // History removed
-            const baseConstraints = schoolId ? [where("schoolId", "==", schoolId)] : [];
-
-            if (userId) {
-                queries.push(query(collection(db, "conventions"), where("userId", "==", userId), ...baseConstraints));
-            }
-
-            // 2. Referenced by email (if email is provided)
-            if (userEmail) {
-                // Determine User Role / School Name for broader query
-                // We need access to the User Store state here? 
-                // We can't easily access another store inside a store without circular dependency or passing it in.
-                // Assuming 'role' is not passed, but we can guess or rely on userEmail queries.
-
-                // CRITICAL: We need to know who the user IS to run the right query (School Name vs Email).
-                // Ideally, fetchConventions should take a 'context' object or we look up the user first.
-                // BUT: We can just fetch user profile inside here? No, 'fetchConventions' is called AFTER user load.
-                // Let's rely on reading the user profile from local storage or passing it in?
-                // The signature only has userId/userEmail.
-
-                // WORKAROUND: We query for conventions where 'ecole_chef_email' matches (Old way)
-                // AND we also query 'ecole_nom' if we could...
-                // SINCE WE CAN'T CHANGE SIGNATURE EASILY:
-                // We will add specific queries for ALL standard roles.
-
-                // Standard Roles - Filtered by schoolId if available (except for students)
-                queries.push(query(collection(db, "conventions"), where("studentId", "==", userEmail), ...baseConstraints));
-                queries.push(query(collection(db, "conventions"), where("prof_email", "==", userEmail), ...baseConstraints));
-                queries.push(query(collection(db, "conventions"), where("rep_legal_email", "==", userEmail), ...baseConstraints));
-                queries.push(query(collection(db, "conventions"), where("tuteur_email", "==", userEmail), ...baseConstraints));
-                queries.push(query(collection(db, "conventions"), where("ent_rep_email", "==", userEmail), ...baseConstraints));
-
-                // For School Head (legacy)
-                queries.push(query(collection(db, "conventions"), where("ecole_chef_email", "==", userEmail), ...baseConstraints));
-
-                // --- NEW: Broader Query for School Staff ---
-                // If the user is DDFPT/Secretary etc, their EMAIL is likely NOT in the convention fields directly.
-                // We need to fetch based on their SCHOOL.
-                // We must read the user's school name.
-                try {
-                    const userDoc = await getDocs(query(collection(db, "users"), where("email", "==", userEmail)));
-                    if (!userDoc.empty) {
-                        const userData = userDoc.docs[0].data();
-                        // Check if role is admin
-                        const r = userData.role as UserRole;
-                        const adminRoles = ['school_head', 'ddfpt', 'business_manager', 'assistant_manager', 'stewardship_secretary', 'at_ddfpt'];
-
-                        if (adminRoles.includes(r)) {
-                            // IF schoolId is present, use IT. Else fallback to name.
-                            if (schoolId) {
-                                console.log(`[ConventionStore] Fetching by schoolId ${schoolId}`);
-                                queries.push(query(collection(db, "conventions"), where("schoolId", "==", schoolId)));
-                            } else {
-                                const schoolName = userData.profileData?.ecole_nom || userData.schoolName; // normalize field
-                                if (schoolName) {
-                                    console.log(`[ConventionStore] Fetching school-wide for ${schoolName} (Role: ${r})`);
-                                    queries.push(query(collection(db, "conventions"), where("ecole_nom", "==", schoolName)));
-                                }
-                            }
-                        }
-                    }
-                } catch (e) {
-                    console.error("Error fetching user context for convention query", e);
-                }
-            }
-
-            // Execute all queries
-            const results = await Promise.all(queries.map(q => getDocs(q)));
-
-            // Deduplicate by ID and final CLIENT-SIDE SchoolId Check (for robustness)
-            const conventionsMap = new Map<string, Convention>();
-            results.forEach(snapshot => {
-                snapshot.forEach(doc => {
-                    const data = doc.data() as Convention;
-
-                    // STRICT ISOLATION: Check schoolId for ALL roles, EXCEPT STUDENTS (Portfolio Mode)
-                    // The user explicitly requested to prevent "ghost" data leakage between schools,
-                    // BUT explicitly requested "Mobilité de l'élève" (Portfolio) in the latest update.
-                    // "L'élève doit pouvoir voir toutes ses conventions passées et présentes, peu importe l'UAI d'origine."
-
-                    const isStudent = (data.studentId === userEmail) || (data.userId === userId);
-                    // Note: userRole isn't passed to this callback easily, but we can infer or rely on data ownership.
-                    // Ideally we should pass 'userRole' into the filter, but it is available in the scope above?
-                    // Yes, fetchConventions scope has 'userRole' (if passed, but signature might not have it?)
-                    // Let's check signature. 
-                    // Actually, let's look at how we determining "isStudent".
-                    // The safer check is: if I am the student owner of this convention, I satisfy the check regardless of schoolId.
-
-                    if (schoolId && data.schoolId && data.schoolId !== schoolId) {
-                        // PORTFOLIO MODE: Check if I am the student owner
-                        const amIOwnerStudent = data.studentId === userEmail || data.userId === userId;
-
-                        if (!amIOwnerStudent) {
-                            // Strict Isolation for everyone else
-                            return;
-                        }
-                        // Students pass here -> allows Multi-School View
-                    }
-
-                    // --- FILTER OUT GHOST/TEST DATA ---
-                    // Hide conventions linked to superadmin testing email 'pledgeum@gmail.com'
-                    // Check fields that might define the 'context' of the convention (not the student themselves)
-                    const isTestConvention =
-                        data.ecole_chef_email === 'pledgeum@gmail.com' ||
-                        data.prof_email === 'pledgeum@gmail.com' ||
-                        data.ent_rep_email === 'pledgeum@gmail.com' ||
-                        data.tuteur_email === 'pledgeum@gmail.com' ||
-                        (data.userId && data.userId.includes('pledgeum_test')) ||
-                        (data as any).isTestData === true;
-
-                    if (isTestConvention) return;
-                    // ----------------------------------
-
-                    conventionsMap.set(doc.id, { ...data, id: doc.id });
-                });
-            });
-
-            set({ conventions: Array.from(conventionsMap.values()) });
         } catch (error) {
-            console.error("Error fetching conventions:", error);
+            console.error("[ConventionStore] API Error:", error);
+            set({ conventions: [] });
         }
     },
 
     fetchAllConventions: async () => {
-        try {
-            const q = query(collection(db, "conventions"));
-            const snapshot = await getDocs(q);
-            const conventions: Convention[] = [];
-            snapshot.forEach(doc => {
-                conventions.push({ id: doc.id, ...doc.data() } as Convention);
-            });
-            // Merge with existing or separate? For this feature we likely want to just access the raw list.
-            // But to avoid messing with user's view, maybe we just return them? 
-            // Better: update state but handle filtering in UI carefully. 
-            // OR: Actually, the modal needs them passed in.
-            // Let's add a specific 'allConventions' state or just append to conventions and let selector filter?
-            // Safer: Just TS definition update here, implementing `getAllConventions` that returns promise/array without setting state.
-            return conventions;
-        } catch (error) {
-            console.error("Error fetching all conventions:", error);
-            return [];
-        }
+        console.log("ConventionStore: Firestore fetchAll disabled.");
+        return [];
     },
 
     addConvention: (data, studentId) => {
@@ -746,28 +510,9 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             const { hashDisplay } = await generateVerificationUrl(tempConvention, 'convention');
 
             // Persist to Firestore (SKIP IN DEMO MODE)
-            if (!useDemoStore.getState().isDemoMode) {
-                const convRef = doc(db, "conventions", id);
-                await updateDoc(convRef, {
-                    status: newStatus,
-                    signatures: newSigs,
-                    certificateHash: hashDisplay,
-                    updatedAt: now,
-                    auditLogs: arrayUnion({
-                        date: now,
-                        action: 'SIGNED',
-                        actorEmail: role === 'student' ? convention.eleve_email :
-                            role === 'parent' ? convention.rep_legal_email :
-                                role === 'teacher' ? convention.prof_email :
-                                    role === 'tutor' ? convention.tuteur_email :
-                                        role === 'company_head' ? convention.ent_rep_email :
-                                            role === 'school_head' ? convention.ecole_chef_email : 'unknown',
-                        details: `Signature par ${role} `
-                    })
-                });
-            } else {
-                console.log("[DEMO] Skipped Firestore write for SIGNED");
-            }
+            // Persist to Firestore REMOVED
+            // TODO: Persist to Postgres API
+            console.log("ConventionStore: Signature updated locally. Postgres sync needed.");
 
             // Update Local State
             set((state) => ({
@@ -827,19 +572,27 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 );
             }
             else if (newStatus === 'VALIDATED_TEACHER') {
-                // Teacher has validated -> Notify Company
-                await sendNotification(
-                    convention.ent_rep_email,
-                    `Convention PFMP à signer - ${convention.eleve_prenom} ${convention.eleve_nom} - ${convention.ecole_nom}`,
-                    `Bonjour,\n\nLa convention de l'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Classe: ${convention.eleve_classe}) pour le stage chez ${convention.ent_nom} (${convention.ent_ville}) a été validée par l'enseignant référent (${convention.prof_nom}).\n\nC'est à votre tour de signer : ${dashboardLink}\n\nCordialement.`
-                );
+                // Teacher has validated -> Notify Company (Magic Invite)
+                // Use dynamic import for Server Action to avoid build issues in Store if possible, or direct import.
+                // Assuming direct import works in Next.js 14+ client boundaries.
+                const { sendConventionInvitation } = await import('@/app/actions/notifications');
+                await sendConventionInvitation(convention.id, 'company_head', convention.ent_rep_email, convention.ent_rep_nom);
+                // await sendNotification(
+                //     convention.ent_rep_email,
+                //     `Convention PFMP à signer - ${convention.eleve_prenom} ${convention.eleve_nom} - ${convention.ecole_nom}`,
+                //     `Bonjour,\n\nLa convention de l'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Classe: ${convention.eleve_classe}) pour le stage chez ${convention.ent_nom} (${convention.ent_ville}) a été validée par l'enseignant référent (${convention.prof_nom}).\n\nC'est à votre tour de signer : ${dashboardLink}\n\nCordialement.`
+                // );
             }
             else if (newStatus === 'SIGNED_COMPANY') {
-                await sendNotification(
-                    convention.tuteur_email,
-                    `Convention PFMP à signer - ${convention.eleve_prenom} ${convention.eleve_nom} - ${convention.ecole_nom}`,
-                    `Bonjour,\n\nLe représentant de l'entreprise (${convention.ent_rep_nom}) a signé la convention de l'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Classe: ${convention.eleve_classe}) pour le stage chez ${convention.ent_nom} (${convention.ent_ville}).\n\nMerci de la valider : ${dashboardLink}\n\nCordialement.`
-                );
+                // Company has signed -> Notify Tutor (Magic Invite)
+                const { sendConventionInvitation } = await import('@/app/actions/notifications');
+                await sendConventionInvitation(convention.id, 'tutor', convention.tuteur_email, convention.tuteur_prenom ? `${convention.tuteur_prenom} ${convention.tuteur_nom}` : convention.tuteur_nom);
+
+                // await sendNotification(
+                //     convention.tuteur_email,
+                //     `Convention PFMP à signer - ${convention.eleve_prenom} ${convention.eleve_nom} - ${convention.ecole_nom}`,
+                //     `Bonjour,\n\nLe représentant de l'entreprise (${convention.ent_rep_nom}) a signé la convention de l'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Classe: ${convention.eleve_classe}) pour le stage chez ${convention.ent_nom} (${convention.ent_ville}).\n\nMerci de la valider : ${dashboardLink}\n\nCordialement.`
+                // );
             }
             else if (newStatus === 'SIGNED_TUTOR') {
                 const tutorName = convention.tuteur_prenom ? `${convention.tuteur_prenom} ${convention.tuteur_nom}` : convention.tuteur_nom;
@@ -941,18 +694,24 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             // Firestore add (With Demo Bypass)
             let newId = "";
             if (!useDemoStore.getState().isDemoMode) {
-                const docRef = await addDoc(collection(db, "conventions"), newConvention);
-                newId = docRef.id;
-                console.log("Document written with ID: ", newId);
+                console.log("[CONVENTION_STORE] addConvention: Firestore logic disabled. Please implement Postgres API.");
+                // Placeholder ID
+                newId = "pg_conv_" + Math.random().toString(36).substr(2, 9);
             } else {
                 newId = "demo_conv_" + Math.random().toString(36).substr(2, 9);
                 console.log("[DEMO] Generated fake ID: ", newId);
             }
 
             // Update local state with the real ID
+            const createdConvention = { ...newConvention, id: newId };
             set((state) => ({
-                conventions: [...state.conventions, { ...newConvention, id: newId }]
+                conventions: [...state.conventions, createdConvention]
             }));
+
+            // --- DOUBLE WRITE (Safe Async) ---
+            syncToPostgres(createdConvention);
+            // ---------------------------------
+
             // Send Email Notification
             // Send Email Notification to Student (Confirmation)
             if (data.eleve_email) {
@@ -1341,27 +1100,8 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             // Wait, I can just add the import in a separate edit or assume I can add it here? 
             // I'll stick to parallel queries for maximum compatibility without needing complex index setups.
 
-            const queries = [
-                query(collection(db, "conventions"), where("signatures.studentCode", "==", code)),
-                query(collection(db, "conventions"), where("signatures.parentCode", "==", code)),
-                query(collection(db, "conventions"), where("signatures.teacherCode", "==", code)),
-                query(collection(db, "conventions"), where("signatures.companyCode", "==", code)),
-                query(collection(db, "conventions"), where("signatures.tutorCode", "==", code)),
-                query(collection(db, "conventions"), where("signatures.headCode", "==", code)),
-                query(collection(db, "conventions"), where("attestation_signature_code", "==", code)),
-                // Add queries for Document Hashes
-                query(collection(db, "conventions"), where("certificateHash", "==", code)),
-                query(collection(db, "conventions"), where("attestationHash", "==", code))
-            ];
-
-            const snapshots = await Promise.all(queries.map(q => getDocs(q)));
-
-            for (const snap of snapshots) {
-                if (!snap.empty) {
-                    const doc = snap.docs[0];
-                    return { id: doc.id, ...doc.data() } as Convention;
-                }
-            }
+            console.log("[CONVENTION_STORE] validateCode: Firestore logic disabled. Please implement Postgres API lookup.");
+            return null;
 
         } catch (e) {
             console.error("Error verifying signature globally:", e);

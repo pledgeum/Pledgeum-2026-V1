@@ -79,7 +79,7 @@ export function Step1School() {
                 // Compute derived state for Teacher Locking
                 const studentClass = role === 'student' ? (profileData.class || profileData.classe) : null;
                 // Use reactive 'classes' from the hook above
-                const targetClass = studentClass ? classes.find(c => c.name === studentClass) : null;
+                const targetClass = studentClass ? classes.find(c => c.id === studentClass || c.name === studentClass) : null;
                 const lockedMainTeacher = targetClass?.mainTeacher;
 
                 // Explicit Lock for School Data (Student view OR Demo mode)
@@ -109,26 +109,48 @@ export function Step1School() {
 
                         // 2. Handle Sandbox / Legacy
                         // Normalize 'global-school' or explicit Sandbox UAI
-                        if (uai === '9999999X' || uai === 'global-school' || schoolName === 'Mon LYCEE TOUTFAUX') {
-                            fetchedData = {
-                                name: "Mon LYCEE TOUTFAUX",
-                                address: "12 Rue Ampère, 76500 Elbeuf",
-                                phone: "02 35 77 77 77",
-                                headName: "Proviseur Sandbox",
-                                email: "admin@toutfaux.fr"
-                            };
-                        } else if (uai) {
+                        // 2. Fetch School Data (Postgres API)
+                        if (uai) {
                             try {
-                                const { doc, getDoc } = await import('firebase/firestore');
-                                const { db } = await import('@/lib/firebase');
-                                const snap = await getDoc(doc(db, "schools", uai));
-                                if (snap.exists()) fetchedData = snap.data();
+                                const res = await fetch(`/api/establishments/${uai}`);
+                                if (res.ok) {
+                                    const data = await res.json();
+                                    fetchedData = {
+                                        name: data.name,
+                                        address: data.address,
+                                        phone: data.phone || data.telephone,
+                                        // Use generic head name/email if currently set, but School Head override below takes precedence
+                                        headName: "Proviseur", // Default title if specific name unavailable in simple DB view
+                                        email: data.admin_email
+                                    };
+                                }
                             } catch (err) {
-                                console.error("CONVENTION_DEBUG: Error fetching school", err);
+                                console.error("CONVENTION_DEBUG: Error fetching school from API", err);
                             }
                         }
 
-                        console.log("CONVENTION_DEBUG: Données reçues =", fetchedData);
+                        // [NEW] BUGFIX: Priority to User Profile for School Head
+                        // If the current user IS the school head, use their real identity instead of School/Sandbox defaults.
+                        if (role === 'school_head' && profileData) {
+                            const realName = `${profileData.firstName || ''} ${profileData.lastName || ''}`.trim();
+                            const realEmail = email || (profileData as any).email;
+
+                            console.log("CONVENTION_DEBUG: User is School Head. Overriding defaults with:", { realName, realEmail });
+
+                            if (!fetchedData) fetchedData = {};
+
+                            if (realName) {
+                                fetchedData.headName = realName;
+                                // Ensure we clear conflicting fields to avoid '||' precedence issues downstream if needed, 
+                                // but 'headName' is first in the chain below, so setting it is enough.
+                            }
+                            if (realEmail) {
+                                fetchedData.email = realEmail;
+                                // 'email' is first in chain: fetchedData.email || ...
+                            }
+                        }
+
+                        console.log("CONVENTION_DEBUG: Données reçues (Final) =", fetchedData);
 
                         // 3. Apply Data
                         if (fetchedData) {

@@ -156,34 +156,29 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                         break;
                 }
             }
+
+            // --- UAI Initialization (Universal) ---
+            let uaiToUse = (profileData as any).uai || (profileData as any).establishment_uai || storeSchoolId || '';
+
+            if (uaiToUse === 'global-school' || schoolName === "Mon LYCEE TOUTFAUX") {
+                uaiToUse = "9999999X";
+            }
+
+            // Allow manual override for School Head if not set, otherwise set default
+            if (role === 'school_head' && !uaiToUse) {
+                // Wait for user selection
+            } else {
+                if (uaiToUse) initialData['uai'] = uaiToUse;
+            }
+
             if (role === 'student') {
-                // STRICT ISOLATION from User Request
-                // 1. Inherit UAI from Profile or Store
-                let uaiToUse = (profileData as any).uai || storeSchoolId || '';
-
-                // Fallback: Infer from schoolName for Sandbox if UAI is missing
-                if (!uaiToUse && schoolName === "Mon LYCEE TOUTFAUX") {
-                    uaiToUse = "9999999X";
-                }
-
-                // CRITICAL FIX: Handle 'global-school' legacy/default value as Sandbox
-                if (uaiToUse === 'global-school') {
-                    uaiToUse = "9999999X";
-                }
-
-                initialData['uai'] = uaiToUse;
-
                 // 2. Synchronous Fallback for Sandbox (Prevents infinite spinner)
-                // This ensures that for the known Sandbox case, we display data immediately
                 if (uaiToUse === '9999999X') {
                     initialData['schoolName'] = "Mon LYCEE TOUTFAUX";
                     initialData['schoolAddress'] = "12 Rue Ampère, 76500 Elbeuf";
                     initialData['schoolCity'] = "Elbeuf";
                     initialData['schoolZip'] = "76500";
                 }
-
-                // 3. Fetch School Data Internally (Async handled in separate effect for real UAIs)
-                // We initially set what we have, but we trigger a fetch if UAI is present
             }
 
             setFormData(initialData);
@@ -293,7 +288,8 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
             schoolCity: school.ville,
             schoolZip: school.cp,
             schoolLat: String(school.lat),
-            schoolLng: String(school.lng)
+            schoolLng: String(school.lng),
+            uai: school.id // Capturing the UAI (RNE) properly
         }));
         setSchoolQuery('');
         setCityQuery('');

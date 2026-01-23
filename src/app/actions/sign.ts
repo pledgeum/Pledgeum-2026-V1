@@ -3,7 +3,7 @@
 import { signData } from '@/lib/signature';
 import { Convention } from '@/store/convention';
 
-export async function generateVerificationUrl(data: Convention, type: 'convention' | 'attestation') {
+export async function generateVerificationUrl(data: Convention, type: 'convention' | 'attestation' | 'mission_order') {
     // 1. Extract Minimal Critical Data (Minified keys for shorter URL)
     const payload = {
         t: type === 'convention' ? 'c' : 'a', // Type
@@ -28,6 +28,13 @@ export async function generateVerificationUrl(data: Convention, type: 'conventio
             sn: data.attestation_signer_name,
             sf: data.attestation_signer_function,
             sd: data.attestationDate
+        } : {}),
+        // For Mission Order
+        ...(type === 'mission_order' ? {
+            mo: true,
+            tn: data.prof_nom, // Teacher Name
+            sa: data.ecole_adresse,
+            ca: data.ent_adresse
         } : {})
     };
 

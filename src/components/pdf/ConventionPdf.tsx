@@ -193,7 +193,12 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                     </View>
                     <View style={styles.row}>
                         <Text style={styles.label}>Représenté par :</Text>
-                        <Text style={styles.value}>{data.ecole_chef_nom}</Text>
+                        <Text style={styles.value}>
+                            {(data.metadata as any)?.signatories?.principal?.name
+                                ? `${(data.metadata as any).signatories.principal.name}` // Dynamic
+                                : data.ecole_chef_nom // Fallback
+                            }
+                        </Text>
                     </View>
                     <View style={styles.row}>
                         <Text style={styles.label}>Enseignant-référent/Professeur Principal :</Text>

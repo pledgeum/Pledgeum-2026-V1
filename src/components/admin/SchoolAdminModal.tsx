@@ -117,12 +117,14 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
         collaborators, classes, addCollaborator, removeCollaborator, addClass, removeClass, updateClass,
         importTeachers, addTeacherToClass, removeTeacherFromClass, importGlobalTeachers,
         importStudents, addStudentToClass, removeStudentFromClass, allowedConventionTypes,
+        fetchClassStudents, fetchClassTeachers,
         toggleConventionType, schoolHeadEmail, delegatedAdminId, setDelegatedAdmin, schoolName,
         schoolAddress, schoolPhone, schoolHeadName, generateStudentCredentials, regenerateStudentCredentials, markCredentialsPrinted, generateTeacherCredentials, importGlobalStructure,
         partnerCompanies, importPartners, removePartner,
         // Visibility Store
         hiddenActivities, setHiddenActivities, hiddenJobs, setHiddenJobs, hiddenClasses, setHiddenClasses,
-        restoreTestData
+        restoreTestData,
+        importProgress
     } = useSchoolStore();
     const { conventions } = useConventionStore();
     // Removed local selected state in favor of derived visibility state
@@ -306,16 +308,19 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                     const nom = normalizedRow['NOM'];
                     const prenom = normalizedRow['PRENOM'];
                     const dateNaiss = normalizedRow['DATENAISS'] || normalizedRow['NEELE'] || normalizedRow['DATENAISSANCE'];
-                    const classeRaw = normalizedRow['CLASSES'] || normalizedRow['CLASSE'] || normalizedRow['DIVISION'];
+                    // Fix: Robust class mapping including 'CLASSES'
+                    const classeRaw = normalizedRow['CLASSES'] || normalizedRow['CLASSE'] || normalizedRow['DIVISION'] || normalizedRow['CLASSE_LABEL'];
 
                     if (nom && prenom && classeRaw) {
                         // ... (rest is same)
                         const className = classeRaw.split(',')[0].trim();
 
-                        const student: Omit<Student, 'id'> = {
+                        const student: any = {
                             firstName: prenom,
                             lastName: nom,
-                            birthDate: dateNaiss
+                            email: "", // Default empty as CSV usually doesn't have email for mass import
+                            birthDate: dateNaiss,
+                            originalClass: className // Fix: Explicitly add originalClass for API Zod
                         };
 
                         if (!map.has(className)) {
@@ -1488,16 +1493,24 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                     </div>
                                                     <div className="flex-none flex flex-wrap gap-2 justify-end w-full lg:w-auto">
                                                         <button
-                                                            onClick={() => setExpandedStudentClassId(expandedStudentClassId === cls.id ? null : cls.id)}
+                                                            onClick={() => {
+                                                                const newId = expandedStudentClassId === cls.id ? null : cls.id;
+                                                                setExpandedStudentClassId(newId);
+                                                                if (newId) fetchClassStudents(cls.id);
+                                                            }}
                                                             className="text-xs bg-orange-50 text-orange-700 px-3 py-1.5 rounded-full hover:bg-orange-100 font-medium transition-colors border border-orange-200 w-[230px] flex justify-center items-center"
                                                         >
-                                                            {expandedStudentClassId === cls.id ? "Masquer les élèves" : `Gérer les élèves (${cls.studentsList?.length || 0})`}
+                                                            {expandedStudentClassId === cls.id ? "Masquer les élèves" : `Gérer les élèves (${cls.studentCount || 0})`}
                                                         </button>
                                                         <button
-                                                            onClick={() => setExpandedClassId(expandedClassId === cls.id ? null : cls.id)}
+                                                            onClick={() => {
+                                                                const newId = expandedClassId === cls.id ? null : cls.id;
+                                                                setExpandedClassId(newId);
+                                                                if (newId) fetchClassTeachers(cls.id);
+                                                            }}
                                                             className="text-xs bg-blue-50 text-blue-700 px-3 py-1.5 rounded-full hover:bg-blue-100 font-medium transition-colors border border-blue-200 w-[230px] flex justify-center items-center"
                                                         >
-                                                            {expandedClassId === cls.id ? "Masquer l'équipe pédagogique" : `Gérer l'équipe pédagogique (${cls.teachersList?.length || 0})`}
+                                                            {expandedClassId === cls.id ? "Masquer l'équipe pédagogique" : `Gérer l'équipe pédagogique (${cls.teacherCount || 0})`}
                                                         </button>
                                                     </div>
                                                 </div>
@@ -1508,7 +1521,13 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                             {cls.mainTeacher && cls.mainTeacher.lastName ? (
                                                                 <div className="text-sm">
                                                                     <p className="font-medium text-gray-900">{cls.mainTeacher.firstName} {cls.mainTeacher.lastName}</p>
-                                                                    <p className="text-xs text-gray-500">{cls.mainTeacher.email}</p>
+                                                                    {(() => {
+                                                                        const email = cls.mainTeacher?.email || "";
+                                                                        if (!email.includes('@pledgeum.temp') && !email.includes('@pledgeum.provisoire')) {
+                                                                            return <p className="text-xs text-gray-500">{email}</p>;
+                                                                        }
+                                                                        return null;
+                                                                    })()}
                                                                 </div>
                                                             ) : (
                                                                 <p className="text-xs text-gray-400 italic">Non assigné</p>
@@ -1519,7 +1538,13 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                             {cls.cpe && cls.cpe.lastName ? (
                                                                 <div className="text-sm">
                                                                     <p className="font-medium text-gray-900">{cls.cpe.firstName} {cls.cpe.lastName}</p>
-                                                                    <p className="text-xs text-gray-500">{cls.cpe.email}</p>
+                                                                    {(() => {
+                                                                        const email = cls.cpe?.email || "";
+                                                                        if (!email.includes('@pledgeum.temp') && !email.includes('@pledgeum.provisoire')) {
+                                                                            return <p className="text-xs text-gray-500">{email}</p>;
+                                                                        }
+                                                                        return null;
+                                                                    })()}
                                                                 </div>
                                                             ) : (
                                                                 <p className="text-xs text-gray-400 italic">Non assigné</p>
@@ -1545,6 +1570,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                                 <select
                                                                     className="block w-full text-xs border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                                                     value={
+                                                                        cls.mainTeacher?.id ||
                                                                         cls.teachersList.find(t =>
                                                                             (cls.mainTeacher?.email && t.email === cls.mainTeacher.email) ||
                                                                             (cls.mainTeacher && t.lastName === cls.mainTeacher.lastName && t.firstName === cls.mainTeacher.firstName)
@@ -1747,7 +1773,9 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                             cls.teachersList.map(teacher => (
                                                                 <div key={teacher.id} className="flex justify-between items-center bg-gray-50 px-2 py-1 rounded text-xs group/teacher">
                                                                     <span className="truncate flex-1">{teacher.firstName} {teacher.lastName}</span>
-                                                                    <span className="text-gray-400 truncate flex-1 mx-2">{teacher.email}</span>
+                                                                    <span className="text-gray-400 truncate flex-1 mx-2">
+                                                                        {!teacher.email?.includes('@pledgeum.temp') && !teacher.email?.includes('@pledgeum.provisoire') ? teacher.email : ''}
+                                                                    </span>
                                                                     <button
                                                                         onClick={() => removeTeacherFromClass(cls.id, teacher.id)}
                                                                         className="text-gray-400 hover:text-red-500 opacity-0 group-hover/teacher:opacity-100"
@@ -1852,7 +1880,9 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                                                 } catch (e) { return student.birthDate; }
                                                                             })()}</span>}
                                                                         </div>
-                                                                        <span className="text-gray-400 truncate flex-1 mx-2">{student.email}</span>
+                                                                        <span className="text-gray-400 truncate flex-1 mx-2">
+                                                                            {!student.email?.includes('@pledgeum.temp') && !student.email?.includes('@pledgeum.provisoire') ? student.email : ''}
+                                                                        </span>
                                                                         <div className="flex items-center space-x-1 opacity-0 group-hover/student:opacity-100 transition-opacity">
                                                                             <button
                                                                                 onClick={() => {
@@ -1903,18 +1933,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                     uai: useUserStore.getState().profileData?.uai // Helper access
                                 };
 
-                                // FORCE DISPLAY FOR SANDBOX
-                                if (currentUser.email === 'fabrice.dumasdelage@gmail.com' || currentUser.schoolId === '9999999X') {
-                                    console.log("DEBUG_SANDBOX: Forcing Sandbox Data Display", displayData);
-                                    displayData = {
-                                        name: 'Mon LYCEE TOUTFAUX',
-                                        address: '12 Rue Ampère, 76500 Elbeuf',
-                                        phone: '0102030405',
-                                        headName: 'Fabrice Dumasdelage',
-                                        headEmail: 'fabrice.dumasdelage@gmail.com',
-                                        uai: '9999999X'
-                                    };
-                                }
+
 
                                 return (
                                     <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">

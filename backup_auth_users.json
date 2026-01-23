@@ -1,0 +1,78 @@
+[
+  {
+    "uid": "5CnHIaIE5XVwaPDjl4UknUx6eHi2",
+    "email": "pledgeum@gmail.com",
+    "emailVerified": false,
+    "disabled": false,
+    "metadata": {
+      "lastSignInTime": "Sat, 17 Jan 2026 12:51:47 GMT",
+      "creationTime": "Fri, 19 Dec 2025 16:12:14 GMT",
+      "lastRefreshTime": "Sat, 17 Jan 2026 12:51:48 GMT"
+    },
+    "providerData": [
+      {
+        "uid": "pledgeum@gmail.com",
+        "email": "pledgeum@gmail.com",
+        "providerId": "password"
+      }
+    ]
+  },
+  {
+    "uid": "CxprZh7KfudNYdJ7gxInbDHZDx32",
+    "email": "demo@pledgeum.fr",
+    "emailVerified": false,
+    "displayName": "Lycée d'Excellence Démo",
+    "disabled": false,
+    "metadata": {
+      "lastSignInTime": "Wed, 14 Jan 2026 17:28:22 GMT",
+      "creationTime": "Sat, 10 Jan 2026 06:11:32 GMT",
+      "lastRefreshTime": "Wed, 14 Jan 2026 19:40:26 GMT"
+    },
+    "providerData": [
+      {
+        "uid": "demo@pledgeum.fr",
+        "displayName": "Lycée d'Excellence Démo",
+        "email": "demo@pledgeum.fr",
+        "providerId": "password"
+      }
+    ]
+  },
+  {
+    "uid": "KEUDq6UYuVQlysS05mr9fHBNlkN2",
+    "email": "demo_access@pledgeum.fr",
+    "emailVerified": false,
+    "disabled": false,
+    "metadata": {
+      "lastSignInTime": "Thu, 15 Jan 2026 11:37:38 GMT",
+      "creationTime": "Wed, 14 Jan 2026 20:36:42 GMT",
+      "lastRefreshTime": "Fri, 16 Jan 2026 14:45:24 GMT"
+    },
+    "providerData": [
+      {
+        "uid": "demo_access@pledgeum.fr",
+        "email": "demo_access@pledgeum.fr",
+        "providerId": "password"
+      }
+    ]
+  },
+  {
+    "uid": "lAmUIDeewqOAmgbIRnoxxnbOvff2",
+    "email": "fabrice.dumasdelage@gmail.com",
+    "emailVerified": true,
+    "displayName": "Mon LYCEE TOUTFAUX",
+    "disabled": false,
+    "metadata": {
+      "lastSignInTime": "Sat, 17 Jan 2026 12:52:44 GMT",
+      "creationTime": "Sat, 17 Jan 2026 10:27:16 GMT",
+      "lastRefreshTime": "Sat, 17 Jan 2026 17:27:48 GMT"
+    },
+    "providerData": [
+      {
+        "uid": "fabrice.dumasdelage@gmail.com",
+        "displayName": "Mon LYCEE TOUTFAUX",
+        "email": "fabrice.dumasdelage@gmail.com",
+        "providerId": "password"
+      }
+    ]
+  }
+]

@@ -25,6 +25,7 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
     const router = useRouter();
     const pathname = usePathname();
     const [isChecking, setIsChecking] = useState(true);
+    const [loadError, setLoadError] = useState(false);
 
     // Safety check to prevent infinite fetch loops
     const fetchAttempted = useRef(false);
@@ -46,8 +47,10 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
             // Always ensure profile is loaded, even if on excluded path (like /complete-profile)
             if (!fetchAttempted.current && Object.keys(profileData || {}).length === 0 && !isLoadingProfile) {
                 fetchAttempted.current = true;
-                await fetchUserProfile(user.uid);
-                // After fetch, re-render will check redirection logic below
+                const success = await fetchUserProfile(user.uid);
+                if (!success) {
+                    setLoadError(true);
+                }
                 return;
             }
 
@@ -55,6 +58,8 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
                 console.log("ProfileGuard: Waiting for profile load...");
                 return;
             }
+
+            if (loadError) return; // Stop checking if error
 
             // Check exclusions AFTER data is potentially loaded
             const isExcluded = EXCLUDED_PATHS.some(p => pathname?.startsWith(p));
@@ -96,6 +101,26 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
     // Simplification: If user && !isComplete && !excluded => return null (redirecting)
     // ALLOW INCOMPLETE PROFILES TO RENDER
     // We rely on ProfileModal or headers to nudge user to complete profile.
+
+    if (loadError) {
+        return (
+            <div className="min-h-screen flex items-center justify-center bg-gray-50">
+                <div className="text-center max-w-md p-6 bg-white rounded-lg shadow-md border border-red-200">
+                    <h2 className="text-xl font-bold text-red-600 mb-2">Service Indisponible</h2>
+                    <p className="text-gray-600 mb-4">Impossible de charger votre profil utilisateur. Une erreur technique est survenue.</p>
+                    <button
+                        onClick={() => window.location.reload()}
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 transition"
+                    >
+                        Réessayer
+                    </button>
+                    <div className="mt-4 text-xs text-gray-400">
+                        Si le problème persiste, le service de base de données est peut-être inaccessible via l'API. (Erreur 500)
+                    </div>
+                </div>
+            </div>
+        );
+    }
 
     return <>{children}</>;
 }

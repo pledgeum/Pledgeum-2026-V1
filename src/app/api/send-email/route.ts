@@ -2,6 +2,10 @@ import { NextResponse } from 'next/server';
 import { checkRateLimit, validateOrigin, verifyUserSession } from '@/lib/server-security';
 import { sendEmail } from '@/lib/email';
 
+import pool from '@/lib/pg';
+
+// ... (existing helper function could be extracted, but we'll inline log logic for now or add a helper)
+
 export async function POST(request: Request) {
     try {
         // 1. Security Checks
@@ -47,6 +51,20 @@ export async function POST(request: Request) {
         }
 
         const success = await sendEmail({ to, subject, text, attachments: attachments.length > 0 ? attachments : undefined });
+
+        // --- POSTGRES LOGGING ---
+        try {
+            const client = await pool.connect();
+            await client.query(
+                `INSERT INTO notification_logs (recipient_email, subject, status, meta_data) VALUES ($1, $2, $3, $4)`,
+                [to, subject, success ? 'SENT' : 'FAILED', JSON.stringify({ sender: user.uid, hasAttachments: attachments.length > 0 })]
+            );
+            client.release();
+        } catch (logErr) {
+            console.error('Failed to log email to Postgres:', logErr);
+            // Don't fail the request just because logging failed
+        }
+        // ------------------------
 
         if (!success) {
             return NextResponse.json({ error: "Failed to send email via shared utility." }, { status: 500 });

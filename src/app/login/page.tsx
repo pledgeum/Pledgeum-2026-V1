@@ -302,186 +302,45 @@ export default function LoginPage() {
     };
 
     const performAccountCreation = async () => {
-        const finalizeActivation = async (uid: string, email: string) => {
-            // Priority: INVITATION UAI
-            // The invitation code dictates the CURRENT school context.
-            // Even if the user exists, we SWITCH them to this new school.
-
-            const newSchoolId = foundClassId?.split('_')[0] || "UNKNOWN"; // Extract UAI from classId (e.g. 9999999X_...)
-
-            // 1. Fetch Existing Profile (to preserve mobility data)
-            let existingProfile: any = {};
-            try {
-                const userDoc = await getDoc(doc(db, "users", uid));
-                if (userDoc.exists()) {
-                    existingProfile = userDoc.data().profileData || {};
-                }
-            } catch (e) {
-                console.warn("Could not fetch existing profile, starting fresh.", e);
-            }
-
-            // 2. FETCH STRICT SCHOOL IDENTITY (No API Search)
-            // We must rely on the School Document in Firestore which is the single source of truth
-            // for the establishment that issued the codes.
-            let canonicalSchoolData = {
-                name: foundStudent.schoolName || existingProfile.ecole_nom || '',
-                address: foundStudent.address || existingProfile.address || '',
-                city: foundStudent.city || existingProfile.city || '',
-                postalCode: foundStudent.postalCode || existingProfile.postalCode || ''
-            };
-
-            if (newSchoolId && newSchoolId !== 'UNKNOWN') {
-                try {
-                    const schoolDoc = await getDoc(doc(db, "schools", newSchoolId));
-                    if (schoolDoc.exists()) {
-                        const sData = schoolDoc.data();
-                        canonicalSchoolData = {
-                            name: sData.schoolName || canonicalSchoolData.name,
-                            address: sData.schoolAddress || canonicalSchoolData.address,
-                            city: sData.schoolCity || canonicalSchoolData.city,
-                            postalCode: sData.schoolPostalCode || canonicalSchoolData.postalCode
-                        };
-                        console.log(`[Activation] Resolved Canonical School Identity for ${newSchoolId}:`, canonicalSchoolData.name);
-                    }
-                } catch (err) {
-                    console.error("[Activation] Failed to fetch school document:", err);
-                }
-            }
-
-            // 2b. FETCH CLASS IDENTITY (For Diploma)
-            let classDiploma = "";
-            if (foundClassId) {
-                try {
-                    const classDoc = await getDoc(doc(db, "classes", foundClassId));
-                    if (classDoc.exists()) {
-                        classDiploma = classDoc.data().diploma || "";
-                        console.log(`[Activation] Resolved Class Diploma for ${foundClassId}:`, classDiploma);
-                    }
-                } catch (err) {
-                    console.error("[Activation] Failed to fetch class document:", err);
-                }
-            }
-
-            // 3. FORCE School Switch & Merge Profile
-            // We KEEP Name, Phone, Address, Diploma from existing profile if available (Identity Persistence)
-            // We OVERWRITE Class and School info from Invitation (Context Switch)
-
-            const pick = (a: any, b: any) => {
-                const val = (a !== undefined && a !== null && a !== '') ? a : b;
-                return val === undefined ? "" : val;
-            };
-
-            // PRIORITY LOGIC: UAI 9999999X
-            // If the code is from the Sandbox, we FORCE the UAI to be 9999999X.
-            let safeUai = newSchoolId || "";
-            if (newSchoolId === '9999999X' || email === 'fabrice.dumasdelage@gmail.com') {
-                safeUai = '9999999X';
-            }
-
-            const mergedProfileData = {
-                // Identity
-                firstName: pick(existingProfile.firstName, foundStudent.firstName),
-                lastName: pick(existingProfile.lastName, foundStudent.lastName),
-                birthDate: pick(existingProfile.birthDate, foundStudent.birthDate),
-
-                // Address & Contact
-                address: pick(existingProfile.address, foundStudent.address),
-                postalCode: pick(existingProfile.postalCode, foundStudent.postalCode),
-                zipCode: pick(existingProfile.zipCode, foundStudent.zipCode),
-                city: pick(existingProfile.city, foundStudent.city),
-                phone: pick(existingProfile.phone, foundStudent.phone),
-
-                // Academic
-                diploma: classDiploma || pick(existingProfile.diploma, foundStudent.diploma),
-
-                // FORCE NEW SCHOOL CONTEXT
-                email: email || "",
-                schoolId: safeUai, // Use normalized UAI
-                class: foundStudent.className || existingProfile.class || "",
-                uai: safeUai, // NEW: Root Level UAI Compliance
-
-                // STRICT SCHOOL IDENTITY
-                ecole_nom: canonicalSchoolData.name,
-                ecole_ville: canonicalSchoolData.city,
-
-                // Role
-                role: foundStudent.role || existingProfile.role || 'student',
-            };
-
-            // Final safety net
-            Object.keys(mergedProfileData).forEach(key => {
-                if ((mergedProfileData as any)[key] === undefined) {
-                    (mergedProfileData as any)[key] = "";
-                }
-            });
-
-            await createUserProfile(uid, {
-                email: email,
-                role: mergedProfileData.role,
-                name: `${mergedProfileData.firstName} ${mergedProfileData.lastName}`,
-                birthDate: mergedProfileData.birthDate,
-                profileData: mergedProfileData,
-                // Pass explicit UAI to store/DB
-                uai: safeUai
-            } as any); // Type cast until store interface is fully updated strictly
-
-            // Also explicitly update the root user document 'schoolId' AND 'uai' field
-            // Redundant but safe for direct DB reads
-            await updateDoc(doc(db, "users", uid), {
-                schoolId: safeUai,
-                uai: safeUai
-            });
-
-            // 4. Update School Store with correct email (Linking in the new school's sub-collection)
-            if (foundClassId && foundStudent && foundStudent.id) {
-                updateStudent(foundClassId, foundStudent.id, { email: email });
-            }
-
-            // 5. Success -> Redirect
-            router.push('/');
-        };
-
         try {
-            // 1. Unified Account Logic: Try to Login FIRST
-            // If the user exists, we just want to switch their context (School Switch).
-            // If they don't exist, we create them.
+            console.log("Starting Server-Side Activation...");
 
-            let user = auth.currentUser;
-            let isExistingUser = false;
+            // 1. Call Activation API
+            const response = await fetch('/api/auth/activate', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    tempId: tempId,
+                    tempCode: tempCode,
+                    email: newEmail,
+                    password: newPassword
+                })
+            });
 
-            try {
-                // Attempt Login with provided credentials
-                const userCredential = await signInWithEmailAndPassword(auth, newEmail, newPassword);
-                user = userCredential.user;
-                isExistingUser = true;
-                console.log("Existing user identified and authenticated. Proceeding to context switch.");
-            } catch (loginErr: any) {
-                if (loginErr.code === 'auth/user-not-found' || loginErr.code === 'auth/invalid-credential') {
-                    // Not found -> Create New
-                    const userCredential = await createUserWithEmailAndPassword(auth, newEmail, newPassword);
-                    user = userCredential.user;
-                } else if (loginErr.code === 'auth/wrong-password') {
-                    // Account exists but wrong password
-                    setError("Un compte existe déjà avec cet email mais le mot de passe est incorrect. Veuillez utiliser votre mot de passe habituel si vous avez déjà un compte.");
-                    setLoading(false);
-                    return;
-                } else {
-                    throw loginErr; // Re-throw other errors
+            if (!response.ok) {
+                const data = await response.json().catch(() => ({}));
+
+                // Specific Check for Email Duplicate
+                if (response.status === 409 || data.code === 'EMAIL_TAKEN' || data.error === 'EMAIL_ALREADY_IN_USE') {
+                    setActivationStep(2); // Go back to email input
+                    throw new Error("Cette adresse est déjà associée à un compte. Veuillez vous connecter ou utiliser une autre adresse.");
                 }
+
+                throw new Error(data.error || "Échec de l'activation");
             }
 
-            if (!user) throw new Error("Authentication failed");
+            console.log("Activation API Success. Logging in...");
 
-            await finalizeActivation(user.uid, user.email || newEmail);
+            // 2. Sign In locally with the new credentials
+            // The account is created/updated on server, now we get the token on client.
+            await signInWithEmailAndPassword(auth, newEmail, newPassword);
+
+            // 3. Success -> Redirect
+            router.push('/');
 
         } catch (err: any) {
-            console.error(err);
-            if (err.code === 'auth/email-already-in-use') {
-                // Should be caught by login attempt, but safety net
-                setError("Un compte existe déjà avec cet email. Veuillez utiliser votre mot de passe habituel.");
-            } else {
-                setError("Erreur lors de la finalisation du compte : " + err.message);
-            }
+            console.error("Activation Failed:", err);
+            setError(err.message || "Erreur lors de l'activation du compte.");
         } finally {
             setLoading(false);
         }
@@ -706,6 +565,11 @@ export default function LoginPage() {
                                         value={newEmail}
                                         onChange={(e) => setNewEmail(e.target.value)}
                                     />
+                                    {error && error.includes('Cette adresse') && (
+                                        <div className="text-red-500 text-xs mt-1 font-medium">
+                                            {error}
+                                        </div>
+                                    )}
                                 </div>
                                 <div>
                                     <label className="block text-sm font-medium text-gray-700 mb-1">Nouveau mot de passe</label>
@@ -734,7 +598,7 @@ export default function LoginPage() {
                                     />
                                 </div>
 
-                                {error && (
+                                {error && !error.includes('Cette adresse') && (
                                     <div className="text-red-500 text-sm text-center bg-red-50 p-2 rounded border border-red-100">{error}</div>
                                 )}
 

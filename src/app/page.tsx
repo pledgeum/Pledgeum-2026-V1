@@ -10,9 +10,8 @@ import { useConventionStore, Convention } from '@/store/convention';
 import { useSchoolStore } from '@/store/school';
 import { SignatureModal } from '@/components/ui/SignatureModal';
 import { SignatureTimeline } from '@/components/ui/SignatureTimeline';
-
 import { CompanySearchModal } from '@/components/ui/CompanySearchModal';
-import { pdf } from '@react-pdf/renderer';
+import { pdfService } from '@/services/pdfService';
 import { MissionOrderPdf } from '@/components/pdf/MissionOrderPdf';
 import { ProfileModal } from '@/components/ui/ProfileModal';
 import { ParentValidationModal } from '@/components/ui/ParentValidationModal';
@@ -42,7 +41,8 @@ import { EmailCorrectionModal } from '@/components/ui/EmailCorrectionModal';
 import TrackingAssignmentModal from '@/components/ui/TrackingAssignmentModal';
 import { doc, setDoc, query, collection, getDocs, where } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
-
+import { ConventionStatusBadge } from '@/components/conventions/ConventionStatusBadge';
+import { ConventionActions } from '@/components/conventions/ConventionActions';
 import { AlumniModal } from '@/components/ui/AlumniModal';
 import { useAdminStore } from '@/store/admin';
 import { TrackingMatrixModal } from '@/components/ui/TrackingMatrixModal';
@@ -139,8 +139,8 @@ export default function Home() {
       // Old: phone, address (string), zipCode, city, parentName...
 
       const hasContact = (
-        (profileData.address && typeof profileData.address === 'object') ||
-        (profileData.address && profileData.zipCode && profileData.city)
+        (profileData?.address && typeof profileData.address === 'object') ||
+        (profileData?.address && profileData.zipCode && profileData.city)
       );
 
       // Check Parent (Only mandatory for minors)
@@ -997,15 +997,10 @@ export default function Home() {
           isOpen={isSearchModalOpen}
           onClose={() => setIsSearchModalOpen(false)}
           conventions={allConventions}
-          studentAddress={(() => {
-            // Address logic: prefer student address if available, else null
-            if (role === 'student') {
-              const myConv = getConventionsByRole('student', user.email || '', user.uid)[0];
-              return myConv?.eleve_adresse || '';
-            }
-            if (user.email === 'pledgeum@gmail.com') return "10 Rue de Rivoli, 75001 Paris";
-            return ""; // Other roles likely don't need 'Home' origin or can set it manually
-          })()}
+          studentAddress={
+            (role === 'student' ? (getConventionsByRole('student', user.email || '', user.uid)[0]?.eleve_adresse || '') :
+              (user.email === 'pledgeum@gmail.com' ? "10 Rue de Rivoli, 75001 Paris" : ""))
+          }
           schoolAddress="123 Avenue de la République, 75011 Paris"
         />
         {/* MOBILE: Floating Action Button for Student (New Convention) */}
@@ -1029,7 +1024,7 @@ export default function Home() {
 // Sub-component for list rendering to keep Page clean
 function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdModalOpen, onModalChange }: { role: UserRole, userEmail: string, userId?: string, isRgpdModalOpen: boolean, setIsRgpdModalOpen: (v: boolean) => void, onModalChange?: (isOpen: boolean) => void }) {
   const router = useRouter();
-  const { getConventionsByRole, signConvention, sendReminder, bulkSignConventions, updateEmail, assignTrackingTeacher } = useConventionStore();
+  const { getConventionsByRole, signConvention, sendReminder, bulkSignConventions, updateEmail, assignTrackingTeacher, fetchConventions } = useConventionStore();
   const { classes } = useSchoolStore();
   const { addNotification, name, schoolId } = useUserStore();
   const conventions = getConventionsByRole(role, userEmail, userId);
@@ -1098,16 +1093,30 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
     fetchMissionOrders();
   }, [fetchMissionOrders]);
 
-  const handleDownloadOdm = (odm: MissionOrder, convention: Convention) => {
+  const [odmQrCodeUrl, setOdmQrCodeUrl] = useState<string>('');
+
+  const handleDownloadOdm = async (odm: MissionOrder, convention: Convention) => {
+    // Generate QR Code for Mission Order
+    try {
+      const { url } = await generateVerificationUrl(convention, 'mission_order');
+      const qrCode = await QRCode.toDataURL(url);
+      setOdmQrCodeUrl(qrCode);
+    } catch (e) {
+      console.error("Failed to generate ODM QR Code", e);
+    }
     setOdmPreviewData({ odm, convention });
   };
 
   const executeDownloadOdm = async (odm: MissionOrder, convention: Convention) => {
     try {
-      const blob = await pdf(<MissionOrderPdf missionOrder={odm} convention={convention} />).toBlob();
-      const url = URL.createObjectURL(blob);
+      // Regenerate QR for download to ensure fresh URL
+      const { url } = await generateVerificationUrl(convention, 'mission_order');
+      const qrCode = await QRCode.toDataURL(url);
+
+      const blob = await pdf(<MissionOrderPdf missionOrder={odm} convention={convention} qrCodeUrl={qrCode} />).toBlob();
+      const pdfUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
-      link.href = url;
+      link.href = pdfUrl;
       link.download = `ODM_${convention.eleve_nom}_${convention.eleve_prenom}.pdf`;
       document.body.appendChild(link);
       link.click();
@@ -1607,7 +1616,7 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
 
               {/* Status Label - Right Side */}
               <div className="flex flex-col items-end space-y-1">
-                {getSignatureStatusLabel(conv)}
+                <ConventionStatusBadge status={conv.status} />
                 <span className="text-xs text-gray-500">
                   Mis à jour le {new Date(conv.updatedAt).toLocaleDateString()}
                 </span>
@@ -1723,30 +1732,28 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
                   );
                 })()}
 
-                {/* Dynamic Action Button (Sign) */}
-                {actionable ? (
+                {/* WORKFLOW ACTIONS */}
+                <ConventionActions
+                  convention={conv}
+                  onUpdate={() => fetchConventions(schoolId)} // Refresh list
+                  onSign={() => handleOpenSignModal(conv.id)}
+                />
+
+                {/* Legacy Reminder Button (Keep if not replaced by Actions) */}
+                {!actionable && role !== 'student' && role !== 'parent' && (
                   <button
-                    onClick={() => handleOpenSignModal(conv.id)}
-                    className="flex-1 sm:flex-none px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 animate-pulse"
+                    onClick={() => {
+                      sendReminder(conv.id).then(() => {
+                        addNotification({ title: "Rappel envoyé", message: "Le rappel a été envoyé avec succès par email." });
+                      }).catch(err => {
+                        addNotification({ title: "Erreur", message: err.message });
+                      });
+                    }}
+                    className="flex-1 sm:flex-none px-3 py-2 border border-blue-200 shadow-sm text-sm font-medium rounded-md text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors"
+                    title="Envoyer un rappel par email"
                   >
-                    {getActionLabel(conv.status, role, conv)}
+                    <Bell className="w-4 h-4" />
                   </button>
-                ) : (
-                  role !== 'student' && role !== 'parent' && (
-                    <button
-                      onClick={() => {
-                        sendReminder(conv.id).then(() => {
-                          addNotification({ title: "Rappel envoyé", message: "Le rappel a été envoyé avec succès par email." });
-                        }).catch(err => {
-                          addNotification({ title: "Erreur", message: err.message });
-                        });
-                      }}
-                      className="flex-1 sm:flex-none px-3 py-2 border border-blue-200 shadow-sm text-sm font-medium rounded-md text-blue-600 bg-blue-50 hover:bg-blue-100 transition-colors"
-                      title="Envoyer un rappel par email"
-                    >
-                      <Bell className="w-4 h-4" />
-                    </button>
-                  )
                 )}
 
                 {/* Invalid Email Correction Button */}
@@ -1778,6 +1785,8 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
         isOpen={isSigModalOpen}
         onClose={() => setIsSigModalOpen(false)}
         onSign={handleSign}
+        canSignDual={role === 'tutor'}
+        dualRoleLabel="Je certifie être également le représentant de l'entreprise et souhaite signer pour les deux rôles."
         conventionId={selectedConventionId || ''}
         signeeName={(() => {
           const c = conventions.find(c => c.id === selectedConventionId);
@@ -1938,7 +1947,7 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
               </div>
               <div className="flex-1 bg-gray-100 overflow-hidden relative">
                 <PDFViewer width="100%" height="100%" className="w-full h-full">
-                  <MissionOrderPdf missionOrder={odmPreviewData.odm} convention={odmPreviewData.convention} />
+                  <MissionOrderPdf missionOrder={odmPreviewData.odm} convention={odmPreviewData.convention} qrCodeUrl={odmQrCodeUrl} />
                 </PDFViewer>
               </div>
             </div>
