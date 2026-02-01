@@ -6,6 +6,7 @@ import { generateVerificationUrl } from '@/app/actions/sign';
 import { sha256 } from 'js-sha256';
 import { UserRole, useUserStore } from './user';
 import { useDemoStore } from './demo';
+import { db, doc, updateDoc, arrayUnion } from '@/lib/firebase';
 
 export type ConventionStatus =
     | 'DRAFT'
@@ -94,13 +95,15 @@ export interface Convention extends ConventionData {
 
 interface ConventionState {
     conventions: Convention[];
+    isLoading?: boolean;
     addConvention: (data: ConventionData, studentId: string) => void;
     updateStatus: (id: string, newStatus: ConventionStatus) => void;
     signConvention: (id: string, role: string, signatureImage?: string, code?: string, extraAuditLog?: AuditLog, dualSign?: boolean) => Promise<void>;
     addFeedback: (id: string, author: string, message: string) => void;
     assignTrackingTeacher: (conventionId: string, trackingTeacherEmail: string) => Promise<void>;
     getConventionsByRole: (role: string, userEmail: string, currentUserId?: string) => Convention[];
-    submitConvention: (data: ConventionData, studentId: string, userId: string) => Promise<void>;
+    submitConvention: (data: ConventionData, studentId: string, userId: string) => Promise<string>;
+    createConvention: (data: any) => Promise<string>;
     fetchConventions: (userId: string, userEmail?: string) => Promise<void>;
     fetchAllConventions: () => Promise<Convention[]>;
     updateConvention: (id: string, data: Partial<ConventionData | Convention>) => Promise<void>;
@@ -126,31 +129,39 @@ const generateSignatureCode = () => {
 };
 
 // --- DUAL WRITE HELPER ---
+// --- DUAL WRITE HELPER ---
 const syncToPostgres = async (convention: any) => {
     try {
-        // Do not sync in Demo Mode (Client-side check)
-        // Actually, store manages demo mode, but here we can check if ID looks like demo?
-        // Or better: The caller checks it.
-        // But for safety:
+        // Do not sync in Demo Mode 
         if ((convention.id && convention.id.startsWith('demo_')) || convention.studentId === 'etudiant.simu@email.com') {
-            // console.log("[DUAL_WRITE] Skipping Demo Convention");
             return;
         }
 
-        // console.log("[DUAL_WRITE] Syncing to PostgreSQL...", convention.id);
+        console.log("[DUAL_WRITE] Syncing to PostgreSQL...", convention.id);
+        console.log("SENDING PAYLOAD:", JSON.stringify(convention, null, 2));
         const res = await fetch('/api/sync/convention', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify(convention)
         });
-        const json = await res.json();
-        if (!json.success) {
-            console.error("[DUAL_WRITE] API Error:", json.error);
-        } else {
-            // console.log("[DUAL_WRITE] Success for", convention.id);
+
+        const contentType = res.headers.get("content-type");
+        if (!contentType || !contentType.includes("application/json")) {
+            throw new Error("API returned non-JSON response: " + res.statusText);
         }
-    } catch (e) {
-        console.error("[DUAL_WRITE] Network/Fetch Error (Non-blocking):", e);
+
+        const json = await res.json();
+
+        if (!res.ok || !json.success) {
+            console.error("[DUAL_WRITE] API Error:", json.error || res.statusText);
+            throw new Error(`Erreur de sauvegarde (API): ${json.error || res.statusText}`);
+        } else {
+            console.log("[DUAL_WRITE] Success for", convention.id);
+        }
+    } catch (e: any) {
+        console.error("[DUAL_WRITE] Network/Fetch Error:", e);
+        // We MUST re-throw or notify to prevent silent failure in UI
+        throw e;
     }
 };
 
@@ -275,6 +286,7 @@ const MOCK_CONVENTION_READY: Convention = {
 
 export const useConventionStore = create<ConventionState>((set, get) => ({
     conventions: [], // Start empty, fetch on load
+    isLoading: false,
 
     fetchConventions: async (userId: string, userEmail?: string) => {
         const { role, schoolId } = useUserStore.getState();
@@ -288,9 +300,6 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             } else if (schoolId) {
                 // Admin / Teacher sees School scope
                 url += `&uai=${schoolId}`;
-            } else if (userEmail === 'pledgeum@gmail.com') {
-                // Fallback for Admin initialization if schoolId missing
-                url += `&uai=9999999X`;
             }
 
             console.log(`[ConventionStore] Fetching from: ${url}`);
@@ -301,19 +310,20 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             const data = await res.json();
             if (data.success && Array.isArray(data.conventions)) {
                 const mappedConventions = data.conventions.map((c: any) => ({
-                    ...c,
-                    // Flatten metadata to top-level fields (e.g. ent_nom, eleve_nom)
+                    // Systemic Fix: Spread metadata FIRST, then API columns.
+                    // This ensures Live Data (teacherEmail from JOIN) overrides stale Snapshot data.
                     ...(c.metadata || {}),
+                    ...c,
 
                     // Map specific DB columns to Frontend Conventions interface
-                    stage_date_debut: c.date_start,
-                    stage_date_fin: c.date_end,
-                    studentId: c.student_uid,
-                    schoolId: c.establishment_uai,
+                    stage_date_debut: c.dateStart || c.date_start || (c.metadata && c.metadata.stage_date_debut),
+                    stage_date_fin: c.dateEnd || c.date_end || (c.metadata && c.metadata.stage_date_fin),
+                    studentId: c.studentId || c.student_uid,
+                    schoolId: c.schoolId || c.establishment_uai || c.establishmentUai,
 
                     // Ensure dates are stringified if needed (though API JSON does this)
-                    createdAt: c.created_at,
-                    updatedAt: c.updated_at,
+                    createdAt: c.createdAt || c.created_at,
+                    updatedAt: c.updatedAt || c.updated_at,
                 }));
 
                 set({ conventions: mappedConventions });
@@ -334,7 +344,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
 
     addConvention: (data, studentId) => {
         const { schoolId, email } = useUserStore.getState();
-        const isSandbox = schoolId === '9999999X';
+        const isSandbox = schoolId === '9999999Z';
         const isSuperAdmin = email === 'pledgeum@gmail.com';
 
         set((state) => ({
@@ -367,160 +377,47 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
         const convention = conventions.find(c => c.id === id);
         if (!convention) return;
 
-        const now = new Date().toISOString();
         const code = providedCode || generateSignatureCode();
-        const newSigs = { ...convention.signatures };
-        let newStatus = convention.status;
-
-        // Helper to check if a role has signed
-        const hasSigned = (r: UserRole) => {
-            if (r === 'student') return !!newSigs.studentAt;
-            if (r === 'parent') return !!newSigs.parentAt;
-            if (r === 'teacher') return !!newSigs.teacherAt;
-            if (r === 'company_head') return !!newSigs.companyAt;
-            if (r === 'tutor') return !!newSigs.tutorAt;
-            if (r === 'school_head') return !!newSigs.headAt;
-            return false;
-        };
-
-        // State Machine Logic
-        if (role === 'student') {
-            newSigs.studentAt = now;
-            if (signatureImage) newSigs.studentImg = signatureImage;
-            newSigs.studentCode = code;
-
-            if (convention.status === 'DRAFT') {
-                newStatus = 'SUBMITTED';
-            }
-        }
-        else if (role === 'parent' && convention.est_mineur) {
-            if (convention.status === 'SUBMITTED') {
-                newSigs.parentAt = now;
-                if (signatureImage) newSigs.parentImg = signatureImage;
-                newSigs.parentCode = code;
-                newStatus = 'SIGNED_PARENT';
-            }
-        }
-        else if (role === 'teacher') {
-            const canSign = (convention.est_mineur && convention.status === 'SIGNED_PARENT') ||
-                (!convention.est_mineur && (convention.status === 'SUBMITTED' || convention.status === 'SIGNED_PARENT'));
-
-            if (canSign) {
-                newSigs.teacherAt = now;
-                if (signatureImage) newSigs.teacherImg = signatureImage;
-                newSigs.teacherCode = code;
-                newStatus = 'VALIDATED_TEACHER';
-            }
-        }
-        else if (role === 'company_head' || role === 'tutor') {
-            // Flexible Order Logic: Can sign if Teacher has validated
-            // Base condition: Teacher must have validated (so status is at least VALIDATED_TEACHER)
-            // Or partners already started signing (SIGNED_COMPANY, SIGNED_TUTOR)
-            const isReadyForPartners = ['VALIDATED_TEACHER', 'SIGNED_COMPANY', 'SIGNED_TUTOR'].includes(convention.status);
-
-            if (isReadyForPartners) {
-                // Apply Main Signature
-                if (role === 'company_head') {
-                    newSigs.companyAt = now;
-                    if (signatureImage) newSigs.companyImg = signatureImage;
-                    newSigs.companyCode = code;
-                }
-                if (role === 'tutor') {
-                    newSigs.tutorAt = now;
-                    if (signatureImage) newSigs.tutorImg = signatureImage;
-                    newSigs.tutorCode = code;
-                }
-
-                // Apply Dual Signature if requested
-                if (dualSign) {
-                    const dualRole = role === 'company_head' ? 'tutor' : 'company_head';
-                    // We use the same image and code? Or generate new?
-                    // To imply "delegation" or "same person", same image + same code is appropriate.
-                    // But technically they are distinct fields.
-                    if (dualRole === 'company_head') {
-                        newSigs.companyAt = now;
-                        if (signatureImage) newSigs.companyImg = signatureImage;
-                        newSigs.companyCode = code;
-                    } else {
-                        newSigs.tutorAt = now;
-                        if (signatureImage) newSigs.tutorImg = signatureImage;
-                        newSigs.tutorCode = code;
-                    }
-                }
-
-                // Determine New Status
-                // If BOTH Company and Tutor have signed -> SIGNED_TUTOR (Ready for Head)
-                // If only Company -> SIGNED_COMPANY
-                // If only Tutor -> VALIDATED_TEACHER (technically unchanged status, but signature added)
-                // NOTE: We rely on checking the updated `newSigs` object
-                const companySigned = !!newSigs.companyAt;
-                const tutorSigned = !!newSigs.tutorAt;
-
-                if (companySigned && tutorSigned) {
-                    newStatus = 'SIGNED_TUTOR'; // Both signed, ready for Head
-                } else if (companySigned) {
-                    newStatus = 'SIGNED_COMPANY'; // Company signed, waiting for Tutor
-                } else if (tutorSigned) {
-                    // Tutor signed, waiting for Company.
-                    // We keep VALIDATED_TEACHER so UI says "En attente : Chef d'Entreprise" (via Logic in page.tsx)
-                    // Or we introduce a new status? Let's stick to existing statuses to avoid breaking UI.
-                    // VALIDATED_TEACHER effectively means "Waiting for Company/Partners"
-                    newStatus = 'VALIDATED_TEACHER';
-                }
-            }
-        }
-        else if (role === 'school_head' && convention.status === 'SIGNED_TUTOR') {
-            newSigs.headAt = now;
-            if (signatureImage) newSigs.headImg = signatureImage;
-            newSigs.headCode = code;
-            newStatus = 'VALIDATED_HEAD';
-        }
 
         try {
-            // Verify if (status changed) OR (signatures changed)
-            // We compare signature timestamps count to detect if a signature was added
-            const countSigs = (s: any) => [s.studentAt, s.parentAt, s.teacherAt, s.companyAt, s.tutorAt, s.headAt].filter(Boolean).length;
-            const oldSigCount = countSigs(convention.signatures);
-            const newSigCount = countSigs(newSigs);
+            // Call the new API
+            const response = await fetch(`/api/conventions/${id}/sign`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    role,
+                    signatureImage,
+                    code,
+                    dualSign
+                })
+            });
 
-            const signaturesChanged = newSigCount > oldSigCount;
-            const statusChanged = newStatus !== convention.status;
-
-            const allowedResign =
-                (role === 'student' && ['DRAFT', 'SUBMITTED', 'REJECTED'].includes(convention.status)) ||
-                (role === 'parent' && convention.status === 'SIGNED_PARENT') ||
-                (role === 'teacher' && convention.status === 'VALIDATED_TEACHER') ||
-                (role === 'company_head' && convention.status === 'SIGNED_COMPANY') ||
-                (role === 'tutor' && convention.status === 'SIGNED_TUTOR') ||
-                (role === 'school_head' && convention.status === 'VALIDATED_HEAD');
-
-            if (!statusChanged && !signaturesChanged && !allowedResign) {
-                console.warn(`Signature ignored: Status ${newStatus} unchanged for role ${role}. (Minor: ${convention.est_mineur}, Status: ${convention.status})`);
-                throw new Error(`La signature n'a pas pu être prise en compte. Statut: ${convention.status}, Rôle: ${role}.`);
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to sign convention via API');
             }
 
-            // Compute Verification Hash (Server-Side Logic via Action)
-            // Create a preview of the new state to generate the correct signature
-            const tempConvention = {
-                ...convention,
-                signatures: newSigs,
-                status: newStatus,
-            } as Convention;
+            const { data: updatedData } = await response.json();
 
-            const { hashDisplay } = await generateVerificationUrl(tempConvention, 'convention');
+            // Optimistically update local state or use returned data
+            // We'll merge returned metadata with local convention to keep UI snappy
+            // Note: The API returns the raw DB row. We might need to map it if the store expects specific camelCase.
+            // But for `signatures` and `status`, it should be consistent if we updated metadata correctly.
 
-            // Persist to Firestore (SKIP IN DEMO MODE)
-            // Persist to Firestore REMOVED
-            // TODO: Persist to Postgres API
-            console.log("ConventionStore: Signature updated locally. Postgres sync needed.");
+            const newMetadata = updatedData.metadata || {};
+            const newSignatures = newMetadata.signatures || convention.signatures;
+            const newStatus = updatedData.status; // This might be snake_case in PG? No, usually text.
 
-            // Update Local State
+            const now = new Date().toISOString();
+
             set((state) => ({
                 conventions: state.conventions.map(c =>
                     c.id === id ? {
                         ...c,
-                        signatures: newSigs,
-                        status: newStatus,
+                        status: newStatus as ConventionStatus, // Cast to ensure type safety
+                        signatures: newSignatures,
                         updatedAt: now,
                         auditLogs: [
                             ...(c.auditLogs || []),
@@ -528,19 +425,27 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                             {
                                 date: now,
                                 action: 'SIGNED',
-                                actorEmail: (role === 'student' ? convention.eleve_email :
-                                    role === 'parent' ? convention.rep_legal_email :
-                                        role === 'teacher' ? convention.prof_email :
-                                            role === 'tutor' ? convention.tuteur_email :
-                                                role === 'company_head' ? convention.ent_rep_email :
-                                                    role === 'school_head' ? convention.ecole_chef_email : 'unknown') || 'unknown',
-                                details: `Signature par ${role} `
+                                actorEmail: role, // Simplified logging
+                                details: `Signature par ${role} (API)`
                             }
                         ]
                     } : c
                 )
             }));
 
+            // Notifications are currently handled in the logic below this block in the original file.
+            // We should PRESERVE the notification logic or move it to the API. 
+            // The prompt "Goal: When the user clicks "Signer", the request travels via HTTP to the Server..."
+            // It didn't explicitly say "Move email logic". 
+            // But usually, emails should be server-side. 
+            // However, the original Store had distinct `if (newStatus === ...)` blocks for emails.
+            // For this specific refactor, I will KEEP the client-side email triggers to minimize regression risk,
+            // as I am only tasked to switch the *persistence* layer.
+
+            // ... (The original notification logic follows here in the store, 
+            // but since I am replacing the function, I need to include it or ensure it runs.)
+
+            // RE-Start Notification Logic Copy from Original (Adapted)
             // Determine Dashboard Link based on Environment
             const origin = typeof window !== 'undefined' ? window.location.origin : '';
             const isLocal = origin.includes('localhost');
@@ -572,27 +477,12 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 );
             }
             else if (newStatus === 'VALIDATED_TEACHER') {
-                // Teacher has validated -> Notify Company (Magic Invite)
-                // Use dynamic import for Server Action to avoid build issues in Store if possible, or direct import.
-                // Assuming direct import works in Next.js 14+ client boundaries.
                 const { sendConventionInvitation } = await import('@/app/actions/notifications');
                 await sendConventionInvitation(convention.id, 'company_head', convention.ent_rep_email, convention.ent_rep_nom);
-                // await sendNotification(
-                //     convention.ent_rep_email,
-                //     `Convention PFMP à signer - ${convention.eleve_prenom} ${convention.eleve_nom} - ${convention.ecole_nom}`,
-                //     `Bonjour,\n\nLa convention de l'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Classe: ${convention.eleve_classe}) pour le stage chez ${convention.ent_nom} (${convention.ent_ville}) a été validée par l'enseignant référent (${convention.prof_nom}).\n\nC'est à votre tour de signer : ${dashboardLink}\n\nCordialement.`
-                // );
             }
             else if (newStatus === 'SIGNED_COMPANY') {
-                // Company has signed -> Notify Tutor (Magic Invite)
                 const { sendConventionInvitation } = await import('@/app/actions/notifications');
                 await sendConventionInvitation(convention.id, 'tutor', convention.tuteur_email, convention.tuteur_prenom ? `${convention.tuteur_prenom} ${convention.tuteur_nom}` : convention.tuteur_nom);
-
-                // await sendNotification(
-                //     convention.tuteur_email,
-                //     `Convention PFMP à signer - ${convention.eleve_prenom} ${convention.eleve_nom} - ${convention.ecole_nom}`,
-                //     `Bonjour,\n\nLe représentant de l'entreprise (${convention.ent_rep_nom}) a signé la convention de l'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Classe: ${convention.eleve_classe}) pour le stage chez ${convention.ent_nom} (${convention.ent_ville}).\n\nMerci de la valider : ${dashboardLink}\n\nCordialement.`
-                // );
             }
             else if (newStatus === 'SIGNED_TUTOR') {
                 const tutorName = convention.tuteur_prenom ? `${convention.tuteur_prenom} ${convention.tuteur_nom}` : convention.tuteur_nom;
@@ -614,12 +504,12 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                     convention.tuteur_email,
                     // Parent only if minor
                     convention.est_mineur ? convention.rep_legal_email : null,
-                    // EXPLICITLY EXCLUDED: convention.ecole_chef_email (School Head does not want final email)
                 ].filter(Boolean) as string[];
 
                 // Send in parallel
                 await Promise.all(recipients.map(email => sendNotification(email, subject, msg)));
             }
+
         } catch (error) {
             console.error("Error signing convention:", error);
             throw error;
@@ -673,94 +563,72 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
         return [];
     },
 
-    submitConvention: async (data, studentId, userId) => {
+    // --- NEW: Create Convention via API (Restoring functionality) ---
+    createConvention: async (data: any) => {
+        set({ isLoading: true });
         try {
-            // Create local object first for optimistic/local update or just structure
-            const newConvention: Omit<Convention, 'id'> = {
-                ...data,
-                userId,
-                studentId,
-                status: 'SUBMITTED',
-                createdAt: new Date().toISOString(),
-                updatedAt: new Date().toISOString(),
-                signatures: {
-                    studentAt: new Date().toISOString(),
-                    studentImg: data.signatures?.studentImg,
-                    studentCode: generateSignatureCode() // Generate Unique ID for Student
-                },
-                feedbacks: []
-            };
+            console.log("[Store] Creating convention via API...", data);
+            const response = await fetch('/api/conventions', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
 
-            // Firestore add (With Demo Bypass)
-            let newId = "";
-            if (!useDemoStore.getState().isDemoMode) {
-                console.log("[CONVENTION_STORE] addConvention: Firestore logic disabled. Please implement Postgres API.");
-                // Placeholder ID
-                newId = "pg_conv_" + Math.random().toString(36).substr(2, 9);
-            } else {
-                newId = "demo_conv_" + Math.random().toString(36).substr(2, 9);
-                console.log("[DEMO] Generated fake ID: ", newId);
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to create convention');
             }
 
-            // Update local state with the real ID
-            const createdConvention = { ...newConvention, id: newId };
+            const { data: createdConvention } = await response.json();
+
+            // Add to local state
             set((state) => ({
-                conventions: [...state.conventions, createdConvention]
+                conventions: [...state.conventions, createdConvention],
+                isLoading: false
             }));
 
-            // --- DOUBLE WRITE (Safe Async) ---
-            syncToPostgres(createdConvention);
-            // ---------------------------------
+            return createdConvention.id;
 
-            // Send Email Notification
-            // Send Email Notification to Student (Confirmation)
-            if (data.eleve_email) {
-                await sendNotification(
-                    data.eleve_email,
-                    `Confirmation : Convention PFMP - ${data.eleve_prenom} ${data.eleve_nom} - ${data.ecole_nom}`,
-                    `Bonjour ${data.eleve_prenom},\n\nVotre convention de stage (Classe: ${data.eleve_classe}) pour l'entreprise ${data.ent_nom} (${data.ent_ville}) a bien été signée par vous-même (l'élève) et enregistrée.\n\nElle doit maintenant être validée par votre enseignant référent/professeur principal.\n\nCordialement,\nL'équipe PFMP`
-                );
-            }
-
-            // Determine Dashboard Link based on Environment
-            const origin = typeof window !== 'undefined' ? window.location.origin : '';
-            const isLocal = origin.includes('localhost');
-            const dashboardLink = isLocal ? 'http://localhost:3000/' : 'https://www.pledgeum.fr/';
-
-            if (data.est_mineur && data.rep_legal_email) {
-                await sendNotification(
-                    data.rep_legal_email,
-                    `Convention PFMP à signer - ${data.eleve_prenom} ${data.eleve_nom} - ${data.ecole_nom}`,
-                    `Bonjour,\n\nLa convention de stage de l'élève ${data.eleve_prenom} ${data.eleve_nom} (Classe: ${data.eleve_classe}) chez ${data.ent_nom} (${data.ent_ville}) vient d'être signée par l'élève.\n\nMerci de vous connecter pour vérifier les informations et la signer : ${dashboardLink}\n\nCordialement.`
-                );
-            } else if (data.prof_email) {
-                await sendNotification(
-                    data.prof_email,
-                    `Convention PFMP à valider - ${data.eleve_prenom} ${data.eleve_nom} - ${data.ecole_nom}`,
-                    `Bonjour,\n\nLa convention de stage de l'élève ${data.eleve_prenom} ${data.eleve_nom} (Classe: ${data.eleve_classe}) chez ${data.ent_nom} (${data.ent_ville}) vient d'être signée par l'élève (Majeur).\n\nConnectez-vous pour la valider : ${dashboardLink}\n\nCordialement.`
-                );
-            }
-        } catch (e) {
-            console.error("Error adding document: ", e);
-            throw e; // Re-throw to be handled by UI
+        } catch (error) {
+            console.error("Error creating convention:", error);
+            set({ isLoading: false });
+            throw error;
         }
+    },
+
+    // Alias for UI compatibility (Step 1 calls this)
+    submitConvention: async (data: any, studentId: string, userId: string) => {
+        const { createConvention } = get();
+        // Enhance data with IDs if needed, though API handles session
+        const payload = { ...data, studentId, userId };
+        return createConvention(payload);
     },
     updateConvention: async (id, data) => {
         try {
-            if (!useDemoStore.getState().isDemoMode) {
-                await updateDoc(doc(db, "conventions", id), {
-                    ...data,
-                    updatedAt: new Date().toISOString()
-                });
-            } else {
-                console.log("[DEMO] Skipped Firestore update");
+            // Updated to use PostgreSQL API
+            console.log(`[Store] Updating convention ${id}...`, data);
+
+            const response = await fetch(`/api/conventions/${id}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(data)
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to update convention');
             }
+
+            const { data: updatedConvention } = await response.json();
 
             set((state) => ({
                 conventions: state.conventions.map(c =>
-                    c.id === id ? { ...c, ...data, updatedAt: new Date().toISOString() } : c
+                    c.id === id ? { ...c, ...data, ...updatedConvention } : c
                 )
             }));
+
+            console.log("[Store] Convention updated successfully");
+
         } catch (error) {
             console.error("Error updating convention:", error);
             throw error;

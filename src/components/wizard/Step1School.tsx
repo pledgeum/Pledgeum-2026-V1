@@ -32,7 +32,7 @@ type Step1Data = z.infer<typeof stepSchema>;
 export function Step1School() {
     const { setData, nextStep } = useWizardStore();
     const { profileData, role, email, uai: userUai } = useUserStore();
-    const { allowedConventionTypes, schoolName, schoolAddress, schoolPhone, schoolHeadName, schoolHeadEmail, classes } = useSchoolStore();
+    const { allowedConventionTypes, schoolName, schoolAddress, schoolPhone, schoolHeadName, schoolHeadEmail, classes, fetchSchoolData } = useSchoolStore();
     const [cityQuery, setCityQuery] = useState('');
     const [schoolQuery, setSchoolQuery] = useState('');
     const [results, setResults] = useState<SchoolResult[]>([]);
@@ -109,19 +109,26 @@ export function Step1School() {
 
                         // 2. Handle Sandbox / Legacy
                         // Normalize 'global-school' or explicit Sandbox UAI
-                        // 2. Fetch School Data (Postgres API)
+                        // 2. Fetch School Data (Postgres API) AND Refresh Classes
                         if (uai) {
                             try {
-                                const res = await fetch(`/api/establishments/${uai}`);
-                                if (res.ok) {
-                                    const data = await res.json();
+                                // Parallel Fetch: Identity + Classes (to ensure Main Teacher email is fresh)
+                                const [identityRes] = await Promise.all([
+                                    fetch(`/api/establishments/${uai}`),
+                                    // fetchSchoolData(uai) // REMOVED to prevent infinite loop here. Handled below.
+                                ]);
+
+                                if (identityRes.ok) {
+                                    const data = await identityRes.json();
                                     fetchedData = {
                                         name: data.name,
                                         address: data.address,
+                                        zipCode: data.postalCode || data.zipCode, // Fix: Capture Zip
+                                        city: data.city, // Fix: Capture City
                                         phone: data.phone || data.telephone,
                                         // Use generic head name/email if currently set, but School Head override below takes precedence
-                                        headName: "Proviseur", // Default title if specific name unavailable in simple DB view
-                                        email: data.admin_email
+                                        headName: data.headName || "Proviseur",
+                                        email: data.headEmail || data.admin_email
                                     };
                                 }
                             } catch (err) {
@@ -157,7 +164,11 @@ export function Step1School() {
                             // Map Firestore 'schools' schema to Wizard Form
                             // We handle multiple potential field names from the DB schema
                             const name = fetchedData.name || fetchedData.schoolName;
-                            const address = fetchedData.address || fetchedData.schoolAddress || `${fetchedData.street || ''} ${fetchedData.zipCode || ''} ${fetchedData.city || ''}`;
+                            // FIX: Concatenate Address
+                            const street = fetchedData.address || fetchedData.schoolAddress || fetchedData.street || '';
+                            const zip = fetchedData.zipCode || '';
+                            const city = fetchedData.city || '';
+                            const address = street && (zip || city) ? `${street} ${zip} ${city}`.trim() : street;
                             const phone = fetchedData.phone || fetchedData.schoolPhone;
                             const headName = fetchedData.headName || fetchedData.principalName || fetchedData.schoolHeadName;
                             const headEmail = fetchedData.email || fetchedData.adminEmail || fetchedData.schoolHeadEmail;
@@ -186,9 +197,32 @@ export function Step1School() {
                     // Auto-fill Teacher if locked (Keep existing logic)
                     if (lockedMainTeacher) {
                         form.setValue('prof_nom', `${lockedMainTeacher.firstName} ${lockedMainTeacher.lastName}`);
-                        form.setValue('prof_email', lockedMainTeacher.email);
+
+                        // FIX: Only pre-fill and lock if the email is a REAL email
+                        const email = lockedMainTeacher.email || '';
+                        const isGhost = email.startsWith('teacher-') || email.includes('@pledgeum.temp');
+
+                        if (!isGhost) {
+                            form.setValue('prof_email', email);
+                        }
                     }
                 }, [form, isSchoolLocked, profileData, schoolName, schoolAddress, schoolPhone, schoolHeadName, schoolHeadEmail, lockedMainTeacher]);
+
+                // [NEW] Separate Side Effect for Data Fetching to avoid Infinite Loops
+                // Compute UAI outside to use in dependency array
+                const computedUai = userUai || (profileData as any).uai || (profileData as any).schoolId;
+
+                useEffect(() => {
+                    if (computedUai) {
+                        console.log("[Step1School] Triggering fresh Class Data fetch for UAI:", computedUai);
+                        fetchSchoolData(computedUai);
+                    }
+                }, [computedUai, fetchSchoolData]); // Stable dependencies
+
+                // Helper to determine if we should lock the email field
+                const isEmailLocked = !!lockedMainTeacher &&
+                    !((lockedMainTeacher.email || '').startsWith('teacher-')) &&
+                    !((lockedMainTeacher.email || '').includes('@pledgeum.temp'));
 
                 // Auto-reset convention type if current value is not allowed
                 useEffect(() => {
@@ -398,10 +432,10 @@ export function Step1School() {
                             <input
                                 {...form.register('prof_email')}
                                 type="email"
-                                disabled={!!lockedMainTeacher}
+                                disabled={isEmailLocked}
                                 className={cn(
                                     "mt-1 block w-full rounded-md border-gray-400 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500 disabled:opacity-100 disabled:text-gray-900 read-only:text-gray-900",
-                                    !!lockedMainTeacher && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed",
+                                    isEmailLocked && "bg-gray-50 text-gray-900 border-gray-400 cursor-not-allowed",
                                     form.formState.errors.prof_email && "border-red-500 focus:border-red-500 focus:ring-red-500"
                                 )}
                             />

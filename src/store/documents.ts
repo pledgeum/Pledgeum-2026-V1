@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { db, storage } from '@/lib/firebase';
-import { collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy, updateDoc } from 'firebase/firestore';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from 'firebase/storage';
+import { collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy, updateDoc } from '@/lib/firebase';
+import { ref, uploadBytes, getDownloadURL, deleteObject } from '@/lib/firebase';
 
 export interface ClassDocument {
     id: string;

@@ -116,7 +116,7 @@ async function main() {
         console.log("\n--- STEP 5: School Head Final Validation (Dynamic Identity) ---");
         const finalHash = 'hash_final_sealed_123';
 
-        await updateConventionStatus(testId as any, 'VALIDATED_HEAD', {
+        await updateConventionStatus(testId as any, 'VALIDATED' as any, {
             actorId: 'school_head_id',
             pdfHash: finalHash,
             signer: schoolHeadIdentity // <--- FILTER KEY CHANGE

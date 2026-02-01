@@ -7,7 +7,7 @@ import { fetchCompanyBySiret } from '@/lib/companyApi';
 import { useUserStore, UserRole } from '@/store/user';
 import { useSchoolStore } from '@/store/school';
 import { Convention } from '@/store/convention';
-import { useAuth } from '@/context/AuthContext';
+import { useSession } from "next-auth/react";
 import { CitySearchResults } from './CitySearchResults';
 import { AddressAutocomplete } from './AddressAutocomplete';
 
@@ -22,7 +22,8 @@ interface ProfileModalProps {
 export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = false }: ProfileModalProps) {
     if (!isOpen) return null;
 
-    const { user, logout } = useAuth();
+    const { data: session } = useSession();
+    const user = session?.user;
     const { role, profileData, updateProfileData, name, birthDate, schoolId: storeSchoolId } = useUserStore();
     const { schoolName, schoolAddress } = useSchoolStore();
     const [formData, setFormData] = useState<Record<string, any>>({});
@@ -115,6 +116,19 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                 }
             }
 
+            // Fix: Universal Date Formatting for 'birthDate'
+            if (initialData['birthDate']) {
+                const raw = initialData['birthDate'];
+                if (typeof raw === 'string' && (raw.includes('T') || raw.includes('/'))) {
+                    try {
+                        const d = new Date(raw);
+                        if (!isNaN(d.getTime())) {
+                            initialData['birthDate'] = d.toLocaleDateString('en-CA'); // YYYY-MM-DD
+                        }
+                    } catch (e) { /* ignore */ }
+                }
+            }
+
             // Map defaults based on role if convention exists
             if (conventionDefaults) {
                 switch (role) {
@@ -124,17 +138,34 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
 
                         let bd = birthDate || conventionDefaults?.eleve_date_naissance;
 
-                        // Ensure DD/MM/YYYY for text display
-                        if (bd && bd.match(/^\d{4}-\d{2}-\d{2}$/)) {
-                            const [y, m, d] = bd.split('-');
-                            bd = `${d}/${m}/${y}`;
+                        // Ensure Machine Format (YYYY-MM-DD) for <input type="date">
+                        if (bd) {
+                            if (typeof bd === 'string' && bd.match(/^\d{4}-\d{2}-\d{2}$/)) {
+                                // Already good
+                            }
+                            // Case 2: ISO String -> YYYY-MM-DD (Local Time)
+                            else if (typeof bd === 'string' && (bd.includes('T') || bd.includes('-'))) {
+                                try {
+                                    const dateObj = new Date(bd);
+                                    if (!isNaN(dateObj.getTime())) {
+                                        // 'en-CA' outputs strictly YYYY-MM-DD
+                                        bd = dateObj.toLocaleDateString('en-CA');
+                                    }
+                                } catch (e) {
+                                    console.warn("Date parse error", e);
+                                }
+                            }
                         }
                         setDefault('birthDate', bd);
 
                         setDefault('address', conventionDefaults?.eleve_adresse);
                         setDefault('phone', conventionDefaults?.eleve_tel);
                         setDefault('class', conventionDefaults?.eleve_classe);
+                        setDefault('address', conventionDefaults?.eleve_adresse);
+                        setDefault('phone', conventionDefaults?.eleve_tel);
+                        setDefault('class', conventionDefaults?.eleve_classe);
                         setDefault('diploma', conventionDefaults?.diplome_intitule);
+                        // No default for proxCommune from convention usually, unless added newly
                         break;
                     case 'company_head':
                     case 'company_head_tutor':
@@ -160,9 +191,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
             // --- UAI Initialization (Universal) ---
             let uaiToUse = (profileData as any).uai || (profileData as any).establishment_uai || storeSchoolId || '';
 
-            if (uaiToUse === 'global-school' || schoolName === "Mon LYCEE TOUTFAUX") {
-                uaiToUse = "9999999X";
-            }
+            // Strict UAI: No fallback to 9999999Z.
 
             // Allow manual override for School Head if not set, otherwise set default
             if (role === 'school_head' && !uaiToUse) {
@@ -173,8 +202,8 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
 
             if (role === 'student') {
                 // 2. Synchronous Fallback for Sandbox (Prevents infinite spinner)
-                if (uaiToUse === '9999999X') {
-                    initialData['schoolName'] = "Mon LYCEE TOUTFAUX";
+                if (uaiToUse === '9999999Z') {
+                    initialData['schoolName'] = "Lycée de Démonstration (Sandbox)";
                     initialData['schoolAddress'] = "12 Rue Ampère, 76500 Elbeuf";
                     initialData['schoolCity'] = "Elbeuf";
                     initialData['schoolZip'] = "76500";
@@ -194,7 +223,7 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
             if (role !== 'student' || !formData.uai || !isOpen) return;
 
             try {
-                const { doc, getDoc } = await import('firebase/firestore');
+                const { doc, getDoc } = await import('@/lib/firebase');
                 const { db } = await import('@/lib/firebase');
 
                 const schoolDoc = await getDoc(doc(db, "schools", formData.uai));
@@ -202,17 +231,17 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                     const data = schoolDoc.data();
                     setFormData(prev => ({
                         ...prev,
-                        schoolName: data.schoolName || prev.schoolName,
-                        schoolAddress: data.schoolAddress || prev.schoolAddress,
-                        schoolCity: data.schoolCity || prev.schoolCity,
-                        schoolZip: data.schoolPostalCode || prev.schoolZip,
+                        schoolName: (data as any).schoolName || prev.schoolName,
+                        schoolAddress: (data as any).schoolAddress || prev.schoolAddress,
+                        schoolCity: (data as any).schoolCity || prev.schoolCity,
+                        schoolZip: (data as any).schoolPostalCode || prev.schoolZip,
                     }));
                 } else {
                     // Fallback for Sandbox if NOT in DB
-                    if (formData.uai === '9999999X') {
+                    if (formData.uai === '9999999Z') {
                         setFormData(prev => ({
                             ...prev,
-                            schoolName: "Mon LYCEE TOUTFAUX",
+                            schoolName: "Lycée de Démonstration (Sandbox)",
                             schoolAddress: "12 Rue Ampère, 76500 Elbeuf",
                             schoolCity: "Elbeuf",
                             schoolZip: "76500",
@@ -396,7 +425,9 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                 updates['legalRepresentatives'] = newReps;
             }
 
-            await updateProfileData(user.uid, updates);
+            if (user?.id) {
+                await updateProfileData(user.id, updates);
+            }
             onClose();
         } catch (error: any) {
             console.error("Failed to save profile", error);
@@ -487,11 +518,32 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                     {renderField("email", "Email (Identifiant)", <Mail className="w-4 h-4" />, "email", "", true)}
                     {renderField("phone", "Téléphone", <Phone className="w-4 h-4" />, "tel")}
 
+                    {/* Establishment Badge (Debug Helper) */}
+                    <div className="col-span-2 pt-2 pb-2">
+                        <label className="text-sm font-medium text-gray-700 flex items-center gap-2 mb-1">
+                            <School className="w-4 h-4" />
+                            Établissement de rattachement
+                        </label>
+                        {formData.schoolName || formData.uai ? (
+                            <div className="flex items-center gap-2 bg-green-50 text-green-800 px-3 py-2 rounded-lg border border-green-100">
+                                <span className="font-semibold">{formData.schoolName || 'Nom inconnu'}</span>
+                                <span className="text-xs font-mono bg-green-200/50 px-2 py-1 rounded">
+                                    {formData.uai || 'UAI manquant'}
+                                </span>
+                            </div>
+                        ) : (
+                            <div className="flex items-center gap-2 bg-red-50 text-red-800 px-3 py-2 rounded-lg border border-red-100">
+                                <span className="font-semibold">⚠️ Aucun établissement rattaché</span>
+                                <span className="text-xs ml-auto text-red-600">Contactez un admin ou recherchez ci-dessous</span>
+                            </div>
+                        )}
+                    </div>
+
                     <hr className="border-gray-100" />
 
                     {role === 'student' && (
                         <>
-                            {renderField("birthDate", "Date de Naissance (Non modifiable, contactez l'administration)", <Calendar className="w-4 h-4" />, "text", "jj/mm/aaaa", true)}
+                            {renderField("birthDate", "Date de Naissance (Non modifiable, contactez l'administration)", <Calendar className="w-4 h-4" />, "date", "", true)}
                             <AddressAutocomplete
                                 label="Adresse Personnelle"
                                 value={{
@@ -512,6 +564,11 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                                 {renderField("zipCode", "Code Postal", <MapPin className="w-4 h-4" />)}
                                 {renderField("city", "Ville", <MapPin className="w-4 h-4" />)}
                             </div>
+                            <div className="grid grid-cols-2 gap-4">
+                                {renderField("zipCode", "Code Postal", <MapPin className="w-4 h-4" />)}
+                                {renderField("city", "Ville", <MapPin className="w-4 h-4" />)}
+                            </div>
+
                             {renderField("class", "Classe", <GraduationCap className="w-4 h-4" />, "text", "", true)}
                             {renderField("diploma", "Diplôme Préparé", <GraduationCap className="w-4 h-4" />)}
 
@@ -727,6 +784,8 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                         </>
                     )}
 
+
+
                     {(role === 'company_head' || role === 'company_head_tutor') && (
                         <>
                             {/* ... SIRET Code ... */}
@@ -785,16 +844,22 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                                     <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
                                     <input
                                         type="text"
-                                        value={formData.preferredCity || cityQuery}
+                                        value={formData.proxCommune || cityQuery}
                                         onChange={(e) => {
                                             const val = e.target.value;
-                                            setFormData(prev => ({ ...prev, preferredCity: val })); // Allow manual type
+                                            setFormData(prev => ({
+                                                ...prev,
+                                                proxCommune: val,
+                                                proxCommuneLat: undefined,
+                                                proxCommuneLon: undefined,
+                                                proxCommuneZip: undefined
+                                            })); // Allow manual type AND clear validation
                                             setCityQuery(val); // Trigger search
                                         }}
                                         placeholder="Rechercher une commune..."
                                         className="w-full pl-9 pr-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-200 focus:border-blue-500 outline-none placeholder:text-gray-500 text-gray-900"
                                     />
-                                    {(cityQuery.length > 2 && !formData.preferredCityLat) && (
+                                    {(cityQuery.length > 2 && !formData.proxCommuneLat) && (
                                         <div className="absolute right-3 top-2.5">
                                             <Loader2 className="w-4 h-4 animate-spin text-blue-500" />
                                         </div>
@@ -802,29 +867,29 @@ export function ProfileModal({ isOpen, onClose, conventionDefaults, blocking = f
                                 </div>
 
                                 {/* Results Dropdown (Inline implementation for now) */}
-                                {cityQuery.length > 2 && !formData.preferredCityLat && (
+                                {cityQuery.length > 2 && !formData.proxCommuneLat && (
                                     <CitySearchResults
                                         query={cityQuery}
                                         onSelect={(city) => {
                                             setFormData(prev => ({
                                                 ...prev,
-                                                preferredCity: city.name,
-                                                preferredCityZip: city.postcode,
-                                                preferredCityLat: String(city.lat),
-                                                preferredCityLon: String(city.lon)
+                                                proxCommune: city.name,
+                                                proxCommuneZip: city.postcode,
+                                                proxCommuneLat: String(city.lat),
+                                                proxCommuneLon: String(city.lon)
                                             }));
                                             setCityQuery('');
                                         }}
                                     />
                                 )}
 
-                                {formData.preferredCity && formData.preferredCityLat && (
+                                {formData.proxCommune && formData.proxCommuneLat && (
                                     <div className="mt-2 text-xs text-green-600 flex items-center gap-1 bg-green-50 p-2 rounded border border-green-100">
                                         <CheckCircle className="w-3 h-3" />
-                                        Localisation validée : {formData.preferredCity} ({formData.preferredCityZip})
+                                        Localisation validée : {formData.proxCommune} ({formData.proxCommuneZip})
                                         <button
                                             type="button"
-                                            onClick={() => setFormData(prev => ({ ...prev, preferredCity: '', preferredCityLat: '', preferredCityLon: '', preferredCityZip: '' }))}
+                                            onClick={() => setFormData(prev => ({ ...prev, proxCommune: '', proxCommuneLat: '', proxCommuneLon: '', proxCommuneZip: '' }))}
                                             className="ml-auto text-gray-400 hover:text-red-500"
                                         >
                                             <X className="w-3 h-3" />

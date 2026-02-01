@@ -1,8 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { updatePassword, signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebase';
+import { signOut, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
 import { validatePassword } from '@/lib/validation';
 import { Loader2, Lock, LogOut, CheckCircle2 } from 'lucide-react';
@@ -14,6 +13,7 @@ export default function UpdatePasswordPage() {
     const [error, setError] = useState<string | null>(null);
     const [loading, setLoading] = useState(false);
     const router = useRouter();
+    const { data: session, update } = useSession();
 
     const handleUpdate = async (e: React.FormEvent) => {
         e.preventDefault();
@@ -36,38 +36,39 @@ export default function UpdatePasswordPage() {
         }
 
         try {
-            const user = auth.currentUser;
-            if (user) {
-                await updatePassword(user, newPassword);
-
-                // Confirm change to clear custom claim
-                await fetch('/api/auth/confirm-password-change', {
-                    method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${await user.getIdToken()}`
-                    }
-                });
-
-                // Success - Redirect to Dashboard
-                router.push('/');
-            } else {
+            if (!session?.user?.email) {
                 setError("Utilisateur non connecté.");
+                setLoading(false);
+                return;
             }
+
+            // Call API to update password
+            const response = await fetch('/api/auth/update-password', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ password: newPassword })
+            });
+
+            if (!response.ok) {
+                const data = await response.json();
+                throw new Error(data.error || "Erreur lors de la mise à jour.");
+            }
+
+            // Success - Update session and Redirect
+            await update({ must_change_password: false });
+            router.push('/');
+            router.refresh();
+
         } catch (err: any) {
             console.error(err);
-            if (err.code === 'auth/requires-recent-login') {
-                setError("Par sécurité, veuillez vous reconnecter avant de changer votre mot de passe.");
-            } else {
-                setError("Erreur lors de la mise à jour : " + err.message);
-            }
+            setError("Erreur lors de la mise à jour : " + err.message);
         } finally {
             setLoading(false);
         }
     };
 
     const handleLogout = async () => {
-        await signOut(auth);
-        router.push('/login');
+        await signOut({ callbackUrl: '/login' });
     };
 
     return (

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { X, Search, ShieldCheck, MessageSquare, Trash2, Building2, User, Mail, Calendar, Key } from 'lucide-react';
 import { db, auth } from '@/lib/firebase';
-import { collection, query, where, getDocs, deleteDoc, doc } from 'firebase/firestore';
+import { collection, query, where, getDocs, deleteDoc, doc } from '@/lib/firebase';
 import { useAdminStore, SchoolStatus } from '@/store/admin';
 import { useSchoolStore, Student } from '@/store/school'; // Import School Store
 import { useUserStore } from '@/store/user';
@@ -146,17 +146,17 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
 
                                 {/* URGENT: FLASHY SANDBOX BUTTON FOR PLEDGEUM */}
-                                {(auth.currentUser?.email === 'pledgeum@gmail.com' || userRole === 'super_admin' as any) && (
+                                {(userEmail === 'pledgeum@gmail.com' || userRole?.toString().toUpperCase() === 'SUPER_ADMIN') && (
                                     <button
                                         type="button"
                                         className="relative z-[9999] bg-orange-600 hover:bg-orange-700 text-white font-bold text-lg p-4 block w-full mb-6 rounded-lg shadow-2xl border-4 border-white animate-pulse"
                                         onClick={async () => {
-                                            if (!confirm("⚠️ Initialiser 'Mon LYCEE TOUTFAUX' en mode 'Coquille Vide' (Aucune donnée) et réparer Fabrice ?")) return;
+                                            if (!confirm("⚠️ Initialiser 'Lycée de Démonstration (Sandbox)' en mode 'Coquille Vide' (Aucune donnée) et réparer Fabrice ?")) return;
 
                                             // 0. CLEANUP GHOST DATA (Retroactive Fix)
                                             try {
                                                 console.log("Cleaning up Ghost Data for Sandbox...");
-                                                const sandboxId = "9999999X";
+                                                const sandboxId = "9999999Z";
                                                 const pledgeumEmail = "pledgeum@gmail.com";
 
                                                 // Clean Conventions
@@ -167,7 +167,7 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                 const snapConvs = await getDocs(qConvs);
                                                 const deletePromises: Promise<void>[] = [];
 
-                                                snapConvs.forEach((d) => {
+                                                snapConvs.forEach((d: any) => {
                                                     const data = d.data();
                                                     const isGhost =
                                                         data.ecole_chef_email === pledgeumEmail ||
@@ -183,7 +183,7 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                 // Clean Invitations
                                                 const qInvites = query(collection(db, "invitations"), where("schoolId", "==", sandboxId));
                                                 const snapInvites = await getDocs(qInvites);
-                                                snapInvites.forEach((d) => {
+                                                snapInvites.forEach((d: any) => {
                                                     // If created by pledgeum? Invitations don't always have creator email
                                                     // But if it's in sandbox, and we are resetting, we might want to clear ALL invitations?
                                                     // User said: "supprime... toutes les conventions et signatures... créées par pledgeum"
@@ -205,13 +205,13 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                             useSchoolStore.getState().reset();
 
                                             const sandboxSchool = {
-                                                id: "9999999X",
-                                                nom: "Mon LYCEE TOUTFAUX",
+                                                id: "9999999Z",
+                                                nom: "Lycée de Démonstration (Sandbox)",
                                                 ville: "Elbeuf",
                                                 mail: "fabrice.dumasdelage@gmail.com",
                                                 adresse: "12 Rue Ampère",
                                                 cp: "76500",
-                                                uai: "9999999X"
+                                                uai: "9999999Z"
                                             };
 
                                             const sandboxSchoolResult: SchoolResult = {
@@ -245,7 +245,7 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                     postalCode: sandboxSchool.cp,
                                                     email: sandboxSchool.mail,
                                                     status: 'ADHERENT',
-                                                    uai: "9999999X", // Strict
+                                                    uai: "9999999Z", // Strict
                                                     adminEmail: "fabrice.dumasdelage@gmail.com"
                                                 });
                                                 console.log("Real DB Write Success.");
@@ -259,14 +259,14 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                             // Inject Test Classes & Collaborators (and persist them)
                                             try {
                                                 console.log("Restoring Sandbox Test Data...");
-                                                await useSchoolStore.getState().restoreTestData("9999999X");
+                                                await useSchoolStore.getState().restoreTestData("9999999Z");
                                             } catch (e) {
                                                 console.error("Failed to restore test data:", e);
                                             }
 
                                             // School Store
                                             useSchoolStore.getState().updateSchoolIdentity({
-                                                schoolName: "Mon LYCEE TOUTFAUX",
+                                                schoolName: "Lycée de Démonstration (Sandbox)",
                                                 schoolAddress: "12 Rue Ampère, 76500 Elbeuf",
                                                 schoolHeadEmail: "fabrice.dumasdelage@gmail.com",
                                                 schoolPhone: ""
@@ -275,13 +275,13 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                             // User Store (Update Profile Data to reflect School connection)
                                             useUserStore.setState((state) => ({
                                                 ...state,
-                                                schoolId: "9999999X",
-                                                uai: "9999999X", // NEW: Explicit UAI
+                                                schoolId: "9999999Z",
+                                                uai: "9999999Z", // NEW: Explicit UAI
                                                 profileData: {
                                                     ...state.profileData,
-                                                    ecole_nom: "Mon LYCEE TOUTFAUX",
+                                                    ecole_nom: "Lycée de Démonstration (Sandbox)",
                                                     ecole_ville: "Elbeuf",
-                                                    uai: "9999999X"
+                                                    uai: "9999999Z"
                                                 }
                                             }));
 

@@ -22,10 +22,11 @@ import {
   ShieldCheck, MessageSquare, Settings, UserCircle, AlertTriangle, Search,
   Briefcase, Send, Eye, PenTool, UserPlus, Users, Bell, Shield, Building2, Clock, ClipboardList, FileSpreadsheet
 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useSession, signOut } from "next-auth/react";
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { SchoolAdminModal } from '@/components/admin/SchoolAdminModal';
+import SchoolAdminDashboard from '@/components/admin/SchoolAdminDashboard';
 import { SuperAdminModal } from '@/components/admin/SuperAdminModal';
 import { FeedbackModal } from '@/components/ui/FeedbackModal';
 import { TosModal } from '@/components/ui/TosModal';
@@ -39,8 +40,6 @@ import { useMissionOrderStore, MissionOrder } from '@/store/missionOrder';
 
 import { EmailCorrectionModal } from '@/components/ui/EmailCorrectionModal';
 import TrackingAssignmentModal from '@/components/ui/TrackingAssignmentModal';
-import { doc, setDoc, query, collection, getDocs, where } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { ConventionStatusBadge } from '@/components/conventions/ConventionStatusBadge';
 import { ConventionActions } from '@/components/conventions/ConventionActions';
 import { AlumniModal } from '@/components/ui/AlumniModal';
@@ -49,7 +48,9 @@ import { TrackingMatrixModal } from '@/components/ui/TrackingMatrixModal';
 import { ClassDocumentModal } from '@/components/ui/ClassDocumentModal';
 import { useDocumentStore } from '@/store/documents';
 import { StudentDocumentModal } from '@/components/ui/StudentDocumentModal';
-
+import { db, query, collection, getDocs } from '@/lib/firebase';
+import QRCode from 'qrcode';
+import { generateVerificationUrl } from '@/app/actions/sign';
 
 // Dynamic import of the Preview component to isolate PDF logic and avoid SSR/build issues
 const PdfPreview = dynamic(() => import('@/components/pdf/PdfPreview'), {
@@ -57,6 +58,7 @@ const PdfPreview = dynamic(() => import('@/components/pdf/PdfPreview'), {
   loading: () => <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20"><div className="bg-white p-4 rounded shadow">Chargement de l'aperçu...</div></div>
 });
 
+import { pdf } from '@react-pdf/renderer';
 const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then((mod) => mod.PDFViewer),
   { ssr: false, loading: () => <p>Chargement du lecteur PDF...</p> }
@@ -64,7 +66,12 @@ const PDFViewer = dynamic(
 
 // Helper for Admin Roles
 const isSchoolAdminRole = (r: UserRole) => {
-  return r === 'school_head' || r === 'ddfpt' || r === 'business_manager' || r === 'assistant_manager' || r === 'stewardship_secretary';
+  return r === 'school_head' || r === 'ddfpt' || r === 'business_manager' || r === 'assistant_manager' || r === 'stewardship_secretary' || r === 'cpe' || r === 'school_life' || r === 'at_ddfpt' || r === 'ESTABLISHMENT_ADMIN';
+};
+
+// Helper for High Level Admin (Management Access)
+const isHighLevelAdmin = (r: UserRole | string) => {
+  return r === 'ESTABLISHMENT_ADMIN' || r === 'school_head' || r === 'ddfpt' || r === 'DDFPT';
 };
 
 // Helper for Filter Access (includes Admin Roles + Teachers + AT DDFPT)
@@ -73,9 +80,17 @@ const hasFilterAccess = (r: UserRole) => {
 };
 
 export default function Home() {
-  const { user, loading, logout } = useAuth();
+  const { data: session, status } = useSession();
+  const loading = status === "loading";
+  const user = session?.user;
   const router = useRouter();
-  const { role, notifications, unreadCount, markAsRead, clearNotifications, addNotification, fetchUserProfile, profileData, trackConnection, anonymizeAccount } = useUserStore();
+  const { role: storeRole, notifications, unreadCount, markAsRead, clearNotifications, addNotification, fetchUserProfile, profileData, trackConnection, anonymizeAccount } = useUserStore();
+
+  // Determine effective role (Priority: Session > Store)
+  let initialRole = ((session?.user as any)?.role || storeRole) as string;
+  // Fix for DDFPT uppercase case (if coming from session/claims)
+  if (initialRole === 'DDFPT') initialRole = 'ddfpt';
+  const role = initialRole as UserRole;
   const { getConventionsByRole, fetchConventions, signConvention } = useConventionStore();
   const { isSchoolAuthorized } = useAdminStore();
   const [isRgpdModalOpen, setIsRgpdModalOpen] = useState(false);
@@ -180,12 +195,33 @@ export default function Home() {
       );
 
       // Debug Profile Completion
+      // Debug Profile Completion
       const missingBasic = ['firstName', 'lastName', 'email', 'birthDate', 'schoolName'].filter(f => !profileData?.[f]);
-      if (missingBasic.length > 0) console.log("Profile Incomplete - Missing Basic:", missingBasic);
+      if (missingBasic.length > 0) {
+        console.group("Profile Incomplete - Basic Details");
+        console.log("Missing Fields:", missingBasic);
+        console.log("Current Profile Data:", profileData);
+        console.groupEnd();
+      }
 
       if (!basic) console.log("Profile Incomplete - Basic Failed");
-      if (!hasContact) console.log("Profile Incomplete - Contact Failed", { phone: profileData?.phone, address: profileData?.address, zip: profileData?.zipCode, city: profileData?.city });
-      if (!hasParent) console.log("Profile Incomplete - Missing Parent", { hasParent, legalReps: profileData?.legalRepresentatives });
+      if (!hasContact) {
+        console.group("Profile Incomplete - Contact Details");
+        console.log("Start checking address...");
+        console.log("Address (Object):", typeof profileData?.address === 'object' ? profileData.address : 'N/A');
+        console.log("Address (Flat):", { street: profileData?.address, zip: profileData?.zipCode, city: profileData?.city });
+        console.groupEnd();
+      }
+      if (!hasParent) {
+        console.group("Profile Incomplete - Parent Details");
+        console.log("Legal Representatives Array:", profileData?.legalRepresentatives);
+        console.log("Has Parent Boolean:", hasParent);
+        if (profileData?.legalRepresentatives && profileData?.legalRepresentatives?.length > 0) {
+          console.log("First Rep:", profileData.legalRepresentatives[0]);
+          console.log("First Rep Address:", profileData.legalRepresentatives[0]?.address);
+        }
+        console.groupEnd();
+      }
 
       // Parent is required for ALL students
       return basic && hasContact && hasParent;
@@ -259,16 +295,16 @@ export default function Home() {
     async function checkProfile() {
       if (user) {
         // Prevent double-init for the same user
-        if (initializedUserRef.current === user.uid) {
+        if (initializedUserRef.current === (user.id || '')) {
           return;
         }
-        initializedUserRef.current = user.uid;
+        initializedUserRef.current = (user.id || '');
 
         // ProfileFetch is handled by ProfileGuard. We do not need to fetch again to avoid infinite loops.
         // We only trigger side effects here (Conventions, Notifications, Tracking).
 
-        trackConnection(user.uid);
-        fetchConventions(user.uid, user.email || undefined);
+        trackConnection((user.id || ''));
+        fetchConventions((user.id || ''), user.email || undefined);
         if (user.email) {
           useUserStore.getState().fetchNotifications(user.email);
         }
@@ -281,7 +317,7 @@ export default function Home() {
       // Logic for user presence
       checkProfile();
     }
-  }, [user, loading, router, fetchConventions]); // Removed fetchUserProfile from deps
+  }, [user, loading, router, fetchConventions]);
 
   if (loading) {
     return (
@@ -328,8 +364,8 @@ export default function Home() {
     }
 
     try {
-      await anonymizeAccount(user.uid);
-      await logout();
+      await anonymizeAccount((user.id || ''));
+      await signOut();
       window.location.href = '/';
     } catch (error) {
       console.error("Error deleting account:", error);
@@ -341,7 +377,6 @@ export default function Home() {
 
 
 
-  // Determine effective role for the list
   const effectiveRole = role === 'company_head_tutor' ? dualRoleView : role;
 
 
@@ -359,7 +394,10 @@ export default function Home() {
     assistant_manager: 'Adjoint Gestionnaire',
     stewardship_secretary: 'Secrétaire d\'Intendance',
     teacher_tracker: 'Enseignant référent chargé du suivi',
-    at_ddfpt: 'Assistant(e) Technique DDFPT'
+    at_ddfpt: 'Assistant(e) Technique DDFPT',
+    cpe: 'CPE',
+    school_life: 'Vie Scolaire',
+    ESTABLISHMENT_ADMIN: 'Administrateur d\'Établissement'
   };
 
 
@@ -404,7 +442,9 @@ export default function Home() {
                 )}
               </div>
               <div className="hidden md:block text-left">
-                <p className="text-sm font-bold text-gray-900 group-hover:text-blue-700 transition-colors">{user.email?.split('@')[0]}</p>
+                <p className="text-sm font-bold text-gray-900 group-hover:text-blue-700 transition-colors">
+                  {profileData?.firstName ? `${profileData.firstName} ${profileData.lastName || ''}` : (user.name || user.email?.split('@')[0])}
+                </p>
                 <p className="text-xs text-gray-500 group-hover:text-blue-500 transition-colors">{user.email}</p>
               </div>
             </button>
@@ -496,10 +536,10 @@ export default function Home() {
               </button>
             )}
 
-            {(role === 'school_head' || role === 'ddfpt' || role === 'at_ddfpt' || role === 'business_manager') && (
+            {(role === 'school_head' || role === 'ddfpt' || role === 'at_ddfpt' || role === 'business_manager' || role === 'ESTABLISHMENT_ADMIN') && (
               <div className="flex items-center gap-2">
                 {/* Alumni Button - Conditioned on authorization */}
-                {(isSchoolAuthorized(profileData?.ecole_nom || getConventionsByRole('school_head', user.email || '', user.uid)[0]?.ecole_nom || '') || user.email === 'pledgeum@gmail.com') && (
+                {(isSchoolAuthorized(profileData?.ecole_nom || getConventionsByRole('school_head', user.email || '', (user.id || ''))[0]?.ecole_nom || '') || user.email === 'pledgeum@gmail.com') && (
                   <button
                     onClick={() => setIsAlumniModalOpen(true)}
                     className="hidden md:flex items-center text-gray-500 hover:text-indigo-600 transition-colors text-xs font-bold mr-4"
@@ -554,13 +594,15 @@ export default function Home() {
                     <option value="assistant_manager">Adjoint gestionnaire</option>
                     <option value="stewardship_secretary">Secrétaire d'intendance</option>
                     <option value="at_ddfpt">Assistant(e) Technique DDFPT</option>
+                    <option value="cpe">CPE</option>
+                    <option value="school_life">Vie Scolaire</option>
                   </select>
                 </div>
               </div>
             )}
 
             <button
-              onClick={() => logout()}
+              onClick={() => signOut()}
               className="text-gray-500 hover:text-red-600 p-2 rounded-full hover:bg-gray-100 transition-colors"
               title="Se déconnecter"
             >
@@ -670,7 +712,9 @@ export default function Home() {
                 <UserCircle className="w-5 h-5 text-blue-600" />
               </div>
               <div className="truncate">
-                <p className="text-sm font-bold text-gray-900">{user.email}</p>
+                <p className="text-sm font-bold text-gray-900">
+                  {profileData?.firstName ? `${profileData.firstName} ${profileData.lastName || ''}` : (user.name || user.email)}
+                </p>
                 <p className="text-xs text-gray-500">{roleLabels[role]}</p>
               </div>
             </div>
@@ -710,7 +754,7 @@ export default function Home() {
             {isSchoolAdminRole(role) && (
               <>
                 {/* Alumni Mobile */}
-                {(isSchoolAuthorized(profileData?.ecole_nom || getConventionsByRole('school_head', user.email || '', user.uid)[0]?.ecole_nom || '') || user.email === 'pledgeum@gmail.com') && (
+                {(isSchoolAuthorized(profileData?.ecole_nom || getConventionsByRole('school_head', user.email || '', (user.id || ''))[0]?.ecole_nom || '') || user.email === 'pledgeum@gmail.com') && (
                   <button
                     onClick={() => { setIsAlumniModalOpen(true); setIsMobileMenuOpen(false); }}
                     className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-indigo-700 hover:text-indigo-900 hover:bg-indigo-50"
@@ -757,7 +801,7 @@ export default function Home() {
                 </div>
               </button>
               <button
-                onClick={() => logout()}
+                onClick={() => signOut()}
                 className="block w-full text-left px-3 py-2 rounded-md text-sm font-medium text-gray-500 hover:text-red-600 hover:bg-gray-50"
               >
                 <div className="flex items-center">
@@ -772,16 +816,18 @@ export default function Home() {
 
       {/* Dashboard Content */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        <div className="mb-8">
-          <h1 className="text-2xl font-bold text-gray-900">
-            Tableau de Bord {role === 'company_head_tutor'
-              ? (dualRoleView === 'company_head' ? "Chef d'Entreprise" : "Tuteur")
-              : roleLabels[role]} <span className="text-orange-600 text-sm ml-2 font-medium">version beta</span>
-          </h1>
-          <p className="text-gray-500 mt-1">Gérez vos conventions de stage et signatures.</p>
+        {!isHighLevelAdmin(role) && (
+          <div className="mb-8">
+            <h1 className="text-2xl font-bold text-gray-900">
+              Tableau de Bord {role === 'company_head_tutor'
+                ? (dualRoleView === 'company_head' ? "Chef d'Entreprise" : "Tuteur")
+                : roleLabels[role]} <span className="text-orange-600 text-sm ml-2 font-medium">version beta</span>
+            </h1>
+            <p className="text-gray-500 mt-1">Gérez vos conventions de stage et signatures.</p>
 
-          {role === 'student' && null}
-        </div>
+            {role === 'student' && null}
+          </div>
+        )}
 
         {effectiveRole === 'student' ? (
           // STUDENT DASHBOARD
@@ -829,12 +875,16 @@ export default function Home() {
             </div>
 
             <div className="mt-8">
-              <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={user.uid} isRgpdModalOpen={isRgpdModalOpen} setIsRgpdModalOpen={setIsRgpdModalOpen} onModalChange={setIsChildModalOpen} />
+              <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={(user.id || '')} isRgpdModalOpen={isRgpdModalOpen} setIsRgpdModalOpen={setIsRgpdModalOpen} onModalChange={setIsChildModalOpen} />
             </div>
           </>
         ) : (
           // VALIDATOR DASHBOARD (Teacher, Heads, Tutor)
-          <div className="space-y-6">
+          <div className="space-y-8">
+            {isHighLevelAdmin(role) && (
+              <SchoolAdminDashboard />
+            )}
+
             {(role === 'teacher' || role === 'at_ddfpt' || role === 'ddfpt') && (
               <div className="flex justify-end space-x-4">
                 {/* Class Document Management Button for Main Teachers and Admin Roles */}
@@ -868,7 +918,7 @@ export default function Home() {
               </div>
             )}
             <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={user.uid} isRgpdModalOpen={isRgpdModalOpen} setIsRgpdModalOpen={setIsRgpdModalOpen} onModalChange={setIsChildModalOpen} />
+              <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={(user.id || '')} isRgpdModalOpen={isRgpdModalOpen} setIsRgpdModalOpen={setIsRgpdModalOpen} onModalChange={setIsChildModalOpen} />
             </div>
           </div>
         )}
@@ -881,7 +931,7 @@ export default function Home() {
               setHasDismissedProfileModal(true);
               console.log("Home: Modal closed and dismissed set to true");
             }}
-            conventionDefaults={getConventionsByRole(role, user.email || '', user.uid)[0]}
+            conventionDefaults={getConventionsByRole(role, user.email || '', (user.id || ''))[0]}
             blocking={false} // NEVER BLOCK
           />
         )}
@@ -905,7 +955,7 @@ export default function Home() {
         <AlumniModal
           isOpen={isAlumniModalOpen}
           onClose={() => setIsAlumniModalOpen(false)}
-          authorizedSchoolName={profileData?.ecole_nom || getConventionsByRole('school_head', user.email || '', user.uid)[0]?.ecole_nom}
+          authorizedSchoolName={profileData?.ecole_nom || getConventionsByRole('school_head', user.email || '', (user.id || ''))[0]?.ecole_nom}
         />
         <SuperAdminModal
           isOpen={isSuperAdminModalOpen}
@@ -998,7 +1048,7 @@ export default function Home() {
           onClose={() => setIsSearchModalOpen(false)}
           conventions={allConventions}
           studentAddress={
-            (role === 'student' ? (getConventionsByRole('student', user.email || '', user.uid)[0]?.eleve_adresse || '') :
+            (role === 'student' ? (getConventionsByRole('student', user.email || '', (user.id || ''))[0]?.eleve_adresse || '') :
               (user.email === 'pledgeum@gmail.com' ? "10 Rue de Rivoli, 75001 Paris" : ""))
           }
           schoolAddress="123 Avenue de la République, 75011 Paris"
@@ -1618,7 +1668,9 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
               <div className="flex flex-col items-end space-y-1">
                 <ConventionStatusBadge status={conv.status} />
                 <span className="text-xs text-gray-500">
-                  Mis à jour le {new Date(conv.updatedAt).toLocaleDateString()}
+                  {conv.updatedAt && !isNaN(new Date(conv.updatedAt).getTime())
+                    ? `Mis à jour le ${new Date(conv.updatedAt).toLocaleDateString()}`
+                    : ''}
                 </span>
               </div>
             </div>
@@ -1735,7 +1787,7 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
                 {/* WORKFLOW ACTIONS */}
                 <ConventionActions
                   convention={conv}
-                  onUpdate={() => fetchConventions(schoolId)} // Refresh list
+                  onUpdate={() => fetchConventions(schoolId || '')} // Refresh list
                   onSign={() => handleOpenSignModal(conv.id)}
                 />
 
@@ -1785,8 +1837,8 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
         isOpen={isSigModalOpen}
         onClose={() => setIsSigModalOpen(false)}
         onSign={handleSign}
-        canSignDual={role === 'tutor'}
-        dualRoleLabel="Je certifie être également le représentant de l'entreprise et souhaite signer pour les deux rôles."
+
+
         conventionId={selectedConventionId || ''}
         signeeName={(() => {
           const c = conventions.find(c => c.id === selectedConventionId);

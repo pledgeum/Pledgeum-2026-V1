@@ -5,10 +5,10 @@ import { adminAuth, adminDb as db } from '@/lib/firebase-admin';
 
 // PUT: Update Class (Assign Main Teacher)
 export async function PUT(req: Request) {
-    let client;
+    let client: any;
     try {
         const body = await req.json();
-        const { classId, mainTeacherId, uai } = body; // classId is the Firestore ID (simple class ID)
+        const { classId, mainTeacherId, cpeId, uai } = body; // classId is the Firestore ID (simple class ID)
 
         if (!classId || !uai) {
             return NextResponse.json({ error: "Missing classId or uai" }, { status: 400 });
@@ -16,87 +16,103 @@ export async function PUT(req: Request) {
 
         client = await pool.connect();
 
-        // Construct PG Class ID
-        // HYBRID LOGIC: Support both explicit UUIDs/Random IDs and Legacy "Name_UAI" composites.
-        // We assume the frontend might send a "Simple ID" (legacy) or a "Full ID" (new).
+        // ---------------------------------------------------------
+        // TRANSACTION START: Ensure Atomicity for Teacher assignment
+        // ---------------------------------------------------------
+        await client.query('BEGIN'); // Start Transaction
 
-        // Strategy: First try the ID as provided. If that fails (in update), we might need logic.
-        // For Update, we need to target the correct row.
-        // Since we can't easily "try" in one Update statement query without complexity,
-        // Let's assume: If the ID does NOT contain the UAI (and isn't obviously a UUID?), it MIGHT be a legacy short ID.
-
-        // Better: We check DB existence? No, equivalent to 2 queries.
-        // Heuristic: If ID was stripped in GET, it was "ShortID". 
-        // We reconstruct the Composite: `${classId}_${uai}`.
-
+        // 1. Resolve Class ID (Handle Legacy vs UUID)
         let pgClassId = classId;
 
-        // Check if this looks like a Legacy ID (Does not contain UAI, assuming UAI is 8 chars).
-        // Safest: Check if the provided ID works. If not, try composite.
-        // Let's do a quick SELECT or Updated Row check.
-        // Actually, let's just use the `RETURNING id` clause to see if we hit something.
-
-        const tryUpdate = async (idToTest: string) => {
-            return client.query(`
-                UPDATE classes 
-                SET main_teacher_id = $1, updated_at = NOW()
-                WHERE id = $2
-                RETURNING id
-            `, [mainTeacherId || null, idToTest]);
-        };
-
-        // 1. Fetch Teacher Details (Moved up for availability)
-        let teacherDetails = null;
-        if (mainTeacherId) {
-            const teacherRes = await client.query('SELECT first_name, last_name, email FROM users WHERE uid = $1', [mainTeacherId]);
-            if (teacherRes.rowCount && teacherRes.rowCount > 0) {
-                const t = teacherRes.rows[0];
-                teacherDetails = {
-                    id: mainTeacherId,
-                    firstName: t.first_name,
-                    lastName: t.last_name,
-                    email: t.email
-                };
-            }
-        }
-
-        let updateRes = await tryUpdate(pgClassId);
-
-        if (updateRes.rowCount === 0) {
+        // Find existing class to resolve ID
+        let classCheck = await client.query('SELECT id FROM classes WHERE id = $1', [classId]);
+        if (classCheck.rowCount === 0) {
             // Try Legacy Composite
             const legacyId = `${classId}_${uai}`;
-            if (legacyId !== pgClassId) {
-                console.log(`[API] Primary ID update failed. Trying Legacy ID: ${legacyId}`);
-                updateRes = await tryUpdate(legacyId);
-                if (updateRes.rowCount > 0) {
-                    pgClassId = legacyId; // Confirmed it's legacy
+            classCheck = await client.query('SELECT id FROM classes WHERE id = $1', [legacyId]);
+            if (classCheck.rowCount > 0) pgClassId = legacyId;
+            else throw new Error(`Class not found: ${classId}`);
+        } else {
+            pgClassId = classCheck.rows[0].id;
+        }
+
+        // 2. Handle Main Teacher Update (Transactional)
+        if (mainTeacherId !== undefined) {
+            // A. Reset existing 'is_main_teacher' flags for this class
+            await client.query(`
+                UPDATE teacher_assignments 
+                SET is_main_teacher = false, updated_at = NOW()
+                WHERE class_id = $1
+            `, [pgClassId]);
+
+            // B. If a teacher is selected, set/insert Assignment as Main
+            if (mainTeacherId) {
+                // Upsert logic: Update if exists, Insert if not
+                const toggleRes = await client.query(`
+                    UPDATE teacher_assignments
+                    SET is_main_teacher = true, updated_at = NOW()
+                    WHERE class_id = $1 AND teacher_uid = $2
+                    RETURNING id
+                `, [pgClassId, mainTeacherId]);
+
+                if (toggleRes.rowCount === 0) {
+                    // Start fresh assignment
+                    await client.query(`
+                        INSERT INTO teacher_assignments (class_id, teacher_uid, is_main_teacher, created_at, updated_at)
+                        VALUES ($1, $2, true, NOW(), NOW())
+                    `, [pgClassId, mainTeacherId]);
                 }
             }
         }
 
-        if (updateRes.rowCount === 0) {
-            // Still 0? Maybe class doesn't exist.
-            console.warn(`[API] Update Class Failed: Class ${classId} not found (tried raw and legacy).`);
-            // We don't error out 404 to avoid crashing UI flows, but warn.
+        // 3. Update Class Table (Redundant but required for Schema)
+        // 3. Update Class Table (Redundant but required for Schema)
+        // We use COALESCE for cpe_id to allow partial updates if desired, but main_teacher_id is explicit.
+        // Actually, for strict sync, if mainTeacherId is undefined, we shouldn't touch it?
+        // But the previous step (assignments) logic ran if mainTeacherId !== undefined.
+        // Let's align: matching the params.
+
+        const updateClassRes = await client.query(`
+            UPDATE classes 
+            SET 
+                main_teacher_id = COALESCE($1, main_teacher_id),
+                cpe_id = COALESCE($2, cpe_id),
+                updated_at = NOW()
+            WHERE id = $3
+            RETURNING id
+        `, [
+            mainTeacherId !== undefined ? (mainTeacherId || null) : null,
+            cpeId !== undefined ? (cpeId || null) : null,
+            pgClassId
+        ]);
+
+        // 4. Fetch Details for Response
+        let teacherDetails = null;
+        if (mainTeacherId) {
+            const tRes = await client.query('SELECT first_name, last_name, email FROM users WHERE uid = $1', [mainTeacherId]);
+            if (tRes.rows.length) teacherDetails = tRes.rows[0];
         }
 
-        // 2. Sync to Firestore
-        // Path: establishments/{uai}/years/2025-2026/classes/{classId}
-        // Firestore uses the Frontend ID (classId passed in params, usually Short for legacy).
-        // This preserves the link with Students who use Short ID (Legacy).
+        // COMMIT TRANSACTION
+        await client.query('COMMIT');
+
+        // ... Firestore Sync (DISABLED: Migration to Postgres Complete) ...
+        /*
         const year = "2025-2026";
         const classRef = db.doc(`establishments/${uai}/years/${year}/classes/${classId}`);
 
         await classRef.set({
-            mainTeacherId: mainTeacherId || null,
-            mainTeacher: teacherDetails || null,
+            ...(mainTeacherId !== undefined && { mainTeacherId: mainTeacherId || null, mainTeacher: teacherDetails || null }),
+            ...(cpeId !== undefined && { cpeId: cpeId || null }),
             updatedAt: new Date().toISOString()
         }, { merge: true });
+        */
 
         return NextResponse.json({ success: true, mainTeacher: teacherDetails });
 
     } catch (error: any) {
-        console.error("[API] Update Class Error:", error);
+        if (client) await client.query('ROLLBACK');
+        console.error("[API] Update Class Transaction Error:", error);
         return NextResponse.json({ error: error.message }, { status: 500 });
     } finally {
         if (client) client.release();
@@ -105,7 +121,7 @@ export async function PUT(req: Request) {
 
 // GET: Fetch Classes with Enriched Main Teacher
 export async function GET(req: Request) {
-    let client;
+    let client: any;
     try {
         const { searchParams } = new URL(req.url);
         const uai = searchParams.get('uai');
@@ -122,25 +138,42 @@ export async function GET(req: Request) {
                 c.main_teacher_id,
                 u.first_name as teacher_first,
                 u.last_name as teacher_last,
-                u.email as teacher_email,
+                -- FIX: If email is a Ghost ID, try to find the real account's email
+                COALESCE(
+                    (CASE 
+                        WHEN u.email LIKE 'teacher-%' OR u.email LIKE '%@pledgeum.temp' THEN (
+                            SELECT real_u.email 
+                            FROM users real_u 
+                            WHERE real_u.first_name = u.first_name 
+                              AND real_u.last_name = u.last_name 
+                              AND real_u.role = 'teacher' 
+                              AND real_u.email NOT LIKE 'teacher-%' 
+                              AND real_u.email NOT LIKE '%@pledgeum.temp'
+                            LIMIT 1
+                        )
+                        ELSE u.email 
+                    END),
+                    u.email
+                ) as teacher_email,
+                c.cpe_id,
+                u_cpe.first_name as cpe_first,
+                u_cpe.last_name as cpe_last,
+                u_cpe.email as cpe_email,
                 (SELECT COUNT(*) FROM users s WHERE s.class_id = c.id AND s.role = 'student') as student_count,
                 (SELECT COUNT(DISTINCT teacher_uid) FROM teacher_assignments ta WHERE ta.class_id = c.id) as teacher_count
             FROM classes c
             LEFT JOIN users u ON c.main_teacher_id = u.uid::text
+            LEFT JOIN users u_cpe ON c.cpe_id = u_cpe.uid::text
             WHERE c.establishment_uai = $1
         `;
 
         console.log("[API] Executing Class Query:", query, "Params:", [uai]);
         const res = await client.query(query, [uai]);
 
-        const classes = res.rows.map(row => {
-            // HYBRID LOGIC: 
-            // If ID ends with `_${uai}`, assuming Legacy -> Strip it for frontend (Short ID).
-            // Else -> Keep Key (New Random/UUID).
-            let simpleId = row.pg_id;
-            if (simpleId.endsWith(`_${uai}`)) {
-                simpleId = simpleId.substring(0, simpleId.length - (uai.length + 1));
-            }
+        const classes = res.rows.map((row: any) => {
+            // STRICT LOGIC: Always return the full DB ID.
+            // The students are linked to the FULL ID. Stripping it breaks the link.
+            const simpleId = row.pg_id;
 
             return {
                 id: simpleId,
@@ -152,6 +185,12 @@ export async function GET(req: Request) {
                     firstName: row.teacher_first,
                     lastName: row.teacher_last,
                     email: row.teacher_email
+                } : null,
+                cpe: row.cpe_id ? {
+                    id: row.cpe_id,
+                    firstName: row.cpe_first,
+                    lastName: row.cpe_last,
+                    email: row.cpe_email
                 } : null
             };
         });

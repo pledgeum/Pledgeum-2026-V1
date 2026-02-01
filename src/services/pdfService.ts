@@ -23,7 +23,7 @@ export const pdfService = {
                 missionOrder: odm,
                 convention: convention,
                 qrCodeUrl: qrCode
-            })).toBlob();
+            }) as any).toBlob();
 
             // 3. Trigger Download
             const pdfUrl = URL.createObjectURL(blob);

@@ -43,17 +43,7 @@ export async function POST(request: Request) {
             }
 
             // 2. Server-Side Sandbox Logic (Strict)
-            // Hardcoded "Super Admin / Sandbox" access
-            if (email === 'fabrice.dumasdelage@gmail.com' || email === 'pledgeum@gmail.com') {
-                console.log(`[API_USERS] Applying Sandbox Admin Privileges for ${email}`);
-                role = 'school_head';
-                establishmentUai = '9999999X';
-                firstName = firstName || 'Fabrice';
-                lastName = lastName || 'Dumasdelage';
-                jobFunction = 'Proviseur';
-                phone = '0600000000';
-                addressStr = "12 Rue Ampère 76500 Elbeuf";
-            }
+            // REMOVED: Auto-assignment of 9999999Z. User must be linked via Admin Tools or Invite.
 
             // 3. Upsert into Users Table
             // We use ON CONFLICT to ensure idempotency (Sync on login)
@@ -105,17 +95,7 @@ export async function POST(request: Request) {
             } else {
                 // UPDATE (Touch)
                 console.log(`[API_USERS] Updating existing user ${uid}`);
-                // If Sandbox user, maybe force repair?
-                if (email === 'fabrice.dumasdelage@gmail.com') {
-                    // Force repair logic similar to store
-                    await client.query(`
-                        UPDATE users SET 
-                            establishment_uai = '9999999X', 
-                            role = 'school_head', 
-                            job_function = 'Proviseur'
-                        WHERE uid = $1
-                     `, [uid]);
-                }
+                // No forced repair here to allow DB role to persist
 
                 const updateQuery = `UPDATE users SET last_connection_at = NOW() WHERE uid = $1 RETURNING *`;
                 const res = await client.query(updateQuery, [uid]);

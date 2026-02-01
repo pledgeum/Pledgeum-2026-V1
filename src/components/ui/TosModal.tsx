@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useSession } from "next-auth/react";
 import { useUserStore } from '@/store/user';
 import { ShieldCheck, ArrowRight, BookOpen, X } from 'lucide-react';
 
@@ -9,7 +9,8 @@ interface TosModalProps {
 }
 
 export function TosModal({ isOpen = false, onClose }: TosModalProps) {
-    const { user } = useAuth();
+    const { data: session } = useSession();
+    const user = session?.user;
     const { hasAcceptedTos, acceptTos } = useUserStore();
     const [isLoading, setIsLoading] = useState(false);
 
@@ -33,7 +34,9 @@ export function TosModal({ isOpen = false, onClose }: TosModalProps) {
     const handleAccept = async () => {
         setIsLoading(true);
         try {
-            await acceptTos(user.uid);
+            if (user?.id) {
+                await acceptTos(user.id);
+            }
         } catch (error) {
             console.error("Error accepting TOS:", error);
         } finally {

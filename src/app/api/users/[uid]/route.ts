@@ -17,8 +17,13 @@ export async function GET(
 
     const client = await pool.connect();
     try {
-        // 1. Fetch User (Base)
-        const query = `SELECT * FROM users WHERE uid = $1`;
+        // 1. Fetch User (Base) with Class Name (Left Join)
+        const query = `
+            SELECT u.*, c.name as class_name 
+            FROM users u
+            LEFT JOIN classes c ON u.class_id = c.id
+            WHERE u.uid = $1
+        `;
         const res = await client.query(query, [uid]);
 
         if (!res.rowCount || res.rowCount === 0) {
@@ -30,20 +35,23 @@ export async function GET(
         let establishmentData = null;
 
         // 2. Fetch Establishment Context (For School Head)
+        // 2. Fetch Establishment Context (For School Head)
         if (user.role === 'school_head') {
             const estQuery = `SELECT * FROM establishments WHERE admin_email = $1`;
             const estRes = await client.query(estQuery, [user.email]);
             if (estRes.rowCount && estRes.rowCount > 0) {
                 establishmentUai = estRes.rows[0].uai;
                 establishmentData = estRes.rows[0];
-            } else if (user.email === 'pledgeum@gmail.com') {
-                // DEV BACKDOOR: Ensure Pledgeum has access to Sandbox for testing
-                establishmentUai = '9999999X';
-                establishmentData = { name: 'Lycée Sandbox' };
+            }
+        } else if (user.establishment_uai) {
+            const estQuery = `SELECT * FROM establishments WHERE uai = $1`;
+            const estRes = await client.query(estQuery, [user.establishment_uai]);
+            if (estRes.rowCount && estRes.rowCount > 0) {
+                establishmentData = estRes.rows[0];
             }
         }
 
-        // 3. Construct Profile Data & Flatten Response (Fix 2: Explicit Mapping)
+        // 3. Construct Profile Data & Flatten Response
         // We return a flat object mixed with user metadata, as expected by frontend
         const mappedUser = {
             uid: user.uid,
@@ -55,9 +63,23 @@ export async function GET(
             address: user.address || '',
             function: user.job_function || (establishmentData ? 'Proviseur' : ''),
 
+            // Student Specific
+            birthDate: user.birth_date ? new Date(user.birth_date).toISOString() : null, // Fix: Add birthDate
+            zipCode: user.zip_code || null,   // Fix: Add zipCode
+            city: user.city || null,          // Fix: Add city
+            class: user.class_name || null, // Fix: Add Class Name
+            classId: user.class_id || null, // Fix: Add Class ID
+            diploma: user.diploma_prepared || null, // Fix: Add Diploma
+            legalRepresentatives: user.legal_representatives || [], // Fix: Add Legal Reps
+            proxCommune: user.prox_commune || null, // Add prox_commune
+            proxCommuneZip: user.prox_commune_zip || null,
+            proxCommuneLat: user.prox_commune_lat || null,
+            proxCommuneLon: user.prox_commune_lon || null,
+
             // Legacy / Helper fields
             uai: user.establishment_uai || establishmentUai,
             schoolId: user.establishment_uai || establishmentUai,
+            schoolName: establishmentData ? establishmentData.name : undefined, // Fix: Add schoolName
             ecole_nom: establishmentData ? establishmentData.name : undefined,
             id_establishment: user.establishment_uai || establishmentUai,
 
@@ -67,11 +89,24 @@ export async function GET(
             profileData: {
                 firstName: user.first_name || '',
                 lastName: user.last_name || '',
+                email: user.email || '', // Fix: Add email to profileData
                 function: user.job_function || (establishmentData ? 'Proviseur' : undefined),
                 phone: user.phone || undefined,
                 address: user.address || undefined,
+                schoolName: establishmentData ? establishmentData.name : undefined, // Fix: Add schoolName
                 ecole_nom: establishmentData ? establishmentData.name : undefined,
-                id_establishment: user.establishment_uai || establishmentUai
+                id_establishment: user.establishment_uai || establishmentUai,
+                uai: user.establishment_uai || establishmentUai,
+                zipCode: user.zip_code || undefined, // Fix: Add zipCode
+                city: user.city || undefined,        // Fix: Add city
+                class: user.class_name || undefined, // Fix: Add Class to profileData
+                birthDate: user.birth_date ? new Date(user.birth_date).toISOString() : undefined, // Fix: Add birthDate to profileData
+                diploma: user.diploma_prepared || undefined, // Fix: Add Diploma
+                legalRepresentatives: user.legal_representatives || [], // Fix: Add Legal Reps
+                proxCommune: user.prox_commune || undefined, // Add prox_commune to profileData
+                proxCommuneZip: user.prox_commune_zip || undefined,
+                proxCommuneLat: user.prox_commune_lat || undefined,
+                proxCommuneLon: user.prox_commune_lon || undefined,
             }
         };
 
@@ -121,6 +156,10 @@ export async function PUT(
         const schoolCity = profileData.schoolCity || body.schoolCity;
         const schoolZip = profileData.schoolZip || body.schoolZip;
 
+        // Diploma & Legal Reps
+        const diploma = profileData.diploma || body.diploma;
+        const legalRepresentatives = profileData.legalRepresentatives || body.legalRepresentatives; // Expected to be Array
+
         console.log('[API_USER_UPDATE] Extracted Fields:', {
             firstName: firstName,
             lastName: lastName,
@@ -141,10 +180,10 @@ export async function PUT(
             // 2. ESTABLISHMENT UPSERT (Critical for FK Constraint)
             if (targetUai) {
                 // Special Case: Sandbox
-                if (targetUai === '9999999X') {
+                if (targetUai === '9999999Z') {
                     await client.query(`
                         INSERT INTO establishments (uai, name, address, city, postal_code, type, telephone, admin_email)
-                        VALUES ('9999999X', 'Mon LYCEE TOUTFAUX', '12 Rue Ampère', 'Elbeuf', '76500', 'LP', '02 35 77 77 77', 'pledgeum@gmail.com')
+                        VALUES ('9999999Z', 'Lycée de Démonstration (Sandbox)', '12 Rue Ampère', 'Elbeuf', '76500', 'LP', '02 35 77 77 77', 'pledgeum@gmail.com')
                         ON CONFLICT (uai) DO NOTHING;
                     `);
                 } else {
@@ -186,14 +225,38 @@ export async function PUT(
             }
 
             // Address Handling
-            let addressStr = null;
-            if (profileData.address) {
-                if (typeof profileData.address === 'string') {
-                    addressStr = profileData.address;
-                } else if (typeof profileData.address === 'object') {
-                    addressStr = `${profileData.address.street || ''} ${profileData.address.postalCode || ''} ${profileData.address.city || ''}`.trim();
+            // We now support zip_code and city columns.
+            // Address column should primarily store the Street part now, OR the full string if legacy.
+            // But to avoid duplication issues, if we have zip/city, 'address' usually acts as 'Street Address'.
+
+
+
+            let addressStr = profileData.address;
+
+            // Fix: Ensure addressStr is a clean string (Street only)
+            if (addressStr) {
+                if (typeof addressStr === 'object') {
+                    // Extract street from object
+                    addressStr = addressStr.street || addressStr.address || '';
+                } else if (typeof addressStr === 'string' && addressStr.trim().startsWith('{')) {
+                    // Start of JSON? Try to parse
+                    try {
+                        const parsed = JSON.parse(addressStr);
+                        addressStr = parsed.street || parsed.address || addressStr; // valid fallback?
+                    } catch (e) {
+                        // Not valid JSON, keep origin
+                    }
                 }
             }
+
+            // If still object (rare), coerce to string but warn? 
+            // Should be string by now.
+
+            let zipStr = profileData.zipCode || (typeof profileData.address === 'object' ? profileData.address.postalCode : null);
+            let cityStr = profileData.city || (typeof profileData.address === 'object' ? profileData.address.city : null);
+
+            // Fallback: If only full address string provided but no zip/city in payload (rare for new UI), try to parse? 
+            // No, trust payload. If user sends empty zip, it's empty.
 
             // Fix 3: Use COALESCE in SQL to prevent overwriting existing data with NULLs from a partial update
             // We pass parameters. If a parameter is undefined in JS (which becomes null in SQL param), 
@@ -206,19 +269,23 @@ export async function PUT(
                     address = COALESCE($4, address),
                     establishment_uai = COALESCE($5, establishment_uai),
                     job_function = COALESCE($6, job_function),
+                    zip_code = COALESCE($7, zip_code),
+                    city = COALESCE($8, city),
+                    diploma_prepared = COALESCE($9, diploma_prepared),
+                    legal_representatives = COALESCE($10, legal_representatives),
+                    prox_commune = COALESCE($11, prox_commune),
+                    prox_commune_zip = COALESCE($12, prox_commune_zip),
+                    prox_commune_lat = COALESCE($13, prox_commune_lat),
+                    prox_commune_lon = COALESCE($14, prox_commune_lon),
                     updated_at = NOW()
-                WHERE uid = $7
+                WHERE uid = $15
                 RETURNING *
             `;
 
-            // Note: In Postgres node driver, 'undefined' usually throws or is not allowed. 
-            // We must ensure we pass 'null' if we really mean null, or if we want COALESCE to skip it.
-            // But here, we want 'undefined' in the payload to mean "do not update".
-            // So we explicitly check if the var is strictly undefined.
-            // However, to keep it simple with pg driver, we will pass explicit NULLs where we don't have a value,
-            // and rely on COALESCE to ignore those NULLs.
-            // CAUTION: If we *want* to set a field to NULL, this logic prevents it. 
-            // But for profile updates, we rarely want to erase data to NULL.
+            const proxCommune = profileData.proxCommune || body.proxCommune;
+            const proxCommuneZip = profileData.proxCommuneZip || body.proxCommuneZip;
+            const proxCommuneLat = profileData.proxCommuneLat || body.proxCommuneLat;
+            const proxCommuneLon = profileData.proxCommuneLon || body.proxCommuneLon;
 
             const res = await client.query(updateQuery, [
                 firstName === undefined ? null : firstName,
@@ -227,6 +294,14 @@ export async function PUT(
                 addressStr === undefined ? null : addressStr,
                 targetUai === undefined ? null : targetUai,
                 jobFunction === undefined ? null : jobFunction,
+                zipStr === undefined ? null : zipStr,
+                cityStr === undefined ? null : cityStr,
+                diploma === undefined ? null : diploma,
+                legalRepresentatives === undefined ? null : JSON.stringify(legalRepresentatives),
+                proxCommune === undefined ? null : proxCommune,
+                proxCommuneZip === undefined ? null : proxCommuneZip,
+                proxCommuneLat === undefined ? null : proxCommuneLat,
+                proxCommuneLon === undefined ? null : proxCommuneLon,
                 uid
             ]);
 

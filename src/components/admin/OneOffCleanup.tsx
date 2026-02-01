@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { collection, getDocs, deleteDoc, doc, updateDoc } from 'firebase/firestore';
+import { collection, getDocs, deleteDoc, doc, updateDoc } from '@/lib/firebase';
 import { db } from '@/lib/firebase';
 import { Loader2, Trash2, AlertTriangle, CheckCircle, RefreshCw, Hammer } from 'lucide-react';
 import { migrateAllUsers } from '@/lib/migrations/migrateUsers';

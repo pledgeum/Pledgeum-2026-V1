@@ -3,6 +3,7 @@ import { adminAuth } from '@/lib/firebase-admin';
 import pool from '@/lib/pg';
 import { z } from 'zod';
 import crypto from 'crypto';
+import { auth } from '@/auth';
 
 // Utility functions
 function normalizeString(str: string) {
@@ -36,10 +37,23 @@ const ImportSchema = z.object({
 export async function POST(req: Request) {
     let client;
     try {
-        const body = await req.json();
-        const { schoolId, schoolYear, classes } = ImportSchema.parse(body);
+        const session = await auth();
+        const user = session?.user as any;
+        const uai = user?.establishment_uai;
+        const role = user?.role;
 
-        if (!schoolId) return NextResponse.json({ error: "School ID required" }, { status: 400 });
+        // Security: Only Admins can import
+        if (role !== 'school_head' && role !== 'ESTABLISHMENT_ADMIN') {
+            return NextResponse.json({ error: "Forbidden: Insufficient permissions." }, { status: 403 });
+        }
+
+        if (!uai) {
+            return NextResponse.json({ error: "No establishment linked to your account. Please complete your profile." }, { status: 403 });
+        }
+
+        const body = await req.json();
+        const { schoolYear, classes } = ImportSchema.parse(body);
+        const schoolId = uai; // Primary identifier for all operations
 
         client = await pool.connect();
 
@@ -186,7 +200,7 @@ export async function POST(req: Request) {
                                         password: 'InitialPassword123!'
                                     }).then(() => {
                                         return adminAuth.setCustomUserClaims(newUid, { role: 'student', schoolId });
-                                    }).catch((err) => {
+                                    }).catch((err: any) => {
                                         console.error(`[REPAIR AUTH ERROR] Failed to create ${finalEmail}:`, err.message);
                                     })
                                 );
@@ -241,7 +255,7 @@ export async function POST(req: Request) {
                                 password: 'InitialPassword123!'
                             }).then(() => {
                                 return adminAuth.setCustomUserClaims(uid, { role: 'student', schoolId });
-                            }).catch((err) => {
+                            }).catch((err: any) => {
                                 console.error(`[AUTH ERROR] Failed to create ${finalEmail}:`, err.message);
                             })
                         );

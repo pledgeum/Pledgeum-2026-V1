@@ -1,7 +1,8 @@
 
 import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
-import { useAuth } from '@/context/AuthContext';
+import { useSession } from "next-auth/react";
+import { useUserStore } from '@/store/user';
 import { Loader2, CheckCircle, Send, FileSignature } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
@@ -12,7 +13,9 @@ interface ConventionActionsProps {
 }
 
 export const ConventionActions = ({ convention, onUpdate }: ConventionActionsProps) => {
-    const { userRole, user } = useAuth();
+    const { data: session } = useSession();
+    const { role } = useUserStore();
+    const userRole = role; // Map usage
     const [loading, setLoading] = useState(false);
 
     const handleStatusChange = async (newStatus: string) => {
@@ -20,12 +23,11 @@ export const ConventionActions = ({ convention, onUpdate }: ConventionActionsPro
 
         setLoading(true);
         try {
-            const token = await user?.getIdToken();
+            // No token needed, session cookie used
             const res = await fetch(`/api/conventions/${convention.id}/status`, {
                 method: 'POST',
                 headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token}`
+                    'Content-Type': 'application/json'
                 },
                 body: JSON.stringify({ status: newStatus })
             });
@@ -61,13 +63,15 @@ export const ConventionActions = ({ convention, onUpdate }: ConventionActionsPro
         );
     }
 
-    // 2. Teacher (PP): SUBMITTED -> VALIDATED_BY_PP
+    // 2. Teacher (PP): SUBMITTED/SIGNED_PARENT -> VALIDATED_TEACHER
     // Should verify if this teacher is the main teacher of the class?
     // For now, any teacher with access (RLS handles read access).
-    if ((userRole === 'teacher' || userRole === 'school_head' || userRole === 'admin') && convention.status === 'SUBMITTED') {
+    const isReadyForTeacher = convention.status === 'SUBMITTED' || convention.status === 'SIGNED_PARENT';
+
+    if ((userRole === 'teacher' || userRole === 'school_head') && isReadyForTeacher) {
         return (
             <div className="flex space-x-2">
-                <Button onClick={() => handleStatusChange('VALIDATED_BY_PP')} className="bg-green-600 hover:bg-green-700 text-white">
+                <Button onClick={() => handleStatusChange('VALIDATED_TEACHER')} className="bg-green-600 hover:bg-green-700 text-white">
                     <CheckCircle className="w-4 h-4 mr-2" /> Valider & Envoyer à l'Entreprise
                 </Button>
                 <Button variant="destructive" onClick={() => handleStatusChange('REJECTED')}>
@@ -77,10 +81,12 @@ export const ConventionActions = ({ convention, onUpdate }: ConventionActionsPro
         );
     }
 
-    // 3. School Head: SIGNED_BY_COMPANY -> SIGNED_BY_SCHOOL (Final)
-    if ((userRole === 'school_head' || userRole === 'admin') && convention.status === 'SIGNED_BY_COMPANY') {
+    // 3. School Head: SIGNED_COMPANY/SIGNED_TUTOR -> VALIDATED_HEAD (Final)
+    const isReadyForHead = convention.status === 'SIGNED_COMPANY' || convention.status === 'SIGNED_TUTOR';
+
+    if ((userRole === 'school_head') && isReadyForHead) {
         return (
-            <Button onClick={() => handleStatusChange('SIGNED_BY_SCHOOL')} className="bg-purple-600 hover:bg-purple-700 text-white">
+            <Button onClick={() => handleStatusChange('VALIDATED_HEAD')} className="bg-purple-600 hover:bg-purple-700 text-white">
                 <FileSignature className="w-4 h-4 mr-2" /> Signer et Clôturer
             </Button>
         );
@@ -89,9 +95,9 @@ export const ConventionActions = ({ convention, onUpdate }: ConventionActionsPro
     // Fallback info
     return (
         <span className="text-sm text-gray-500 italic">
-            {convention.status === 'VALIDATED_BY_PP' && 'En attente de signature entreprise...'}
+            {convention.status === 'VALIDATED_TEACHER' && 'En attente de signature entreprise...'}
             {convention.status === 'COMPLETED' && 'Convention terminée.'}
-            {convention.status === 'SIGNED_BY_SCHOOL' && 'Convention terminée.'}
+            {convention.status === 'VALIDATED_HEAD' && 'Convention validée et terminée.'}
         </span>
     );
 };

@@ -3,16 +3,18 @@
 import React, { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Plus, FileText, Loader2, Trash2 } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useSession } from "next-auth/react";
 import { useUserStore } from '@/store/user';
 import { useSchoolStore } from '@/store/school';
-import { updateDoc, arrayUnion, arrayRemove, query, collection, getDocs, where, deleteDoc, doc } from 'firebase/firestore';
+import { updateDoc, arrayUnion, arrayRemove, query, collection, getDocs, where, deleteDoc, doc } from '@/lib/firebase';
 import { db } from '@/lib/firebase';
 import { toast } from 'sonner';
 import { Users, Check } from 'lucide-react';
 
 export default function EvaluationsListPage() {
-    const { user, loading } = useAuth();
+    const { data: session, status } = useSession();
+    const loading = status === "loading";
+    const user = session?.user;
     const router = useRouter();
     const { role } = useUserStore();
     const { classes } = useSchoolStore();
@@ -45,7 +47,7 @@ export default function EvaluationsListPage() {
             } else {
                 q = query(
                     collection(db, "evaluation_templates"),
-                    where("authorId", "==", user.uid)
+                    where("authorId", "==", user.id)
                 );
             }
             const snapshot = await getDocs(q);

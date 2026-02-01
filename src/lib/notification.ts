@@ -1,6 +1,6 @@
 // Existing imports...
-import { db, auth } from '@/lib/firebase';
-import { collection, addDoc } from 'firebase/firestore';
+import { db } from '@/lib/firebase';
+import { collection, addDoc } from '@/lib/firebase';
 
 // Existing imports...
 import { useDemoStore } from '@/store/demo';
@@ -47,13 +47,10 @@ export async function sendNotification(to: string, subject: string, text: string
             ? `${process.env.NEXT_PUBLIC_APP_URL || 'http://localhost:3000'}/api/send-email`
             : '/api/send-email';
 
-        const token = await auth.currentUser?.getIdToken();
-
         const response = await fetch(apiUrl, {
             method: 'POST',
             headers: {
                 'Content-Type': 'application/json',
-                'Authorization': `Bearer ${token || ''}`
             },
             body: JSON.stringify({ to, subject, text }),
         });

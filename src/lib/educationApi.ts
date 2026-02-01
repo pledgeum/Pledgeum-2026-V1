@@ -14,12 +14,12 @@ export interface SchoolResult {
 export async function searchSchools(query: string, city?: string, type?: string): Promise<SchoolResult[]> {
     // --- SANDBOX API BYPASS ---
     // Strict isolation for the Sandbox UAI to prevent any calls to the national API
-    if (query === '9999999X' || query === 'Mon LYCEE TOUTFAUX') {
+    if (query === '9999999Z' || query === 'Lycée de Démonstration (Sandbox)') {
         return [{
-            id: "9999999X",
-            nom: "Mon LYCEE TOUTFAUX",
+            id: "9999999Z",
+            nom: "Lycée de Démonstration (Sandbox)",
             type: "Lycée Polyvalent",
-            adresse: "12 Rue Ampère",
+            adresse: "1 Avenue de la République",
             ville: "Elbeuf",
             cp: "76500",
             mail: "fabrice.dumasdelage@gmail.com",

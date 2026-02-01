@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useRef } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useSession } from "next-auth/react";
 import { useProfileStatus } from '@/hooks/useProfileStatus';
 import { useRouter, usePathname } from 'next/navigation';
 import { useUserStore } from '@/store/user';
@@ -19,7 +19,10 @@ const EXCLUDED_PATHS = [
 ];
 
 export function ProfileGuard({ children }: { children: React.ReactNode }) {
-    const { user, loading: authLoading } = useAuth();
+    const { data: session, status } = useSession();
+    const loading = status === "loading";
+    const user = session?.user;
+
     const { isComplete } = useProfileStatus();
     const { isLoadingProfile, fetchUserProfile, profileData } = useUserStore();
     const router = useRouter();
@@ -32,22 +35,35 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
 
     useEffect(() => {
         const checkStatus = async () => {
-            if (authLoading) return; // Wait for Firebase Auth
+            if (loading) return;
 
             if (!user) {
-                // Not logged in.
-                // We don't necessarily redirect here because the page content might be public or handle its own redirect.
-                // But generally, the dashboard handles it.
-                // For the guard, we just stop checking.
                 setIsChecking(false);
                 return;
             }
 
             // User is logged in. 
-            // Always ensure profile is loaded, even if on excluded path (like /complete-profile)
-            if (!fetchAttempted.current && Object.keys(profileData || {}).length === 0 && !isLoadingProfile) {
+            // Always ensure profile is loaded and matches current user
+            const storeId = useUserStore.getState().id;
+            const storeUai = useUserStore.getState().uai;
+
+            if (loadError) return; // Stop checking if we already failed
+
+            // Force fetch if:
+            // 1. Not attempted yet
+            // 2. Store is empty
+            // 3. Store ID doesn't match Session ID (User switched account)
+            // 4. UAI is missing (Vital for app function)
+
+            const needsFetch = !fetchAttempted.current ||
+                (profileData && Object.keys(profileData).length === 0) ||
+                (storeId !== user.id) ||
+                (!storeUai && !isLoadingProfile);
+
+            if (needsFetch && !isLoadingProfile) {
+                console.log("[ProfileGuard] Fetching profile. Reason: ", { attempted: fetchAttempted.current, storeId, sessionId: user.id, hasUai: !!storeUai });
                 fetchAttempted.current = true;
-                const success = await fetchUserProfile(user.uid);
+                const success = await fetchUserProfile(user.id || '');
                 if (!success) {
                     setLoadError(true);
                 }
@@ -59,7 +75,6 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
                 return;
             }
 
-            if (loadError) return; // Stop checking if error
 
             // Check exclusions AFTER data is potentially loaded
             const isExcluded = EXCLUDED_PATHS.some(p => pathname?.startsWith(p));
@@ -79,10 +94,10 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
         };
 
         checkStatus();
-    }, [user, authLoading, isComplete, isLoadingProfile, pathname, router, fetchUserProfile, profileData]);
+    }, [user, loading, isComplete, isLoadingProfile, pathname, router, fetchUserProfile, profileData]);
 
 
-    if (authLoading || (user && isLoadingProfile && !EXCLUDED_PATHS.some(p => pathname?.startsWith(p)))) {
+    if (loading || (user && isLoadingProfile && !EXCLUDED_PATHS.some(p => pathname?.startsWith(p)))) {
         return (
             <div className="min-h-screen flex items-center justify-center bg-gray-50">
                 <div className="text-center">

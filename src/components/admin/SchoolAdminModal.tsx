@@ -10,7 +10,7 @@ import { ClassCalendarManager } from './ClassCalendarManager';
 import { useUserStore } from '@/store/user';
 import Papa from 'papaparse';
 import { useConventionStore } from '@/store/convention'; // Imported for class cross-referencing
-import { auth } from '@/lib/firebase';
+import { db, collection, query, where, getDocs, deleteDoc, doc, addDoc, writeBatch } from '@/lib/firebase';
 
 // --- Checkable Dropdown Component ---
 interface CheckableDropdownProps {
@@ -562,7 +562,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                 if (partnersToAdd.length > 0) {
                     // Pass schoolId for persistence
                     const state = useUserStore.getState();
-                    const schoolId = state.schoolId || (email === 'fabrice.dumasdelage@gmail.com' ? '9999999X' : undefined);
+                    const schoolId = state.schoolId;
 
                     // Await import
                     await importPartners(partnersToAdd, schoolId);
@@ -658,43 +658,36 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                 }
             }
 
-            // 2.5 Sync with Firestore (only for those we are printing/generating)
+
+            // 2.5 Sync with Postgres (Batch Update)
             try {
-                const { writeBatch, doc: firestoreDoc, collection } = await import("firebase/firestore");
-                const { db } = await import("@/lib/firebase");
+                // Prepare payload for API
+                const invitationsPayload = studentsToPrint.map(s => ({
+                    userId: s.id,
+                    tempId: s.tempId,
+                    tempCode: s.tempCode
+                }));
 
-                const batch = writeBatch(db);
-                const invitationsRef = collection(db, "invitations");
-                const currentUser = auth.currentUser;
-
-                let operationCount = 0;
-                studentsToPrint.forEach(student => {
-                    if (student.tempId && student.tempCode) {
-                        const newInvRef = firestoreDoc(invitationsRef);
-                        batch.set(newInvRef, {
-                            tempId: student.tempId,
-                            tempCode: student.tempCode,
-                            email: student.email || "",
-                            name: `${student.firstName} ${student.lastName}`,
-                            role: 'student',
-                            birthDate: student.birthDate || null,
-                            schoolId: schoolId || schoolName, // Prefer ID, fallback to name if missing (legacy)
-                            createdAt: new Date().toISOString(),
-                            createdBy: currentUser?.uid || "system",
-                            status: 'pending',
-                            classId: cls.id,
-                            className: cls.name
-                        });
-                        operationCount++;
-                    }
+                const response = await fetch('/api/school/invitations/batch', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        uai: schoolId, // Assuming schoolId is the UAI here, validated by store usage
+                        invitations: invitationsPayload
+                    })
                 });
 
-                if (operationCount > 0) {
-                    await batch.commit();
-                    console.log(`Synced ${operationCount} invitations.`);
+                if (!response.ok) {
+                    const errProps = await response.json();
+                    throw new Error(errProps.error || "Batch Import Failed");
                 }
+
+                console.log(`Synced credentials for ${invitationsPayload.length} students to DB.`);
+
             } catch (err) {
-                console.error("Firestore sync warning:", err);
+                console.error("Credentials Sync Error:", err);
+                alert("Erreur lors de la sauvegarde des identifiants en base. Ils pourraient ne pas être actifs.");
+                return; // Stop PDF generation if DB sync fails to avoid "Ghost" credentials
             }
 
 
@@ -770,6 +763,8 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
         e.preventDefault();
         addClass({
             name: newClass.name,
+            studentCount: 0,
+            teacherCount: 0,
             mainTeacher: newClass.mainTeacher,
             cpe: newClass.cpe,
             mef: newClass.mef,
@@ -878,25 +873,11 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
 
             // 3. Send Email
             try {
-                // Get Token
-                const currentUser = auth.currentUser;
-                if (!currentUser) throw new Error("Utilisateur non connecté");
-                const token = await currentUser.getIdToken();
-
-                // Save Invitation to Firestore (for verification later)
-                // Using 'addDoc' or 'setDoc' with auto-ID? 
-                // We don't have db import yet, need to import it or use admin API?
-                // Wait, this is CLIENT side. We should use CLIENT SDK.
-                // Import 'db' from '@/lib/firebase'
-
-                // However, we just protected this call in rules to allow create.
-                // Let's import { collection, addDoc } from "firebase/firestore"; and { db } from "@/lib/firebase";
-
-                // ... Actually let's do it inside the try block
+                // Get Token logic removed (using session)
 
                 try {
-                    const { collection, addDoc } = await import("firebase/firestore");
-                    const { db } = await import("@/lib/firebase");
+                    // const { collection, addDoc } = await import("@/lib/firebase");
+                    // const { db } = await import("@/lib/firebase");
 
                     await addDoc(collection(db, "invitations"), {
                         tempId,
@@ -905,7 +886,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                         name: newCollab.name,
                         role: newCollab.role,
                         createdAt: new Date().toISOString(),
-                        createdBy: currentUser.uid,
+                        createdBy: useUserStore.getState().id || "system",
                         status: 'pending'
                     });
                     console.log("[ModalDebug] Invitation saved to Firestore.");
@@ -913,14 +894,12 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                     console.error("[ModalDebug] Firestore save failed (non-blocking):", err);
                 }
 
-                console.log("[ModalDebug] Token for email:", token ? `Generated (${token.length} chars)` : "NULL/EMPTY");
                 console.log("[ModalDebug] Sending email to:", newCollab.email);
 
                 const response = await fetch('/api/send-email', {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
                     },
                     body: JSON.stringify({
                         to: newCollab.email,
@@ -1661,7 +1640,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                                 onClick={async () => {
                                                                     // We need schoolId. Try from store or fallback to default sandbox if fabrice (should allow admin)
                                                                     let currentSchoolId = useUserStore.getState().schoolId;
-                                                                    if (!currentSchoolId && email === 'fabrice.dumasdelage@gmail.com') currentSchoolId = "9999999X"; // Fallback explicit
+                                                                    if (!currentSchoolId) console.warn("Missing School ID for update");
                                                                     if (!currentSchoolId && useUserStore.getState().role === 'school_head') {
                                                                         // Try deduce from store if localized
                                                                         // but usually schoolId is set. If not, alert.
@@ -1739,7 +1718,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                     </h6>
 
                                                     {/* Add Teacher Form */}
-                                                    <form onSubmit={(e) => handleAddTeacher(e, cls.id)} className="grid grid-cols-7 gap-2 mb-3">
+                                                    < form onSubmit={(e) => handleAddTeacher(e, cls.id)} className="grid grid-cols-7 gap-2 mb-3">
                                                         <input
                                                             placeholder="Nom"
                                                             value={newTeacher.lastName}
@@ -2210,8 +2189,9 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                 </div>
                             </div>
                         </div>
-                    )}
-                </div>
+                    )
+                    }
+                </div >
             </div >
             {importHelpType && (
                 <div className="fixed inset-0 z-[60] flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
@@ -2274,7 +2254,8 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                         data={importReviewData}
                         onConfirm={(selectedData) => {
                             // Robust ID resolution
-                            const targetId = schoolId || (email === 'fabrice.dumasdelage@gmail.com' ? '9999999X' : undefined);
+                            if (!schoolId) { alert("Erreur: Aucun établissement lié au compte."); return; }
+                            const targetId = schoolId;
                             importGlobalStructure(selectedData, targetId);
                             setImportReviewData(null);
                             alert(`${selectedData.length} classes traitées avec succès.`);
@@ -2290,7 +2271,8 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                         onClose={() => setTeacherImportReviewData(null)}
                         data={teacherImportReviewData}
                         onConfirm={(selectedData) => {
-                            const targetId = schoolId || (email === 'fabrice.dumasdelage@gmail.com' ? '9999999X' : undefined);
+                            if (!schoolId) { alert("Erreur: Aucun établissement lié au compte."); return; }
+                            const targetId = schoolId;
                             importGlobalTeachers(selectedData, targetId);
                             setTeacherImportReviewData(null);
                             alert(`${selectedData.length} professeurs importés avec succès.`);

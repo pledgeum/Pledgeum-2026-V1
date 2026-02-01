@@ -2,13 +2,14 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from '@/lib/firebase';
 import { db } from '@/lib/firebase';
-import { useAuth } from '@/context/AuthContext';
+import { useSession } from "next-auth/react";
 import { useUserStore } from '@/store/user';
 import { toast } from 'sonner';
 import { Loader2, Save, ArrowLeft, AlertCircle } from 'lucide-react';
 import { Convention } from '@/store/convention';
+
 
 interface EvaluationTemplate {
     id: string;
@@ -35,10 +36,13 @@ interface EvaluationSubmission {
     updatedBy: string;
 }
 
+
 export default function EvaluationFillingPage() {
     const params = useParams();
     const router = useRouter();
-    const { user, loading } = useAuth();
+    const { data: session, status } = useSession();
+    const loading = status === "loading";
+    const user = session?.user;
     const { role } = useUserStore();
 
     // params can be string or string[], ensuring string
@@ -76,13 +80,13 @@ export default function EvaluationFillingPage() {
                 router.back();
                 return;
             }
-            const data = templateSnap.data();
+            const data = templateSnap.data() as any;
             // Handle both structure formats (flat or nested under 'structure')
             // Older templates might be flat, newer are nested.
-            const headers = data.structure?.headers || data.headers || [];
-            const rows = data.structure?.rows || data.rows || [];
-            const synthesisEnabled = data.synthesis?.enabled ?? data.structure?.synthesisEnabled ?? data.synthesisEnabled ?? false;
-            const synthesisTitle = data.synthesis?.title || data.structure?.synthesisTitle || data.synthesisTitle || "Synthèse globale";
+            const headers = data?.structure?.headers || data?.headers || [];
+            const rows = data?.structure?.rows || data?.rows || [];
+            const synthesisEnabled = data?.synthesis?.enabled ?? data?.structure?.synthesisEnabled ?? data?.synthesisEnabled ?? false;
+            const synthesisTitle = data?.synthesis?.title || data?.structure?.synthesisTitle || data?.synthesisTitle || "Synthèse globale";
 
             const templateData = {
                 id: templateSnap.id,
@@ -203,7 +207,7 @@ export default function EvaluationFillingPage() {
                 answers,
                 synthesis,
                 updatedAt: serverTimestamp(),
-                updatedBy: user.uid
+                updatedBy: user.id || 'unknown'
             };
 
             await setDoc(submissionRef, submissionData, { merge: true });

@@ -1,5 +1,5 @@
 import { db } from '@/lib/firebase';
-import { collection, getDocs, doc, setDoc, writeBatch } from 'firebase/firestore';
+import { collection, getDocs, doc, setDoc, writeBatch } from '@/lib/firebase';
 import { User, UserRole, UserProfileData, LegalRepresentative } from '@/types/user';
 
 export async function migrateAllUsers() {

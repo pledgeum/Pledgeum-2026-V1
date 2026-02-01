@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { X, Upload, Trash2, FileText, Download, Check, AlertCircle, Loader2 } from 'lucide-react';
 import { useSchoolStore } from '@/store/school';
 import { useDocumentStore, ClassDocument } from '@/store/documents';
-import { useAuth } from '@/context/AuthContext';
+import { useSession } from "next-auth/react";
 import { useUserStore } from '@/store/user';
 import { uploadClassDocument } from '@/app/actions/documents';
 
@@ -16,7 +16,8 @@ interface ClassDocumentModalProps {
 export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps) {
     const { classes } = useSchoolStore();
     const { documents, fetchDocuments, fetchUserDocuments, uploadDocument, assignDocumentToClasses, deleteDocument, toggleSharing, loading, error } = useDocumentStore();
-    const { user } = useAuth();
+    const { data: session } = useSession();
+    const user = session?.user;
     const { role, profileData, name } = useUserStore();
 
     const [activeTab, setActiveTab] = useState<'upload' | 'library'>('upload');
@@ -29,8 +30,8 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
 
     useEffect(() => {
         if (isOpen) {
-            if (activeTab === 'library' && user) {
-                fetchUserDocuments(user.uid, profileData?.ecole_nom || '');
+            if (activeTab === 'library' && user?.id) {
+                fetchUserDocuments(user.id, profileData?.ecole_nom || '');
             } else {
                 fetchDocuments();
             }
@@ -68,7 +69,7 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
             const formData = new FormData();
             formData.append('file', file);
             formData.append('classIds', JSON.stringify(selectedClassIds));
-            formData.append('uploadedBy', user.uid);
+            formData.append('uploadedBy', user.id || '');
             formData.append('type', 'OTHER');
             formData.append('sharingData', JSON.stringify({
                 sharedWithSchool,
@@ -245,7 +246,7 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                                     <FileText className="h-5 w-5 text-gray-400 mr-3 flex-shrink-0" />
                                                     <div className="truncate">
                                                         <p className="text-sm font-medium text-gray-900 truncate" title={doc.name}>{doc.name}</p>
-                                                        {doc.uploadedBy === user?.uid && (
+                                                        {doc.uploadedBy === user?.id && (
                                                             <div className="flex items-center mt-1">
                                                                 <label className="flex items-center space-x-2 cursor-pointer">
                                                                     <div className="relative inline-block w-6 h-3 align-middle select-none transition duration-200 ease-in">
@@ -312,7 +313,7 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                                     <div className="flex flex-col">
                                                         <div className="flex items-center gap-2">
                                                             <p className="font-semibold text-gray-900 text-sm">{doc.name}</p>
-                                                            {doc.uploadedBy !== user?.uid && (
+                                                            {doc.uploadedBy !== user?.id && (
                                                                 <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-purple-100 text-purple-800" title={`Mis en ligne par ${doc.uploadedBy}`}>
                                                                     Partagé par {doc.sharedBy || 'Un collègue'}
                                                                 </span>
@@ -326,7 +327,7 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                                     <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 p-1">
                                                         <Download className="w-4 h-4" />
                                                     </a>
-                                                    {doc.uploadedBy === user?.uid && (
+                                                    {doc.uploadedBy === user?.id && (
                                                         <button onClick={() => handleDelete(doc)} className="text-gray-400 hover:text-red-500 p-1" title="Supprimer ce document">
                                                             <Trash2 className="w-4 h-4" />
                                                         </button>
@@ -337,7 +338,7 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                             <div className="mt-3">
                                                 <div className="flex justify-between items-center mb-1">
                                                     {/* Sharing Toggle for Owner */}
-                                                    {doc.uploadedBy === user?.uid && (
+                                                    {doc.uploadedBy === user?.id && (
                                                         <label className="flex items-center space-x-2 cursor-pointer mb-2">
                                                             <div className="relative inline-block w-8 h-4 align-middle select-none transition duration-200 ease-in">
                                                                 <input

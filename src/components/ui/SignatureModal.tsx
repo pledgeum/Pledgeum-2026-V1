@@ -1,7 +1,7 @@
 import { useRef, useEffect, useState } from 'react';
 import { X, PenTool, Mail, CheckCircle, Loader2, AlertTriangle } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
-import { auth } from '@/lib/firebase';
+
 import { useDemoStore } from '@/store/demo';
 import { useConventionStore } from '@/store/convention';
 import { useSchoolStore } from '@/store/school';
@@ -133,12 +133,10 @@ export function SignatureModal({
         }
 
         try {
-            const token = await auth.currentUser?.getIdToken();
             const res = await fetch('/api/otp/send', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token || ''}`
                 },
                 body: JSON.stringify({ email: signeeEmail, conventionId })
             });
@@ -218,12 +216,10 @@ export function SignatureModal({
         }
 
         try {
-            const token = await auth.currentUser?.getIdToken();
             const res = await fetch('/api/otp/verify', {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${token || ''}`
                 },
                 body: JSON.stringify({ email: signeeEmail, code: otpCode })
             });

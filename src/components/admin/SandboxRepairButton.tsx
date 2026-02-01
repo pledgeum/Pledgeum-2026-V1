@@ -23,15 +23,15 @@ export function SandboxRepairButton() {
                 name: "Fabrice Dumasdelage",
                 role: 'school_head', // FORCE ROLE
                 email: 'fabrice.dumasdelage@gmail.com', // FORCE EMAIL
-                schoolId: '9999999X', // FORCE SCHOOL
-                uai: '9999999X', // FORCE UAI
+                schoolId: '9999999Z', // FORCE SCHOOL
+                uai: '9999999Z', // FORCE UAI
                 profileData: {
                     firstName: 'Fabrice',
                     lastName: 'Dumasdelage',
                     email: 'fabrice.dumasdelage@gmail.com',
                     role: 'Proviseur',
                     function: 'Proviseur',
-                    ecole_nom: 'Mon LYCEE TOUTFAUX',
+                    ecole_nom: 'Lycée de Démonstration (Sandbox)',
                     ecole_ville: 'Elbeuf',
                     phone: '0600000000'
                 },
@@ -41,8 +41,8 @@ export function SandboxRepairButton() {
 
         // 2. FORCE ADMIN STORE AUTHORIZATION
         useAdminStore.getState().authorizeSchool({
-            id: "9999999X",
-            name: "Mon LYCEE TOUTFAUX",
+            id: "9999999Z",
+            name: "Lycée de Démonstration (Sandbox)",
             city: "Elbeuf",
             status: 'ADHERENT',
             email: "fabrice.dumasdelage@gmail.com"
@@ -60,7 +60,7 @@ export function SandboxRepairButton() {
         // Zustand persist middleware should handle this automatically if 'user-storage' is set. 
         // We trigger a manual save if simpler, but setState usually triggers persist.
 
-        alert("✅ PROFIL RÉPARÉ.\n\nVous êtes maintenant 'Proviseur' de 'Mon LYCEE TOUTFAUX'.\nLa page va se recharger.");
+        alert("✅ PROFIL RÉPARÉ.\n\nVous êtes maintenant 'Proviseur' de 'Lycée de Démonstration (Sandbox)'.\nLa page va se recharger.");
         window.location.reload();
     };
 
@@ -81,7 +81,7 @@ export function SandboxRepairButton() {
                 boxShadow: '0 4px 6px -1px rgba(0, 0, 0, 0.1)'
             }}
         >
-            🛠️ RÉPARER MON PROFIL & LANCER LE LYCÉE TOUTFAUX (SANDBOX)
+            🛠️ RÉPARER MON PROFIL & LANCER LE LYCÉE DE DÉMONSTRATION (SANDBOX)
         </button>
     );
 }

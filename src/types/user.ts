@@ -1,4 +1,4 @@
-export type UserRole = 'student' | 'teacher' | 'teacher_tracker' | 'school_head' | 'company_head' | 'tutor' | 'parent' | 'company_head_tutor' | 'ddfpt' | 'business_manager' | 'assistant_manager' | 'stewardship_secretary' | 'at_ddfpt';
+export type UserRole = 'student' | 'teacher' | 'teacher_tracker' | 'school_head' | 'company_head' | 'tutor' | 'parent' | 'company_head_tutor' | 'ddfpt' | 'business_manager' | 'assistant_manager' | 'stewardship_secretary' | 'at_ddfpt' | 'cpe' | 'school_life' | 'ESTABLISHMENT_ADMIN';
 
 export interface Address {
     street: string;

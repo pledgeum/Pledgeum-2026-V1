@@ -1,84 +1,44 @@
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase-admin';
-import { checkRateLimit, validateOrigin } from '@/lib/server-security';
 import { z } from 'zod';
-import nodemailer from 'nodemailer';
+import { createOTP, ensureOtpTable } from '@/lib/otp';
+import { sendEmail } from '@/lib/email';
 
 const otpSchema = z.object({
     email: z.string().email("Email invalide"),
-    purpose: z.literal("activation")
+    // purpose is optional but can be checked if needed
+    purpose: z.string().optional()
 });
 
 export async function POST(request: Request) {
-    let step = 'Init';
     try {
-        step = 'Origin Check';
-        if (!validateOrigin(request)) {
-            return NextResponse.json({ error: "Forbidden Origin" }, { status: 403 });
-        }
-
-        // NO Auth Check - This is public for account activation (pre-login)
-
-        step = 'Rate Limit';
-        // Stricter rate limit for public endpoint? 
-        // Assuming checkRateLimit uses IP.
-        const isAllowed = await checkRateLimit(request, 'otp-activation-send');
-        if (!isAllowed) {
-            return NextResponse.json({ error: "Trop de demandes. Veuillez patienter." }, { status: 429 });
-        }
-
-        step = 'Input Parse';
         const body = await request.json();
         const validation = otpSchema.safeParse(body);
 
         if (!validation.success) {
-            return NextResponse.json({ error: "Données invalides" }, { status: 400 });
+            return NextResponse.json({ error: "Email invalide" }, { status: 400 });
         }
 
         const { email } = validation.data;
+        const code = Math.floor(1000 + Math.random() * 9000).toString(); // 4 digits as per frontend placeholder
+        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString(); // 10 min
 
-        // Generate Code
-        const code = Math.floor(1000 + Math.random() * 9000).toString();
-        const expiresAt = new Date(Date.now() + 10 * 60 * 1000).toISOString();
+        await ensureOtpTable();
+        await createOTP(email, 'activation', code, expiresAt);
 
-        step = 'DB Write OTP';
-        await adminDb.collection("otps").add({
-            email,
-            code,
-            purpose: 'activation',
-            expiresAt,
-            createdAt: new Date().toISOString()
+        const emailSent = await sendEmail({
+            to: email,
+            subject: 'Code de vérification - Activation de compte',
+            text: `Bonjour,\n\nVoici votre code de vérification pour activer votre compte : ${code}\n\nCe code est valable 10 minutes.\n\nCordialement,\nL'équipe.`
         });
 
-        step = 'Email Transport Init';
-        if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
-            const transporter = nodemailer.createTransport({
-                host: process.env.EMAIL_HOST,
-                port: Number(process.env.EMAIL_PORT),
-                secure: true,
-                auth: {
-                    user: process.env.EMAIL_USER,
-                    pass: process.env.EMAIL_PASS,
-                },
-            });
-
-            step = 'Email Sending';
-
-            // Fixed: Send to actual recipient
-            await transporter.sendMail({
-                from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-                to: email,
-                bcc: 'pledgeum@gmail.com', // Keep monitoring copy
-                subject: `Code d'activation - Pledgeum`,
-                text: `Bonjour,\n\nVoici votre code d'activation pour finaliser votre inscription : ${code}\n\nCe code est valable 10 minutes.\n\nL'équipe Pledgeum`
-            });
-        } else {
-            console.warn("Email credentials not set. OTP generated but not sent via email:", code);
+        if (!emailSent) {
+            console.error("Failed to send activation email to", email);
+            return NextResponse.json({ error: "Erreur lors de l'envoi de l'email" }, { status: 500 });
         }
 
         return NextResponse.json({ success: true });
-    } catch (error: any) {
-        console.error(`Error sending Activation OTP at step ${step}:`, error);
-        return NextResponse.json({ error: `Erreur technique (${step})` }, { status: 500 });
+    } catch (error) {
+        console.error("Activation OTP Error:", error);
+        return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
     }
 }

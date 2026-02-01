@@ -2,14 +2,15 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import { useAuth } from '@/context/AuthContext';
+import { useSession } from "next-auth/react";
 import { useUserStore, UserRole } from '@/store/user';
 import { useSchoolStore, LegalRepresentative, Address } from '@/store/school';
 import { AddressAutocomplete } from '@/components/ui/AddressAutocomplete';
 import { Loader2, User, GraduationCap, School, Briefcase, Users, UserCheck, UserPlus, Mail, Calendar, UserCircle, Phone, MapPin, CheckSquare, Plus, Trash2 } from 'lucide-react';
 
 export default function OnboardingPage() {
-    const { user } = useAuth();
+    const { data: session } = useSession();
+    const user = session?.user;
     const { createUserProfile, fetchUserProfile, role: currentRole, birthDate: currentBirthDate, name: currentName, profileData, updateProfileData } = useUserStore();
     const { classes, updateStudent } = useSchoolStore();
     const router = useRouter();
@@ -51,8 +52,8 @@ export default function OnboardingPage() {
     // Initialization
     useEffect(() => {
         async function loadProfile() {
-            if (user) {
-                await fetchUserProfile(user.uid);
+            if (user?.id) {
+                await fetchUserProfile(user.id);
                 setIsLoading(false);
             }
         }
@@ -64,10 +65,10 @@ export default function OnboardingPage() {
         if (!isLoading && currentRole) {
             // AUTOMATIC FIX FOR TEST ACCOUNT
             if (user?.email === 'pledgeum@gmail.com' && currentRole === 'student') {
-                createUserProfile(user.uid, {
+                createUserProfile(user.id || 'test-admin-id', {
                     email: user.email,
                     role: 'school_head',
-                    name: user.displayName || 'Compte Test Admin'
+                    name: user.name || 'Compte Test Admin'
                 }).then(() => {
                     window.location.href = '/'; // Hard redirect to force refresh
                 });
@@ -130,10 +131,11 @@ export default function OnboardingPage() {
             return;
         }
         if (window.confirm(`Confirmez-vous le rôle "${roleLabel}" ?`)) {
-            createUserProfile(user.uid, {
+            if (!user.id) return;
+            createUserProfile(user.id, {
                 email: user.email || '',
                 role: roleId,
-                name: user.displayName || 'Utilisateur'
+                name: user.name || 'Utilisateur'
             }).then(() => router.push('/'));
         }
     };
@@ -189,18 +191,18 @@ export default function OnboardingPage() {
             const mapAddr = (a: Address) => ({ street: a.street, city: a.city, zipCode: a.postalCode });
 
             const profilePayload = {
-                firstName: profileData?.firstName || (currentName || user?.displayName || '').split(' ')[0] || 'Prénom',
-                lastName: profileData?.lastName || (currentName || user?.displayName || '').split(' ').slice(1).join(' ') || 'Nom',
+                firstName: profileData?.firstName || (currentName || user?.name || '').split(' ')[0] || 'Prénom',
+                lastName: profileData?.lastName || (currentName || user?.name || '').split(' ').slice(1).join(' ') || 'Nom',
                 phone,
                 address: mapAddr(address),
                 legalRepresentatives: legalReps.map(lr => ({ ...lr, address: mapAddr(lr.address) }))
             };
 
-            if (user) {
-                await createUserProfile(user.uid, {
+            if (user?.id) {
+                await createUserProfile(user.id, {
                     email: user.email || '',
                     role: 'student',
-                    name: currentName || user.displayName || 'Élève',
+                    name: currentName || user.name || 'Élève',
                     birthDate: currentBirthDate || undefined,
                     profileData: profilePayload
                 });
@@ -296,7 +298,7 @@ export default function OnboardingPage() {
                                     <School className="w-5 h-5 mr-2 text-blue-600" /> Informations Administratives <span className="ml-2 text-xs font-normal text-gray-500 hidden sm:inline">(Non modifiable)</span>
                                 </h3>
                                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 bg-gray-50 p-4 rounded-lg text-sm text-gray-700">
-                                    <div><span className="font-semibold">Nom :</span> {currentName || user?.displayName}</div>
+                                    <div><span className="font-semibold">Nom :</span> {currentName || user?.name}</div>
                                     <div><span className="font-semibold">Email :</span> {user?.email}</div>
                                     <div><span className="font-semibold">Date de naissance :</span> {currentBirthDate || "N/A"}</div>
                                     <div><span className="font-semibold">Classe :</span> {studentClass || "Non assignée"}</div>

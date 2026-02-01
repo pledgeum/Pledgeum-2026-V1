@@ -99,12 +99,24 @@ export function Step2Student() {
                         setIfEmpty('eleve_nom', profileData.lastName);
                         setIfEmpty('eleve_prenom', profileData.firstName);
 
-                        // Handle Date Format Compatibility (DD/MM/YYYY from Admin -> YYYY-MM-DD for Input)
+                        // Handle Date Format Compatibility
                         if (profileData.birthDate) {
                             let bd = profileData.birthDate;
-                            if (bd.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
-                                const [d, m, y] = bd.split('/');
-                                bd = `${y}-${m}-${d}`;
+                            try {
+                                // 1. ISO String (e.g. 2009-10-25T00:00:00.000Z)
+                                if (bd.includes('T')) {
+                                    bd = bd.split('T')[0];
+                                }
+                                // 2. DD/MM/YYYY (Legacy/Import)
+                                else if (bd.match(/^\d{2}\/\d{2}\/\d{4}$/)) {
+                                    const [d, m, y] = bd.split('/');
+                                    bd = `${y}-${m}-${d}`;
+                                }
+                                // 3. Ensure Valid YYYY-MM-DD (e.g. 2009-10-25) - if it matches, great. 
+                                //    If it's garbage, let Zod/Input handle it, but try to parse if simpler?
+                                //    Let's stick to the extracted forms. 
+                            } catch (e) {
+                                console.warn("Failed to parse birthdate:", bd);
                             }
                             setIfEmpty('eleve_date_naissance', bd);
                         }

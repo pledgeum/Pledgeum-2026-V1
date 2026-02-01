@@ -1,0 +1,53 @@
+[dotenv@17.2.3] injecting env (26) from .env.local -- tip: 🔐 prevent building .env in docker: https://dotenvx.com/prebuild
+[dotenv@17.2.3] injecting env (0) from .env -- tip: 🔑 add access controls to secrets: https://dotenvx.com/ops
+1. Connecting to DB...
+2. Finding student 'Tyméo'...
+✅ Found Student: Tyméo BERTHOU (ID: undefined, UID: student-1769030147063-3bn9e)
+3. Sending Payload to API...
+Payload: {
+  "id": "simulated_save_1769753792713",
+  "studentId": "student-1769030147063-3bn9e",
+  "userId": "simulated_admin",
+  "type": "PFMP_STANDARD",
+  "language": "fr",
+  "ecole_nom": "Ecolee Test",
+  "ecole_adresse": "123 Fake St",
+  "ecole_tel": "0102030405",
+  "ecole_chef_nom": "Principal Skinner",
+  "ecole_chef_email": "skinner@example.com",
+  "prof_nom": "Ms Krabappel",
+  "prof_email": "krabappel@example.com",
+  "eleve_nom": "BERTHOU",
+  "eleve_prenom": "Tyméo",
+  "eleve_date_naissance": "2005-01-01",
+  "eleve_adresse": "Home",
+  "eleve_cp": "75000",
+  "eleve_ville": "Paris",
+  "eleve_email": "fabrice.dumasdelage@yahoo.fr",
+  "eleve_classe": "2NDE",
+  "diplome_intitule": "Bac",
+  "ent_nom": "Moe Tavern",
+  "ent_adresse": "Evergreen Tce",
+  "ent_code_postal": "75000",
+  "ent_ville": "Springfield",
+  "ent_rep_nom": "Moe",
+  "ent_rep_function": "Bartender",
+  "ent_rep_email": "moe@example.com",
+  "ent_rep_fonction": "Gerant",
+  "tuteur_nom": "Barney",
+  "tuteur_fonction": "Client",
+  "tuteur_email": "barney@example.com",
+  "stage_date_debut": "2024-01-01",
+  "stage_date_fin": "2024-02-01",
+  "stage_duree_heures": 35,
+  "stage_activites": "Drinking Duff",
+  "status": "SUBMITTED",
+  "createdAt": "2026-01-30T06:16:32.713Z",
+  "updatedAt": "2026-01-30T06:16:32.714Z",
+  "signatures": {
+    "studentAt": "2026-01-30T06:16:32.714Z"
+  }
+}
+Response Status: 500
+Response Body: {"success":false,"error":"duplicate key value violates unique constraint \"users_email_key\"","stack":"error: duplicate key value violates unique constraint \"users_email_key\"\n    at /Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/pg/lib/client.js:588:17\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async POST (/Users/fabricedumasdelage/Downloads/convention-pfmp/.next/dev/server/chunks/[root-of-the-server]__c94615f9._.js:165:17)\n    at async AppRouteRouteModule.do (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/compiled/next-server/app-route-turbo.runtime.dev.js:5:37789)\n    at async AppRouteRouteModule.handle (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/compiled/next-server/app-route-turbo.runtime.dev.js:5:45045)\n    at async responseGenerator (/Users/fabricedumasdelage/Downloads/convention-pfmp/.next/dev/server/chunks/node_modules_0159d055._.js:17095:38)\n    at async AppRouteRouteModule.handleResponse (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/compiled/next-server/app-route-turbo.runtime.dev.js:1:187851)\n    at async handleResponse (/Users/fabricedumasdelage/Downloads/convention-pfmp/.next/dev/server/chunks/node_modules_0159d055._.js:17157:32)\n    at async handler (/Users/fabricedumasdelage/Downloads/convention-pfmp/.next/dev/server/chunks/node_modules_0159d055._.js:17210:13)\n    at async DevServer.renderToResponseWithComponentsImpl (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/base-server.js:1413:9)\n    at async DevServer.renderPageComponent (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/base-server.js:1465:24)\n    at async DevServer.renderToResponseImpl (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/base-server.js:1515:32)\n    at async DevServer.pipeImpl (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/base-server.js:1021:25)\n    at async NextNodeServer.handleCatchallRenderRequest (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/next-server.js:394:17)\n    at async DevServer.handleRequestImpl (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/base-server.js:912:17)\n    at async /Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/dev/next-dev-server.js:382:20\n    at async Span.traceAsyncFn (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/trace/trace.js:157:20)\n    at async DevServer.handleRequest (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/dev/next-dev-server.js:378:24)\n    at async invokeRender (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/lib/router-server.js:240:21)\n    at async handleRequest (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/lib/router-server.js:436:24)\n    at async requestHandlerImpl (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/lib/router-server.js:484:13)\n    at async Server.requestListener (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/lib/start-server.js:226:13)"}
+❌ API Failed

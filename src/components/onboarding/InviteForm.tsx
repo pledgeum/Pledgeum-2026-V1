@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { Loader2, ArrowRight, Building2, User } from 'lucide-react';
 import { submitOnboarding } from '@/app/actions/onboarding';
-import { signInWithCustomToken } from 'firebase/auth';
+import { signInWithCustomToken } from '@/lib/firebase';
 import { auth } from '@/lib/firebase';
 import { useRouter } from 'next/navigation';
 

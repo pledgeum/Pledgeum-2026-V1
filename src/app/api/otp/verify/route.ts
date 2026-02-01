@@ -1,9 +1,8 @@
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase-admin';
 import { headers } from 'next/headers';
 import { checkRateLimit, verifyUserSession } from '@/lib/server-security';
 import { z } from 'zod';
-import admin from 'firebase-admin';
+import { verifyOTP } from '@/lib/otp';
 
 const verifySchema = z.object({
     email: z.string().email(),
@@ -32,40 +31,17 @@ export async function POST(request: Request) {
 
         const { email, code } = validation.data;
 
-        // Admin SDK Query
-        const otpsRef = adminDb.collection("otps");
-        const querySnapshot = await otpsRef
-            .where("email", "==", email)
-            .where("code", "==", code)
-            .get();
+        // Verify with Postgres Helper
+        const verification = await verifyOTP(email, code);
 
-        if (querySnapshot.empty) {
-            return NextResponse.json({ success: false, error: "Code invalide" }, { status: 400 });
+        if (!verification.valid) {
+            return NextResponse.json({ success: false, error: "Code invalide ou expiré" }, { status: 400 });
         }
 
-        // Check expiration and clean up
-        let valid = false;
-        const now = new Date();
+        const conventionId = verification.conventionId;
+        // Proceed with audit logging using conventionId
 
-        // There might be multiple OTPs if spammed, check all matches
-        const batch = adminDb.batch();
-
-        let conventionId = '';
-
-        querySnapshot.forEach((docSnapshot) => {
-            const data = docSnapshot.data();
-            const expiresAt = new Date(data.expiresAt);
-            if (expiresAt > now) {
-                valid = true;
-                conventionId = data.conventionId;
-            }
-            // Delete used/expired OTPs to prevent reuse
-            batch.delete(docSnapshot.ref);
-        });
-
-        await batch.commit();
-
-        if (valid && conventionId) {
+        if (conventionId) {
             // Audit Log
             try {
                 const headersList = await headers();
@@ -78,9 +54,8 @@ export async function POST(request: Request) {
                     details: 'Code OTP validé avec succès'
                 };
 
-                await adminDb.collection("conventions").doc(conventionId).update({
-                    auditLogs: admin.firestore.FieldValue.arrayUnion(auditLog)
-                });
+                console.log(`[Audit] OTP_VALIDATED for ${email} (Convention: ${conventionId})`);
+                // TODO: Migrate audit logs to Postgres
 
                 return NextResponse.json({ success: true, auditLog });
             } catch (e) {

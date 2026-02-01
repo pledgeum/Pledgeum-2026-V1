@@ -161,8 +161,8 @@ function getStepStatus(step: string, c: Convention): 'completed' | 'current' | '
     const isMinor = c.est_mineur;
 
     // Status Flow Ref:
-    // Minor: SUBMITTED -> SIGNED_PARENT -> VALIDATED_TEACHER -> SIGNED_COMPANY -> SIGNED_TUTOR -> VALIDATED_HEAD
-    // Major: SUBMITTED -> VALIDATED_TEACHER -> SIGNED_COMPANY -> SIGNED_TUTOR -> VALIDATED_HEAD
+    // Minor: SUBMITTED -> SIGNED_PARENT -> VALIDATED_TEACHER -> SIGNED_COMPANY / SIGNED_TUTOR (Order independent) -> VALIDATED_HEAD
+    // Major: SUBMITTED -> VALIDATED_TEACHER -> SIGNED_COMPANY / SIGNED_TUTOR -> VALIDATED_HEAD
 
     switch (step) {
         case 'student':
@@ -174,38 +174,59 @@ function getStepStatus(step: string, c: Convention): 'completed' | 'current' | '
             // FIX: If major, parent step is marked completed immediately (simulated skip)
             if (!isMinor) return 'completed';
             if (s === 'SUBMITTED') return 'current';
-            if (['SIGNED_PARENT', 'VALIDATED_TEACHER', 'SIGNED_COMPANY', 'SIGNED_TUTOR', 'VALIDATED_HEAD'].includes(s)) return 'completed';
+            if (['SIGNED_PARENT', 'VALIDATED_TEACHER', 'SIGNED_COMPANY', 'SIGNED_TUTOR', 'VALIDATED_HEAD', 'COMPLETED'].includes(s)) return 'completed';
             return 'pending';
 
         case 'teacher':
             if (isMinor) {
                 if (s === 'SIGNED_PARENT') return 'current';
-                if (['VALIDATED_TEACHER', 'SIGNED_COMPANY', 'SIGNED_TUTOR', 'VALIDATED_HEAD'].includes(s)) return 'completed';
+                if (['VALIDATED_TEACHER', 'SIGNED_COMPANY', 'SIGNED_TUTOR', 'VALIDATED_HEAD', 'COMPLETED'].includes(s)) return 'completed';
                 return 'pending';
             } else {
                 if (s === 'SUBMITTED') return 'current';
-                if (['VALIDATED_TEACHER', 'SIGNED_COMPANY', 'SIGNED_TUTOR', 'VALIDATED_HEAD'].includes(s)) return 'completed';
+                if (['VALIDATED_TEACHER', 'SIGNED_COMPANY', 'SIGNED_TUTOR', 'VALIDATED_HEAD', 'COMPLETED'].includes(s)) return 'completed';
                 return 'pending';
             }
 
         case 'company':
+            // Check specific signature first
             if (c.signatures?.companyAt) return 'completed';
-            // Open for signing if Teacher validated, regardless of Tutor status (unless fully done)
-            if (['VALIDATED_TEACHER', 'SIGNED_COMPANY'].includes(s)) return 'current';
-            // Fallback for completion states if signature check missed (unlikely)
-            if (['SIGNED_TUTOR', 'VALIDATED_HEAD'].includes(s)) return 'completed';
+
+            // Open for signing if Teacher validated
+            if (['VALIDATED_TEACHER', 'SIGNED_TUTOR'].includes(s)) return 'current';
+            // Also current if status is SIGNED_COMPANY but this specific block matched? 
+            // If status is SIGNED_COMPANY it implies company signed? 
+            // But if dual sign, maybe tutor signed first -> SIGNED_TUTOR. Company still needs to sign.
+            // If status is SIGNED_COMPANY, typically Company signed. 
+            // So relying on c.signatures.companyAt is safest for "completed".
+
+            if (s === 'SIGNED_COMPANY') return 'completed'; // Redundant fallback
+            if (['VALIDATED_HEAD', 'COMPLETED'].includes(s)) return 'completed'; // Final states
             return 'pending';
 
         case 'tutor':
             if (c.signatures?.tutorAt) return 'completed';
-            // Open for signing if Teacher validated, regardless of Company status
+
+            // Open for signing if Teacher validated
             if (['VALIDATED_TEACHER', 'SIGNED_COMPANY'].includes(s)) return 'current';
-            if (['SIGNED_TUTOR', 'VALIDATED_HEAD'].includes(s)) return 'completed';
+
+            if (s === 'SIGNED_TUTOR') return 'completed';
+            if (['VALIDATED_HEAD', 'COMPLETED'].includes(s)) return 'completed';
             return 'pending';
 
         case 'head':
-            if (s === 'SIGNED_TUTOR') return 'current';
-            if (s === 'VALIDATED_HEAD') return 'completed';
+            // Head signs when BOTH Company and Tutor have signed.
+            // Simplified check: If status is SIGNED_COMPANY or SIGNED_TUTOR, we might be waiting for the other?
+            // Head needs BOTH. 
+            // Ideally backend updates status to "READY_FOR_HEAD" or we check both sigs.
+            // But usually status logic might just be "SIGNED_X" waiting for head?
+            // "VALIDATED_HEAD" is completion.
+
+            // Logic: If both Company & Tutor signed, Head can sign.
+            const bothSigned = c.signatures?.companyAt && c.signatures?.tutorAt;
+            if (bothSigned && s !== 'VALIDATED_HEAD' && s !== 'COMPLETED') return 'current';
+
+            if (['VALIDATED_HEAD', 'COMPLETED'].includes(s)) return 'completed';
             return 'pending';
 
         default:

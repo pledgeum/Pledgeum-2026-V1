@@ -1,5 +1,4 @@
 import { create } from 'zustand';
-import { auth } from '@/lib/firebase';
 import { UserRole, UserProfileData, LegalRepresentative, User } from '@/types/user';
 
 export type { UserRole };
@@ -15,7 +14,8 @@ export interface Notification {
 }
 
 interface UserState {
-    // Flattened convenient accessors (Derived from User doc)
+    // Flattened convenient accessors
+    id?: string;
     name: string;
     role: UserRole;
     email: string;
@@ -54,6 +54,7 @@ interface UserState {
 }
 
 export const useUserStore = create<UserState>((set, get) => ({
+    id: undefined,
     name: '',
     role: null as unknown as UserRole,
     email: '',
@@ -91,7 +92,7 @@ export const useUserStore = create<UserState>((set, get) => ({
     fetchUserProfile: async (uid: string) => {
         // Postgres-only: No Firestore fallback.
         set({ isLoadingProfile: true });
-        const currentUser = auth.currentUser;
+        set({ isLoadingProfile: true });
 
         try {
             // 1. Fetch from PostgreSQL API
@@ -101,6 +102,7 @@ export const useUserStore = create<UserState>((set, get) => ({
                 const { user } = await res.json();
 
                 set({
+                    id: uid,
                     name: (user.profileData?.firstName && user.profileData?.lastName)
                         ? `${user.profileData.firstName} ${user.profileData.lastName}`
                         : user.email, // Fallback
@@ -119,21 +121,11 @@ export const useUserStore = create<UserState>((set, get) => ({
                 get().trackConnection(uid);
                 return true;
             } else if (res.status === 404) {
-                // 2. User Not Found -> Auto-Create (Init) using Firebase Auth Info
-                console.log("UserStore: User not found in Postgres. Initializing...", currentUser);
-
-                if (currentUser) {
-                    await get().createUserProfile(uid, {
-                        email: currentUser.email || '',
-                        name: currentUser.displayName || '',
-                        role: 'student' // Default, API might override for specific emails
-                    });
-                    return true;
-                } else {
-                    console.error("UserStore: Cannot auto-create user without Auth Context.");
-                    set({ isLoadingProfile: false });
-                    return false;
-                }
+                // 2. User Not Found -> Auto-Create (Init) using Session Info
+                // This should now be handled by the caller or a separate init method
+                console.log("UserStore: User not found in Postgres. Please initialize.");
+                set({ isLoadingProfile: false });
+                return false;
             } else {
                 console.error("UserStore: API Error", res.status);
                 set({ isLoadingProfile: false });
@@ -153,7 +145,6 @@ export const useUserStore = create<UserState>((set, get) => ({
                 uid,
                 email: data.email,
                 displayName: data.name,
-                photoURL: (auth.currentUser as any)?.photoURL,
                 ...data // Pass role, etc if explicit
             };
 

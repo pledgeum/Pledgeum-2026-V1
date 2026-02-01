@@ -17,7 +17,7 @@ export const metadata: Metadata = {
   description: "Plateforme de gestion des PFMP et conventions de stage",
 };
 
-import { AuthProvider } from "@/context/AuthContext";
+import { SessionProvider } from "next-auth/react";
 import { ProfileGuard } from "@/components/auth/ProfileGuard";
 import { DemoUI } from "@/components/demo/DemoUI";
 
@@ -31,12 +31,12 @@ export default function RootLayout({
       <body
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
-        <AuthProvider>
+        <SessionProvider>
           <ProfileGuard>
             <DemoUI />
             {children}
           </ProfileGuard>
-        </AuthProvider>
+        </SessionProvider>
       </body>
     </html>
   );

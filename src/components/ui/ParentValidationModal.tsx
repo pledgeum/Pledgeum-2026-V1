@@ -2,7 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { X, Check, User, Mail, MapPin, Phone } from 'lucide-react';
 import { Convention } from '@/store/convention';
 import { useUserStore } from '@/store/user';
-import { auth } from '@/lib/firebase';
+
 
 interface ParentValidationModalProps {
     isOpen: boolean;
@@ -46,10 +46,13 @@ export function ParentValidationModal({ isOpen, onClose, onValidated, convention
         setLoading(true);
         try {
             // Update User Profile instead of Convention
-            if (auth.currentUser) {
-                await updateProfileData(auth.currentUser.uid, {
+            // Update User Profile instead of Convention
+            // Using store ID as auth.currentUser is not available in session-based auth context here directly
+            // We assume the user is logged in if this modal is open.
+            const userId = useUserStore.getState().id;
+            if (userId) {
+                await updateProfileData(userId, {
                     phone: formData.rep_legal_tel,
-                    // address: formData.rep_legal_adresse, // Cannot update structured address from string
                     name: formData.rep_legal_nom,
                     email: formData.rep_legal_email
                 });

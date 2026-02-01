@@ -1,185 +1,127 @@
-
 import { NextResponse } from 'next/server';
-import { adminAuth, adminDb } from '@/lib/firebase-admin';
-import { checkRateLimit, validateOrigin } from '@/lib/server-security';
+import pool from '@/lib/pg';
+import bcrypt from 'bcryptjs';
 
 export async function POST(request: Request) {
+    let client;
     try {
-        // 1. Security Checks
-        if (!validateOrigin(request)) {
-            return NextResponse.json({ error: "Forbidden Origin" }, { status: 403 });
-        }
-
-        const isAllowed = await checkRateLimit(request, 'account-activate' as any);
-        if (!isAllowed) {
-            return NextResponse.json({ error: "Trop de tentatives. Veuillez patienter." }, { status: 429 });
-        }
-
         const body = await request.json();
         const { tempId, tempCode, email, password } = body;
 
-        // Validation
-        if (!tempId || !tempCode || !email || !password) {
-            return NextResponse.json({ error: "Données incomplètes" }, { status: 400 });
+        console.log("👉 Activation Request:", { tempId, newEmail: email, hasPassword: !!password });
+
+        if (!tempId || !email || !password) {
+            return NextResponse.json({ error: "Données manquantes" }, { status: 400 });
         }
 
-        // Sanitize
-        const cleanTempId = tempId.trim().toUpperCase();
-        const cleanTempCode = tempCode.trim().toUpperCase(); // Assuming code is alphanumeric case-insensitive
+        const cleanTempId = tempId.trim();
 
-        // 2. Verify Invitation (Admin SDK - Bypass Firestore Rules)
-        // We look for the exact student/invitation
-        const invitationsRef = adminDb.collection('invitations');
-        const snapshot = await invitationsRef.where('tempId', '==', cleanTempId).get();
+        client = await pool.connect();
 
-        if (snapshot.empty) {
-            return NextResponse.json({ error: "Identifiant provisoire inconnu" }, { status: 404 });
+        // ---------------------------------------------------------
+        // DIAGNOSTIC MODE (FORENSIC DUMP)
+        // ---------------------------------------------------------
+        try {
+            console.log("🔍 STARTING FORENSIC DUMP 🔍");
+
+            // 1. List Tables
+            const tablesRes = await client.query(`SELECT table_name FROM information_schema.tables WHERE table_schema = 'public'`);
+            console.log("📊 Tables:", tablesRes.rows.map(r => r.table_name));
+
+            // 2. Dump First 5 Users
+            const usersDump = await client.query('SELECT * FROM users LIMIT 5');
+            console.log("👤 Users Sample:", usersDump.rows);
+
+            console.log("🔍 END FORENSIC DUMP 🔍");
+
+        } catch (dbgErr) {
+            console.warn("Forensic dump failed", dbgErr);
         }
 
-        // Check Code (Iterate if multiple, though tempId *should* be unique)
-        let invitationDoc: any = null;
-        let invitationData: any = null;
-
-        snapshot.forEach(doc => {
-            const data = doc.data();
-            // Loose check? Or strict case?
-            // User input for code might be mixed case. Let's compare uppercase.
-            if ((data.tempCode || "").toString().toUpperCase() === cleanTempCode) {
-                invitationDoc = doc;
-                invitationData = data;
-            }
-        });
-
-        if (!invitationDoc || !invitationData) {
-            return NextResponse.json({ error: "Code d'accès incorrect" }, { status: 401 });
+        // DEBUG: Peek at the database content (to see real format)
+        try {
+            const debugCheck = await client.query('SELECT uid, temp_id, email FROM users WHERE temp_id IS NOT NULL LIMIT 3');
+            console.log('👀 DB Sample (temp_ids):', debugCheck.rows);
+        } catch (dbgErr) {
+            console.warn("Debug query failed", dbgErr);
         }
 
-        // 3. Check if User Exists in Auth
-        let uid = null;
-        let isNewUser = false;
+        // ---------------------------------------------------------
+        // 1. LOOKUP: Find User by TempID (Strict but Robust)
+        // ---------------------------------------------------------
+        // We use TRIM + UPPER to handle copy-paste spaces or case differences
+        const userRes = await client.query(`
+            SELECT uid, temp_code, temp_id, email, is_active 
+            FROM users 
+            WHERE TRIM(UPPER(temp_id)) = TRIM(UPPER($1))
+            LIMIT 1
+        `, [cleanTempId]);
+
+        if (userRes.rowCount === 0) {
+            console.error(`❌ Activate: TempID '${cleanTempId}' not found.`);
+            // Double check strict match failure
+            return NextResponse.json({ error: "Code d'activation introuvable" }, { status: 404 });
+        }
+
+        const targetUser = userRes.rows[0];
+
+        // ---------------------------------------------------------
+        // 2. VERIFY: Check Code
+        // ---------------------------------------------------------
+        if (targetUser.temp_code !== tempCode) {
+            console.error("❌ Activate: Invalid Code");
+            return NextResponse.json({ error: "Code invalide" }, { status: 401 });
+        }
+
+        // ---------------------------------------------------------
+        // 3. COLLISION CHECK: Is new email taken?
+        // ---------------------------------------------------------
+        // We are about to set this user's email to 'email'. Must ensure no other user has it.
+        // It's okay if the user THEMSELVES has it (re-activation).
+        const emailCheck = await client.query(`
+            SELECT uid FROM users WHERE LOWER(email) = LOWER($1) AND uid != $2
+        `, [email, targetUser.uid]);
+
+        if (emailCheck.rowCount !== null && emailCheck.rowCount > 0) {
+            console.error("❌ Activate: Email collision");
+            return NextResponse.json({ error: "Cet email est déjà utilisé par un autre compte." }, { status: 409 });
+        }
+
+        // ---------------------------------------------------------
+        // 4. UPDATE: Set Credentials & Email
+        // ---------------------------------------------------------
+        const salt = await bcrypt.genSalt(10);
+        const passwordHash = await bcrypt.hash(password, salt);
+
+        await client.query('BEGIN');
 
         try {
-            const userRecord = await adminAuth.getUserByEmail(email);
-            // Existing user -> CONFLICT (User must login)
-            return NextResponse.json({
-                code: 'EMAIL_TAKEN',
-                message: 'Cet email est déjà utilisé.'
-            }, { status: 409 });
+            console.log(`🔄 Activating User ${targetUser.uid}. Setting email to ${email}`);
+            await client.query(`
+                UPDATE users 
+                SET password_hash = $1, 
+                    email = $2, 
+                    email_verified = NOW(),
+                    updated_at = NOW(),
+                    temp_id = NULL,
+                    temp_code = NULL,
+                    is_active = TRUE
+                WHERE uid = $3
+             `, [passwordHash, email, targetUser.uid]);
 
-        } catch (e: any) {
-            if (e.code === 'auth/user-not-found') {
-                // New User -> Create
-                try {
-                    const newUser = await adminAuth.createUser({
-                        email: email,
-                        password: password,
-                        displayName: invitationData.name || `${invitationData.firstName} ${invitationData.lastName}`
-                    });
-                    uid = newUser.uid;
-                    isNewUser = true;
-                    console.log(`[ACTIVATE] User ${email} created (${uid}).`);
-                } catch (createErr: any) {
-                    if (createErr.code === 'auth/email-already-exists' || createErr.code === 'auth/uid-already-exists') {
-                        return NextResponse.json({
-                            code: 'EMAIL_TAKEN',
-                            message: 'Cet email est déjà utilisé.'
-                        }, { status: 409 });
-                    }
-                    return NextResponse.json({ error: "Impossible de créer le compte: " + createErr.message }, { status: 500 });
-                }
-            } else {
-                return NextResponse.json({ error: "Erreur vérification email: " + e.message }, { status: 500 });
-            }
+            await client.query('COMMIT');
+            console.log("✅ Activation Successful.");
+            return NextResponse.json({ success: true });
+
+        } catch (dbError) {
+            await client.query('ROLLBACK');
+            throw dbError;
         }
 
-        // 4. Update/Create User Document (Admin SDK - Bypass Rules)
-        // This resolves the "Missing Permissions" issue because we are Server-Side.
-
-        // Prepare Profile Data Structure
-        const schoolId = invitationData.schoolId || '9999999X';
-        const classId = invitationData.classId || '';
-
-        const profileData = {
-            firstName: invitationData.firstName,
-            lastName: invitationData.lastName,
-            email: email,
-            role: 'student', // Enforced
-            birthDate: invitationData.birthDate || null,
-            // Context Switch
-            schoolId: schoolId,
-            uai: schoolId,
-            class: invitationData.className || '',
-
-            // Address placeholders if missing (optional)
-            // phone: "",
-            // address: {},
-        };
-
-        const userDocRef = adminDb.collection('users').doc(uid);
-
-        // If existing user, we MERGE carefully (preserve existing non-school data?)
-        // The requirement is to switch context but keeping identity.
-        // Invitation data is authoritative for Name context in School.
-
-        await userDocRef.set({
-            email: email,
-            role: 'student', // Force role? Or add to array? For now: Force.
-            uai: schoolId,
-            schoolId: schoolId,
-            name: `${profileData.firstName} ${profileData.lastName}`,
-            profileData: profileData,
-
-            // Metadata
-            lastConnectionAt: new Date().toISOString(),
-            activatedAt: new Date().toISOString(),
-            // If new, add createAt
-            ...(isNewUser ? { createdAt: new Date().toISOString(), hasAcceptedTos: false } : {})
-        }, { merge: true });
-
-
-        // 5. Update Student Record in School (Link real email)
-        // We know the student ID is the Invitation ID (from our store logic) OR we find it via Invitation.
-        // Store logic: `doc(db, 'invitations', studentId)`
-        const studentId = invitationDoc.id;
-
-        // Update Student in Subcollection
-        // Path: establishments/{schoolId}/years/{year}/students/{studentId}
-        // Need to find the Year. Invitation usually doesn't have Year explicitly unless we stored it.
-        // We know current year is "2025-2026" hardcoded in store.
-        // Ideally invitation should have it.
-        // Fallback: Query all years? Or assume current.
-        const year = "2025-2026";
-
-        const studentRef = adminDb.doc(`establishments/${schoolId}/years/${year}/students/${studentId}`);
-        await studentRef.set({
-            email: email,
-            userId: uid, // Link to User Doc
-            status: 'active',
-            activatedAt: new Date().toISOString()
-        }, { merge: true });
-
-
-        // 6. Cleanup (Optional: Delete invitation to prevent reuse?)
-        // Or mark as used.
-        await invitationDoc.ref.update({
-            usedAt: new Date().toISOString(),
-            usedByUid: uid
-        });
-        // await invitationDoc.ref.delete(); // Un-comment if we want single-use strict
-
-
-        // 7. Generate Custom Token for Immediate Login?
-        // Frontend will likely sign-in with password provided.
-        // But we can return a token to facilitate.
-        // For now, let frontend handle login with the password they just set/verified.
-
-        return NextResponse.json({
-            success: true,
-            uid: uid
-        });
-
     } catch (error: any) {
-        console.error('[ACTIVATE] Error:', error);
-        return NextResponse.json({ error: "Erreur technique lors de l'activation." }, { status: 500 });
+        console.error("Activate Server Error:", error);
+        return NextResponse.json({ error: "Erreur serveur" }, { status: 500 });
+    } finally {
+        if (client) client.release();
     }
 }

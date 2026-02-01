@@ -29,6 +29,15 @@ export default function PdfPreview({ data, onClose }: PdfPreviewProps) {
         init();
     }, [data.id, data.eleve_nom]);
 
+    // Data Normalization for PDF
+    // The PDF component expects 'stage_date_debut' (historical) but API provides 'dateStart' (clean)
+    const normalizedData = {
+        ...data,
+        ...(data.metadata || {}), // Flatten metadata
+        stage_date_debut: data.dateStart || (data.metadata as any)?.stage_date_debut || (data as any).stage_date_debut,
+        stage_date_fin: data.dateEnd || (data.metadata as any)?.stage_date_fin || (data as any).stage_date_fin,
+    };
+
     const Content = (
         <div className={`bg-white rounded-xl shadow-2xl flex flex-col overflow-hidden ${isModal ? 'w-full max-w-5xl h-[90vh]' : 'w-full h-[600px] border border-gray-200'}`}>
             <div className="px-6 py-4 border-b border-gray-200 flex justify-between items-center bg-gray-50">
@@ -36,7 +45,7 @@ export default function PdfPreview({ data, onClose }: PdfPreviewProps) {
                 <div className="flex items-center gap-2">
                     {data.status === 'VALIDATED_HEAD' && (
                         <PDFDownloadLink
-                            document={<ConventionPdf data={data} qrCodeUrl={qrCodeUrl} hashCode={hashDisplay} />}
+                            document={<ConventionPdf data={normalizedData} qrCodeUrl={qrCodeUrl} hashCode={hashDisplay} />}
                             fileName={`convention_${data.eleve_nom || 'eleve'}.pdf`}
                             className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors flex items-center gap-2"
                         >
@@ -64,7 +73,7 @@ export default function PdfPreview({ data, onClose }: PdfPreviewProps) {
             </div>
             <div className="flex-1 bg-gray-100 overflow-hidden relative">
                 <PDFViewer width="100%" height="100%" style={{ width: '100%', height: '100%' }} className="w-full h-full">
-                    <ConventionPdf data={data} qrCodeUrl={qrCodeUrl} hashCode={hashDisplay} />
+                    <ConventionPdf data={normalizedData} qrCodeUrl={qrCodeUrl} hashCode={hashDisplay} />
                 </PDFViewer>
             </div>
         </div>

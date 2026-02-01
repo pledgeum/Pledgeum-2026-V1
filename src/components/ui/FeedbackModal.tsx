@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { X, MessageSquare, Bug, Lightbulb, Send } from 'lucide-react';
 import { useAdminStore, FeedbackType } from '@/store/admin';
 import { useUserStore } from '@/store/user';
-import { useAuth } from '@/context/AuthContext';
+import { useSession } from "next-auth/react";
 
 interface FeedbackModalProps {
     isOpen: boolean;
@@ -13,7 +13,8 @@ interface FeedbackModalProps {
 }
 
 export function FeedbackModal({ isOpen, onClose }: FeedbackModalProps) {
-    const { user } = useAuth();
+    const { data: session } = useSession();
+    const user = session?.user;
     const { role } = useUserStore();
     const { addFeedback } = useAdminStore();
 

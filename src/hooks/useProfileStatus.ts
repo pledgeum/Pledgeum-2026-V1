@@ -1,7 +1,7 @@
 import { useUserStore } from '@/store/user';
 import { useMemo } from 'react';
 
-export type UserRole = 'student' | 'teacher' | 'teacher_tracker' | 'school_head' | 'company_head' | 'tutor' | 'parent' | 'company_head_tutor' | 'ddfpt' | 'business_manager' | 'assistant_manager' | 'stewardship_secretary' | 'at_ddfpt';
+export type UserRole = 'student' | 'teacher' | 'teacher_tracker' | 'school_head' | 'company_head' | 'tutor' | 'parent' | 'company_head_tutor' | 'ddfpt' | 'business_manager' | 'assistant_manager' | 'stewardship_secretary' | 'at_ddfpt' | 'ESTABLISHMENT_ADMIN';
 
 interface ProfileStatus {
     isComplete: boolean;
@@ -53,7 +53,7 @@ export const useProfileStatus = (): ProfileStatus => {
             // Subject might be optional for some, but prompt asked for it
             if (!data.subject && !data.matiere) missing.push('subject');
         }
-        else if (role === 'school_head' || role === 'ddfpt' || role === 'business_manager') {
+        else if (role === 'school_head' || role === 'ddfpt' || role === 'business_manager' || role === 'ESTABLISHMENT_ADMIN') {
             // Admin roles usually just need contact info
             // Phone is optional for internal collaborators as data comes from invite
             // if (!data.phone) missing.push('phone');

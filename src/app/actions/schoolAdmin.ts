@@ -126,8 +126,8 @@ export async function forceSandboxUserRole(email: string) {
             } else throw e;
         }
 
-        const schoolId = "9999999X";
-        const schoolName = "Mon LYCEE TOUTFAUX";
+        const schoolId = "9999999Z";
+        const schoolName = "Lycée de Démonstration (Sandbox)";
 
         // 1. Set Auth Claims - Explicitly School Admin for this school only
         await adminAuth.setCustomUserClaims(user.uid, {
@@ -145,7 +145,7 @@ export async function forceSandboxUserRole(email: string) {
             name: "Fabrice Dumasdelage",
             email: email,
             role: 'school_head',
-            schoolId: '9999999X', // Strict casing matching establishment ID
+            schoolId: '9999999Z', // Strict casing matching establishment ID
             status: 'active', // Explicit active status
             profileData: {
                 firstName: "Fabrice",

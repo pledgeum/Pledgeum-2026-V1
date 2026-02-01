@@ -2,10 +2,10 @@
 
 import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, GripVertical, Settings2, X, Loader2, AlignLeft, Hash, CheckSquare, ChevronDown } from 'lucide-react';
-import { useAuth } from '@/context/AuthContext';
+import { useSession } from "next-auth/react";
 import { useUserStore } from '@/store/user';
 import { db } from '@/lib/firebase';
-import { doc, updateDoc, collection, addDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, updateDoc, collection, addDoc, serverTimestamp } from '@/lib/firebase';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 
@@ -23,7 +23,8 @@ interface EvaluationGridBuilderProps {
 }
 
 export const EvaluationGridBuilder = ({ initialData, templateId, mode = 'create' }: EvaluationGridBuilderProps) => {
-    const { user } = useAuth();
+    const { data: session } = useSession();
+    const user = session?.user;
     const { profileData, role } = useUserStore();
     const router = useRouter();
 
@@ -124,7 +125,7 @@ export const EvaluationGridBuilder = ({ initialData, templateId, mode = 'create'
                 updatedAt: serverTimestamp(),
                 // Only set these on create, but merging usually safe
                 ...(mode === 'create' ? {
-                    authorId: user.uid,
+                    authorId: user.id,
                     schoolId: profileData?.ecole_id || null,
                     createdAt: serverTimestamp()
                 } : {})

@@ -8,8 +8,7 @@ import { EmailSimulatorModal } from "./EmailSimulatorModal";
 import { MockMailbox } from "./MockMailbox";
 import { GripVertical } from "lucide-react";
 import { usePathname, useRouter } from 'next/navigation';
-import { collection, query, where, onSnapshot } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
+import { signIn } from "next-auth/react";
 
 export function DemoUI() {
     const isDemoMode = useDemoStore((state) => state.isDemoMode);
@@ -90,60 +89,18 @@ export function DemoUI() {
         }
     }, [isDemoMode, restoreTestData]);
 
-    // Global Unread Listener for Contextual Notifications
+    // Global Unread Listener for Contextual Notifications -> DISABLED FOR MIGRATION (Firestore Removal)
+    /*
     useEffect(() => {
         if (!isDemoMode) return;
 
         const q = query(collection(db, 'demo_inbox'), where('read', '==', false));
         const unsubscribe = onSnapshot(q, (snapshot) => {
-            const unreadEmails = snapshot.docs.map(doc => doc.data() as { to: string });
-
-            let notificationTarget = null;
-
-            for (const email of unreadEmails) {
-                if (email.to.includes('demo+parent')) notificationTarget = 'Parent';
-                else if (email.to.includes('demo+tutor')) notificationTarget = 'Tuteur';
-                else if (email.to.includes('demo+teacher')) notificationTarget = 'Enseignant';
-                else if (email.to.includes('demo+company')) notificationTarget = 'Entreprise';
-                else if (email.to.includes('demo+student')) notificationTarget = 'Élève';
-                else if (email.to === 'demo_access@pledgeum.fr') notificationTarget = 'Proviseur';
-
-                // If the notification targets the CURRENT role, hide it (they are already here)
-                // Wait, we need to check if the current user email MATCHES the target.
-                // Actually, simpler: if I am logged in as Tutor, allow seeing "Un email pour Tuteur" briefly? 
-                // No, request says "disparaît une fois que l'utilisateur a changé pour le rôle concerné".
-                // So if I am currently that role, I shouldn't see the banner urging me to switch.
-
-                // However, we don't have access to 'userEmail' here easily without store.
-                // But 'demoRole' is available.
-
-                if (notificationTarget) {
-                    // Check against current role
-                    let currentRoleKey = demoRole;
-                    // Mapping
-                    let targetKey = '';
-                    if (notificationTarget === 'Parent') targetKey = 'parent';
-                    if (notificationTarget === 'Tuteur') targetKey = 'tutor';
-                    if (notificationTarget === 'Enseignant') targetKey = 'teacher';
-                    if (notificationTarget === 'Entreprise') targetKey = 'company_head';
-                    if (notificationTarget === 'Élève') targetKey = 'student';
-                    if (notificationTarget === 'Proviseur') targetKey = 'school_head';
-
-                    if (targetKey === currentRoleKey) {
-                        notificationTarget = null; // Don't show if already on it
-                        continue; // Look for others? Or just stop? 
-                        // If there's one for Student and one for Tutor, and I am Student. 
-                        // I should see Tutor.
-                    } else {
-                        break; // Found a valid notification for ANOTHER role
-                    }
-                }
-            }
-            setPendingRoleNotification(notificationTarget);
+             // ... logic removed ...
         });
         return () => unsubscribe();
     }, [isDemoMode, demoRole]);
-
+    */
 
     const router = useRouter();
 
@@ -164,7 +121,7 @@ export function DemoUI() {
                     }}
                     className="fixed bottom-4 left-1/2 z-[9999] flex flex-col items-center gap-2 fade-in duration-300 cursor-move select-none"
                 >
-                    {/* Contextual Notification Bubble */}
+                    {/* Contextual Notification Bubble -> DISABLED */}
                     {pendingRoleNotification && (
                         <div className="bg-orange-600 text-white px-4 py-2 rounded-full shadow-lg text-sm font-bold animate-bounce pointer-events-auto mb-2 flex items-center gap-2 max-w-[90vw] text-center">
                             <span className="w-2 h-2 bg-white rounded-full animate-pulse shrink-0"></span>
@@ -176,7 +133,6 @@ export function DemoUI() {
 
                     {/* Role Selector */}
                     <div className="relative group pointer-events-auto">
-                        {/* Animated Hint Arrow - Only show if NO notification, to avoid clutter */}
                         {!pendingRoleNotification && (
                             <div className="absolute -left-12 top-1/2 -translate-y-1/2 animate-bounce hidden group-hover:hidden md:block text-white font-bold drop-shadow-md pointer-events-none">
                                 <span className="text-xl">👉</span>
@@ -184,7 +140,6 @@ export function DemoUI() {
                         )}
 
                         <div className="bg-indigo-600/90 hover:bg-indigo-500 backdrop-blur-sm text-white pl-2 pr-2 py-1.5 rounded-full shadow-lg flex items-center gap-2 transition-all hover:scale-105 border border-indigo-400/30 max-w-[95vw]">
-                            {/* Drag Handle Area */}
                             <div className="flex items-center gap-1 cursor-grab active:cursor-grabbing border-r border-white/20 pr-2">
                                 <GripVertical className="w-5 h-5 text-indigo-200" />
                                 <span className="text-xs font-bold whitespace-nowrap hidden sm:inline">🦁 Testez chaque rôle</span>
@@ -197,44 +152,22 @@ export function DemoUI() {
                                     const newRole = e.target.value as any;
                                     useDemoStore.getState().setDemoRole(newRole);
 
-                                    const { auth } = await import('@/lib/firebase');
-                                    const { signInWithEmailAndPassword, createUserWithEmailAndPassword } = await import('firebase/auth');
+                                    // Switch User Logic using NextAuth
+                                    const emailPrefix = newRole === 'school_head' ? 'demo_access' : `demo+${newRole}`;
+                                    const email = newRole === 'school_head' ? 'demo_access@pledgeum.fr' : `${emailPrefix}@pledgeum.fr`;
+                                    const password = 'demo1234';
 
-                                    // Check if NOT logged in (Login Page scenario)
-                                    if (!auth.currentUser) {
-                                        const emailPrefix = newRole === 'school_head' ? 'demo_access' : `demo+${newRole}`;
-                                        const email = newRole === 'school_head' ? 'demo_access@pledgeum.fr' : `${emailPrefix}@pledgeum.fr`;
-                                        const password = 'demo1234';
-
-                                        try {
-                                            await signInWithEmailAndPassword(auth, email, password);
-                                            useDemoStore.getState().setDemoMode(true);
-                                            // Router push handled by AuthContext or Page
-                                            router.push('/');
-                                        } catch (loginErr: any) {
-                                            // Handle creation if generic error (user-not-found)
-                                            if (loginErr.code === 'auth/user-not-found' || loginErr.code === 'auth/invalid-credential') {
-                                                try {
-                                                    await createUserWithEmailAndPassword(auth, email, password);
-                                                    useDemoStore.getState().setDemoMode(true);
-                                                    router.push('/');
-                                                } catch (createErr) {
-                                                    console.error("Failed to create demo account from switcher", createErr);
-                                                    alert("Erreur lors de la création du compte démo.");
-                                                }
-                                            } else {
-                                                console.error("Login failed", loginErr);
-                                                alert("Erreur de connexion.");
-                                            }
-                                        }
-                                        return;
-                                    }
-
-                                    // Trigger profile refresh to apply new mock data (Existing Logic)
-                                    if (auth.currentUser) {
-                                        await import('@/store/user').then(({ useUserStore }) =>
-                                            useUserStore.getState().fetchUserProfile(auth.currentUser!.uid)
-                                        );
+                                    try {
+                                        await signIn('credentials', {
+                                            redirect: false,
+                                            email,
+                                            password
+                                        });
+                                        useDemoStore.getState().setDemoMode(true);
+                                        window.location.reload(); // Force reload to pick up new session
+                                    } catch (err) {
+                                        console.error("Demo Switch Error:", err);
+                                        alert("Erreur lors du changement de rôle.");
                                     }
                                 }}
                                 className="bg-transparent border-none text-white text-xs font-bold py-0 pr-6 pl-0 cursor-pointer focus:ring-0 hover:bg-white/10 rounded transition-colors uppercase tracking-wide max-w-[120px] sm:max-w-none truncate"

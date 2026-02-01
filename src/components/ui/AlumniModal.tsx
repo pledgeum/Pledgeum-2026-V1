@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { X, GraduationCap, Search, Mail, Calendar, School, CheckSquare, Square, Send, ClipboardList, MessageSquare, Users, Loader2 } from 'lucide-react';
 import { useConventionStore, Convention } from '@/store/convention';
 import { db } from '@/lib/firebase';
-import { collection, getDocs } from 'firebase/firestore';
+import { collection, getDocs } from '@/lib/firebase';
 import { sendNotification } from '@/lib/notification';
 
 interface AlumniModalProps {
@@ -48,7 +48,7 @@ export function AlumniModal({ isOpen, onClose, authorizedSchoolName }: AlumniMod
             try {
                 const querySnapshot = await getDocs(collection(db, "alumni"));
                 const updates: Record<string, any> = {};
-                querySnapshot.forEach((doc) => {
+                querySnapshot.forEach((doc: any) => {
                     updates[doc.id] = doc.data();
                 });
 

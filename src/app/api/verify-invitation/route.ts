@@ -1,15 +1,16 @@
 import { NextResponse } from 'next/server';
-import { adminDb } from '@/lib/firebase-admin';
+import pool from '@/lib/pg';
 import { checkRateLimit, validateOrigin } from '@/lib/server-security';
 
 export async function POST(request: Request) {
+    let client;
     try {
         // 1. Security Checks
         if (!validateOrigin(request)) {
             return NextResponse.json({ error: "Forbidden Origin" }, { status: 403 });
         }
 
-        const isAllowed = await checkRateLimit(request, 'otp-verify'); // Use similar rate limit
+        const isAllowed = await checkRateLimit(request, 'otp-verify');
         if (!isAllowed) {
             return NextResponse.json({ error: "Trop de tentatives. Veuillez patienter." }, { status: 429 });
         }
@@ -21,36 +22,43 @@ export async function POST(request: Request) {
             return NextResponse.json({ error: "Identifiants manquants" }, { status: 400 });
         }
 
-        // 2. Query Firestore for Invitation
-        // We search in 'invitations' collection where tempId matches
-        const snapshot = await adminDb.collection('invitations')
-            .where('tempId', '==', tempId)
-            .limit(1)
-            .get();
+        // 2. Query Postgres for Invitation/User
+        client = await pool.connect();
 
-        if (snapshot.empty) {
+        // We look for a user with this temp_id
+        const res = await client.query(`
+            SELECT email, first_name, last_name, role, establishment_uai, birth_date, class_id, temp_code
+            FROM users
+            WHERE temp_id = $1
+            LIMIT 1
+        `, [tempId]);
+
+        if (res.rowCount === 0) {
             return NextResponse.json({ error: "Identifiant non reconnu" }, { status: 404 });
         }
 
-        const doc = snapshot.docs[0];
-        const data = doc.data();
+        const user = res.rows[0];
 
         // 3. Verify Code
-        if (data.tempCode !== tempCode) {
+        if (user.temp_code !== tempCode) {
             return NextResponse.json({ error: "Code d'accès incorrect" }, { status: 401 });
         }
 
         // 4. Return Data for Account Creation
+        // Helper to format name
+        const displayName = `${user.first_name || ''} ${user.last_name || ''}`.trim();
+
         return NextResponse.json({
             success: true,
             user: {
-                email: data.email,
-                name: data.name,
-                role: data.role,
-                schoolId: data.schoolId || null,
-                birthDate: data.birthDate || null,
-                classId: data.classId || null,
-                className: data.className || null
+                email: user.email,
+                name: displayName,
+                role: user.role,
+                schoolId: user.establishment_uai,
+                birthDate: user.birth_date,
+                classId: user.class_id,
+                // className is not easily available without a join, but frontend might not strictly need it for display if it has classId?
+                // Or we can simple omit it or do a join. Let's do a join to be nice.
             }
         });
 
@@ -60,5 +68,7 @@ export async function POST(request: Request) {
             { error: 'Erreur technique lors de la vérification' },
             { status: 500 }
         );
+    } finally {
+        if (client) client.release();
     }
 }

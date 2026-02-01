@@ -1,23 +1,24 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
+import { useUserStore } from '@/store/user';
 
 export type CollaboratorRole =
-    | 'DDFPT'
-    | 'BDE' // Bureau des entreprises
-    | 'AT_DDFPT'
-    | 'CPE'
-    | 'VIE_SCOLAIRE'
-    | 'ADJOINT_GEST'
-    | 'SEC_INTENDANCE';
+    | 'ddfpt'
+    | 'business_manager'
+    | 'at_ddfpt'
+    | 'cpe'
+    | 'school_life'
+    | 'assistant_manager'
+    | 'stewardship_secretary';
 
 export const COLLABORATOR_LABELS: Record<CollaboratorRole, string> = {
-    'DDFPT': 'DDFPT (Directeur·rice Délégué·e aux Formations)',
-    'BDE': 'Responsable Bureau des Entreprises',
-    'AT_DDFPT': 'Assistant(e) Technique DDFPT',
-    'CPE': 'CPE (Conseiller·ère Principal·e d\'Éducation)',
-    'VIE_SCOLAIRE': 'Vie Scolaire',
-    'ADJOINT_GEST': 'Adjoint(e) Gestionnaire',
-    'SEC_INTENDANCE': 'Secrétaire d\'Intendance'
+    'ddfpt': 'DDFPT (Directeur·rice Délégué·e aux Formations)',
+    'business_manager': 'Responsable Bureau des Entreprises',
+    'at_ddfpt': 'Assistant(e) Technique DDFPT',
+    'cpe': 'CPE (Conseiller·ère Principal·e d\'Éducation)',
+    'school_life': 'Vie Scolaire',
+    'assistant_manager': 'Adjoint(e) Gestionnaire',
+    'stewardship_secretary': 'Secrétaire d\'Intendance'
 };
 
 export interface Collaborator {
@@ -124,7 +125,7 @@ interface SchoolState {
     importTeachers: (classId: string, teachers: Omit<Teacher, 'id'>[]) => void;
     addTeacherToClass: (classId: string, teacher: Omit<Teacher, 'id'>) => void;
 
-    importGlobalTeachers: (structure: { teacher: Omit<Teacher, 'id'>; classes: string[] }[], schoolId?: string) => Promise<void>;
+    importGlobalTeachers: (structure: { teacher: Omit<Teacher, 'id'>; classes: string[] }[], schoolId: string) => Promise<void>;
     updateTeacher: (classId: string, teacherId: string, updates: Partial<Teacher>) => void;
     removeTeacherFromClass: (classId: string, teacherId: string) => void;
 
@@ -135,8 +136,9 @@ interface SchoolState {
     regenerateStudentCredentials: (classId: string, studentId: string) => void;
     markCredentialsPrinted: (classId: string, studentIds: string[]) => void;
 
-    importGlobalStructure: (structure: { className: string; students: Omit<Student, 'id'>[] }[], schoolId?: string) => Promise<void>;
-    generateTeacherCredentials: (classId: string, schoolId: string) => Promise<void>;
+    importGlobalStructure: (structure: { className: string; students: Omit<Student, 'id'>[] }[], schoolId: string) => Promise<void>;
+    generateTeacherCredentials: (classId: string, schoolId: string) => void;
+    markTeacherCredentialsPrinted: (classId: string, teacherIds: string[]) => void;
 
     schoolName: string;
     schoolAddress: string;
@@ -179,6 +181,7 @@ interface SchoolState {
 
     // FETCH METHOD
     fetchSchoolData: (schoolId: string) => Promise<void>;
+    fetchCollaborators: (schoolId: string) => Promise<void>; // New action
     fetchClassStudents: (classId: string) => Promise<void>;
     fetchClassTeachers: (classId: string) => Promise<void>;
 }
@@ -209,6 +212,19 @@ export const useSchoolStore = create<SchoolState>()(
             importProgress: null,
 
             setImportProgress: (progress) => set({ importProgress: progress }),
+
+            fetchCollaborators: async (schoolId: string) => {
+                if (!schoolId) return;
+                try {
+                    const collabRes = await fetch(`/api/school/collaborators?uai=${schoolId}`);
+                    if (collabRes.ok) {
+                        const data = await collabRes.json();
+                        set({ collaborators: data.collaborators || [] });
+                    }
+                } catch (e) {
+                    console.error("Collaborators fetch error", e);
+                }
+            },
 
             fetchSchoolData: async (schoolId: string) => {
                 if (!schoolId) return;
@@ -267,15 +283,17 @@ export const useSchoolStore = create<SchoolState>()(
                                 schoolHeadName: est.headName || state.schoolHeadName,
                                 schoolHeadEmail: est.admin_email || state.schoolHeadEmail
                             };
-
                         }
                     } catch (e) {
                         console.error("Identity fetch error", e);
                     }
 
+                    // 4. Fetch Collaborators (via new action)
+                    await get().fetchCollaborators(schoolId);
+
                     set((state) => ({
                         classes: loadedClasses.sort((a, b) => a.name.localeCompare(b.name)),
-                        collaborators: [], // Reset or fetch from API if available
+                        // Collaborators are set by fetchCollaborators
                         partnerCompanies: [], // Reset or fetch from API if available
                         ...identityUpdates
                     }));
@@ -291,7 +309,7 @@ export const useSchoolStore = create<SchoolState>()(
             fetchClassStudents: async (classId: string) => {
                 try {
                     // console.log(`[SCHOOL_STORE] Fetching students for class: ${classId}`);
-                    const res = await fetch(`/api/school/classes/${classId}/students`);
+                    const res = await fetch(`/api/school/class/${classId}/students`);
                     if (!res.ok) throw new Error("Failed to fetch students");
                     const { students } = await res.json();
 
@@ -307,7 +325,7 @@ export const useSchoolStore = create<SchoolState>()(
 
             fetchClassTeachers: async (classId: string) => {
                 try {
-                    const res = await fetch(`/api/school/classes/${classId}/teachers`);
+                    const res = await fetch(`/api/school/class/${classId}/teachers`);
                     if (!res.ok) throw new Error("Failed to fetch teachers");
                     const { teachers } = await res.json();
 
@@ -401,11 +419,53 @@ export const useSchoolStore = create<SchoolState>()(
                 })
             })),
 
-            generateTeacherCredentials: async (classId, schoolId) => {
-                console.log("Teacher credentials generation (mock). Persistence disabled.");
-            },
+            generateTeacherCredentials: (classId, schoolId) => set((state) => ({
+                classes: state.classes.map((c) => {
+                    if (c.id !== classId) return c;
+
+                    const updatedTeachers = c.teachersList.map(teacher => {
+                        // Format: 4 chars LAST + 4 chars FIRST + 3 Digits
+                        const clean = (str: string) => str.toUpperCase()
+                            .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
+                            .replace(/[^A-Z0-9]/g, "");
+
+                        const sLast = clean(teacher.lastName).substring(0, 4).padEnd(4, 'X');
+                        const sFirst = clean(teacher.firstName).substring(0, 4).padEnd(4, 'X');
+
+                        // Use existing tempId if present, else generate new
+                        let tempId = teacher.tempId;
+                        if (!tempId) {
+                            const random3 = Math.floor(100 + Math.random() * 900); // 100-999
+                            tempId = `${sLast}${sFirst}${random3}`;
+                        }
+
+                        // Use existing tempCode if present, else generate new
+                        const tempCode = teacher.tempCode || Math.floor(100000 + Math.random() * 900000).toString();
+
+                        return {
+                            ...teacher,
+                            tempId,
+                            tempCode
+                        };
+                    });
+
+                    return { ...c, teachersList: updatedTeachers };
+                })
+            })),
 
 
+
+            markTeacherCredentialsPrinted: (classId, teacherIds) => set((state) => ({
+                classes: state.classes.map((c) => {
+                    if (c.id !== classId) return c;
+                    return {
+                        ...c,
+                        teachersList: c.teachersList.map(t =>
+                            teacherIds.includes(t.id) ? { ...t, credentialsPrinted: true } : t
+                        )
+                    };
+                })
+            })),
 
             // Default: Lycée Ferdinand Buisson
             schoolName: "Lycée Polyvalent Ferdinand Buisson",
@@ -418,7 +478,32 @@ export const useSchoolStore = create<SchoolState>()(
 
             allowedConventionTypes: ['PFMP_STANDARD', 'STAGE_2NDE', 'ERASMUS_MOBILITY'],
 
-            updateSchoolIdentity: (data) => set((state) => ({ ...state, ...data })),
+            updateSchoolIdentity: (data) => {
+                set((state) => ({ ...state, ...data }));
+
+                // Debounce or immediate persistence
+                // Using immediate for now but inside an async context wrapper if needed, 
+                // but simpler to just fire and forget here or use a better pattern.
+                // We'll fire-and-forget for UI responsiveness, logging errors.
+                const state = get();
+                // Determine UAI
+                // We don't have UAI directly in state root, usually it's passed or in UserStore.
+                // Let's get it from UserStore dynamically.
+                import('@/store/user').then(({ useUserStore }) => {
+                    const uai = useUserStore.getState().uai || useUserStore.getState().schoolId;
+                    if (uai) {
+                        fetch(`/api/establishments/${uai}`, {
+                            method: 'PUT',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify(data)
+                        })
+                            .then(res => {
+                                if (!res.ok) console.error("Identity update failed", res.status);
+                            })
+                            .catch(err => console.error("Identity update error", err));
+                    }
+                });
+            },
             updateSchoolAddress: (address: string) => set({ schoolAddress: address }), // Deprecated but kept for compatibility if used elsewhere
 
             setDelegatedAdmin: (id) => set({ delegatedAdminId: id }),
@@ -434,9 +519,32 @@ export const useSchoolStore = create<SchoolState>()(
                 collaborators: [...state.collaborators, { ...collaborator, id: Math.random().toString(36).substr(2, 9) }]
             })),
 
-            removeCollaborator: (id) => set((state) => ({
-                collaborators: state.collaborators.filter((c) => c.id !== id)
-            })),
+            removeCollaborator: async (id) => {
+                const state = get();
+                const schoolId = useUserStore.getState().uai || useUserStore.getState().schoolId; // Get UAI from user store
+
+                // Optimistic Update
+                const original = state.collaborators;
+                set({ collaborators: state.collaborators.filter((c) => c.id !== id) });
+
+                if (schoolId) {
+                    try {
+                        const res = await fetch('/api/school/collaborators', {
+                            method: 'DELETE',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ uid: id, uai: schoolId })
+                        });
+                        if (!res.ok) throw new Error("Delete failed");
+                    } catch (e) {
+                        console.error("Remove Collaborator Error:", e);
+                        // Revert
+                        set({ collaborators: original });
+                        alert("Erreur lors de la suppression. Veuillez réessayer.");
+                    }
+                }
+            },
+
+
 
             addClass: (cls) => set((state) => ({
                 classes: [...state.classes, { ...cls, id: Math.random().toString(36).substr(2, 9), teachersList: [], studentsList: [], studentCount: 0, teacherCount: 0 }]
@@ -451,20 +559,28 @@ export const useSchoolStore = create<SchoolState>()(
                     classes: state.classes.map((c) => c.id === id ? { ...c, ...updates } : c)
                 }));
 
-                // Persist to API if mainTeacher is updated (including unassignment)
-                if ('mainTeacher' in updates) {
+                // Persist to API if mainTeacher OR CPE is updated
+                if ('mainTeacher' in updates || 'cpe' in updates) {
                     import('@/store/user').then(({ useUserStore }) => {
-                        const uai = useUserStore.getState().uai || useUserStore.getState().schoolId || '9999999X';
+                        const uai = useUserStore.getState().uai || useUserStore.getState().schoolId;
+                        if (!uai) console.warn("Missing UAI for persisting class update");
+
+                        // Resolve IDs from updates or current state fallback
+                        // Note: state inside async might be stale, but we merged updates into state BEFORE this block.
+                        // Ideally we should use the fresh state.
+
+                        const freshClass = useSchoolStore.getState().classes.find(c => c.id === id);
 
                         fetch('/api/school/classes', {
                             method: 'PUT',
                             headers: { 'Content-Type': 'application/json' },
                             body: JSON.stringify({
                                 classId: id,
-                                mainTeacherId: updates.mainTeacher?.id || null,
+                                mainTeacherId: updates.mainTeacher !== undefined ? (updates.mainTeacher?.id || null) : undefined, // specific undefined check
+                                cpeId: updates.cpe !== undefined ? (updates.cpe?.id || null) : undefined,
                                 uai: uai
                             })
-                        }).catch(e => console.error("Failed to persist class update (Main Teacher):", e));
+                        }).catch(e => console.error("Failed to persist class update (Main/CPE):", e));
                     });
                 }
             },
@@ -512,7 +628,7 @@ export const useSchoolStore = create<SchoolState>()(
                 })
             })),
 
-            importGlobalTeachers: async (structure: { teacher: Omit<Teacher, 'id'>; classes: string[] }[], schoolId?: string) => {
+            importGlobalTeachers: async (structure: { teacher: Omit<Teacher, 'id'>; classes: string[] }[], schoolId: string) => {
                 const state = get();
                 const year = "2025-2026";
                 if (!schoolId) return;
@@ -661,7 +777,7 @@ export const useSchoolStore = create<SchoolState>()(
                 })
             })),
 
-            importGlobalStructure: async (structure: any[], schoolId?: string) => {
+            importGlobalStructure: async (structure: any[], schoolId: string) => {
                 const state = get();
                 const year = "2025-2026";
                 if (!schoolId) return;
@@ -746,7 +862,7 @@ export const useSchoolStore = create<SchoolState>()(
                 ];
 
                 const testCollaborators: Collaborator[] = [
-                    { id: 'c1', name: 'Marie Durand', email: 'marie.durand@ecole.fr', role: 'CPE' }
+                    { id: 'c1', name: 'Marie Durand', email: 'marie.durand@ecole.fr', role: 'cpe' }
                 ];
 
                 let schoolIdentity = {
@@ -757,10 +873,10 @@ export const useSchoolStore = create<SchoolState>()(
                     schoolHeadEmail: "demo@ecole.fr"
                 };
 
-                if (schoolId === '9999999X') {
+                if (schoolId === '9999999Z') {
                     schoolIdentity = {
-                        schoolName: "Mon LYCEE TOUTFAUX",
-                        schoolAddress: "12 Rue Ampère, 76500 Elbeuf",
+                        schoolName: "Lycée de Démonstration (Sandbox)",
+                        schoolAddress: "1 Avenue de la République, 76500 Elbeuf",
                         schoolPhone: "02 35 77 00 00",
                         schoolHeadName: "Fabrice Dumasdelage",
                         schoolHeadEmail: "fabrice.dumasdelage@gmail.com"

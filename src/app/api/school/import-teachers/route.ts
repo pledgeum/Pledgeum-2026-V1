@@ -4,6 +4,7 @@ import pool from '@/lib/pg';
 import { z } from 'zod';
 import { adminAuth } from '@/lib/firebase-admin'; // Added
 import crypto from 'crypto'; // Added
+import { auth } from '@/auth';
 
 // Helper for normalization (matches Import Structure logic)
 function normalizeString(str: string) {
@@ -29,10 +30,23 @@ const TeacherImportSchema = z.object({
 export async function POST(req: Request) {
     let client;
     try {
-        const body = await req.json();
-        const { schoolId, teachers } = TeacherImportSchema.parse(body);
+        const session = await auth();
+        const user = session?.user as any;
+        const uai = user?.establishment_uai;
+        const role = user?.role;
 
-        if (!schoolId) return NextResponse.json({ error: "School ID (UAI) required" }, { status: 400 });
+        // Security: Only Admins can import
+        if (role !== 'school_head' && role !== 'ESTABLISHMENT_ADMIN') {
+            return NextResponse.json({ error: "Forbidden: Insufficient permissions." }, { status: 403 });
+        }
+
+        if (!uai) {
+            return NextResponse.json({ error: "No establishment linked to your account. Please complete your profile." }, { status: 403 });
+        }
+
+        const body = await req.json();
+        const { teachers } = TeacherImportSchema.parse(body);
+        const schoolId = uai;
 
         client = await pool.connect();
 

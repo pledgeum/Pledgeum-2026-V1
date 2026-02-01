@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { Building2, CheckCircle, Search, Briefcase, GraduationCap, ArrowRight, Loader2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
 import { db } from '@/lib/firebase';
-import { doc, getDoc, setDoc, serverTimestamp } from 'firebase/firestore';
+import { doc, getDoc, setDoc, serverTimestamp } from '@/lib/firebase';
 
 export default function AlumniSurveyPage() {
     const searchParams = useSearchParams();

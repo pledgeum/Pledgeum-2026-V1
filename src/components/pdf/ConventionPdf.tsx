@@ -194,8 +194,8 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                     <View style={styles.row}>
                         <Text style={styles.label}>Représenté par :</Text>
                         <Text style={styles.value}>
-                            {(data.metadata as any)?.signatories?.principal?.name
-                                ? `${(data.metadata as any).signatories.principal.name}` // Dynamic
+                            {(data as any).metadata?.signatories?.principal?.name
+                                ? `${(data as any).metadata.signatories.principal.name}` // Dynamic
                                 : data.ecole_chef_nom // Fallback
                             }
                         </Text>
@@ -410,7 +410,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                             {data.signatures?.headImg && <Image src={data.signatures.headImg} style={{ width: 100, height: 40 }} />}
                             {data.signatures?.headCode && (
                                 <View style={localStyles.authCodeBox}>
-                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.headCode}</Text>
+                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.headSignatureId || data.signatures.headCode}</Text>
                                 </View>
                             )}
                         </View>
@@ -419,7 +419,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                             {data.signatures?.companyImg && <Image src={data.signatures.companyImg} style={{ width: 100, height: 40 }} />}
                             {data.signatures?.companyCode && (
                                 <View style={localStyles.authCodeBox}>
-                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.companyCode}</Text>
+                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.companySignatureId || data.signatures.companyCode}</Text>
                                 </View>
                             )}
                         </View>
@@ -428,7 +428,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                             {data.signatures?.studentImg && <Image src={data.signatures.studentImg} style={{ width: 100, height: 40 }} />}
                             {data.signatures?.studentCode && (
                                 <View style={localStyles.authCodeBox}>
-                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.studentCode}</Text>
+                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.studentSignatureId || data.signatures.studentCode}</Text>
                                 </View>
                             )}
                         </View>
@@ -442,7 +442,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                                     {data.signatures?.parentImg && <Image src={data.signatures.parentImg} style={{ width: 100, height: 40 }} />}
                                     {data.signatures?.parentCode && (
                                         <View style={localStyles.authCodeBox}>
-                                            <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.parentCode}</Text>
+                                            <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.parentSignatureId || data.signatures.parentCode}</Text>
                                         </View>
                                     )}
                                 </>
@@ -454,7 +454,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                                     {data.signatures?.studentImg && <Image src={data.signatures.studentImg} style={{ width: 100, height: 40 }} />}
                                     {data.signatures?.studentCode && (
                                         <View style={localStyles.authCodeBox}>
-                                            <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.studentCode}</Text>
+                                            <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.studentSignatureId || data.signatures.studentCode}</Text>
                                         </View>
                                     )}
                                 </>
@@ -465,7 +465,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                             {data.signatures?.tutorImg && <Image src={data.signatures.tutorImg} style={{ width: 100, height: 40 }} />}
                             {data.signatures?.tutorCode && (
                                 <View style={localStyles.authCodeBox}>
-                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.tutorCode}</Text>
+                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.tutorSignatureId || data.signatures.tutorCode}</Text>
                                 </View>
                             )}
                         </View>
@@ -474,7 +474,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                             {data.signatures?.teacherImg && <Image src={data.signatures.teacherImg} style={{ width: 100, height: 40 }} />}
                             {data.signatures?.teacherCode && (
                                 <View style={localStyles.authCodeBox}>
-                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.teacherCode}</Text>
+                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.teacherSignatureId || data.signatures.teacherCode}</Text>
                                 </View>
                             )}
                         </View>

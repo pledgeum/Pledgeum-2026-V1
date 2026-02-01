@@ -10,8 +10,17 @@ export async function POST(req: Request) {
         const body = await req.json();
         const { id, studentId, userId, ...rest } = body;
 
+        console.log(`[PG_SYNC] Received payload for ID: ${id}, Student: ${studentId}, User: ${userId}`);
+
         // Critical: User FK
-        const studentUid = userId || studentId; // Fallback
+        // Critical: User FK
+        const studentUid = studentId || userId; // Fallback
+
+        if (!studentUid) {
+            console.error("[PG_SYNC] Error: Missing studentUid (userId or studentId required)");
+            return NextResponse.json({ success: false, error: "Missing studentUid" }, { status: 400 });
+        }
+
         const rawSiret = body.ent_siret;
         const companySiret = rawSiret ? rawSiret.replace(/\D/g, '').substring(0, 14) : null;
 
@@ -38,11 +47,25 @@ export async function POST(req: Request) {
 
             // 2. Ensure User Exists (Stub)
             if (studentUid) {
+                // Ensure email is not undefined
+                const studentEmail = body.eleve_email || `missing_${studentUid}@pledgeum.fr`;
                 await client.query(`
                     INSERT INTO users (uid, email, role)
                     VALUES ($1, $2, $3)
                     ON CONFLICT (uid) DO NOTHING
-                `, [studentUid, body.eleve_email || `missing_${studentUid}@pledgeum.fr`, 'student']);
+                `, [studentUid, studentEmail, 'student']);
+            }
+
+            // 2b. Fetch Student UAI (Authority) - FIX for Cross-Tenant Leak
+            // We must rely on the stored User Profile UAI, not the client-provided schoolId
+            let resolvedUai = body.schoolId || null;
+            if (studentUid) {
+                const uRes = await client.query('SELECT establishment_uai FROM users WHERE uid = $1', [studentUid]);
+                if (uRes.rows.length > 0 && uRes.rows[0].establishment_uai) {
+                    resolvedUai = uRes.rows[0].establishment_uai;
+                } else {
+                    console.warn(`[PG_SYNC] Warning: Student ${studentUid} has no establishment_uai in DB. Using fallback: ${resolvedUai}`);
+                }
             }
 
             // 3. Upsert Convention (V2 Schema)
@@ -68,7 +91,7 @@ export async function POST(req: Request) {
             `, [
                 id,
                 studentUid,
-                body.schoolId !== '9999999X' && body.schoolId ? body.schoolId : '9999999X',
+                resolvedUai || null, // Allow null if really unknown, but should be prevented
                 null, // class_id (Not mapped yet)
                 (companySiret && companySiret.length === 14) ? companySiret : null,
 
@@ -84,22 +107,20 @@ export async function POST(req: Request) {
             ]);
 
             await client.query('COMMIT');
+            console.log(`[PG_SYNC] Convention saved successfully: ${id}`);
             return NextResponse.json({ success: true });
 
 
         } catch (dbErr: any) {
             await client.query('ROLLBACK');
             console.error("[PG_SYNC] TX Error:", dbErr);
-            throw dbErr;
+            return NextResponse.json({ success: false, error: dbErr.message, stack: dbErr.stack }, { status: 500 });
         } finally {
             client.release();
         }
 
     } catch (error: any) {
         console.error("[PG_SYNC] Handler Error:", error);
-        // User requested: "Application ne plante pas" -> Return 200 with error info?
-        // Or just let store catch it. The store will catch non-200.
-        // Let's return 200 with error field so store can log but not throw.
-        return NextResponse.json({ success: false, error: error.message }, { status: 200 });
+        return NextResponse.json({ success: false, error: error.message }, { status: 500 });
     }
 }

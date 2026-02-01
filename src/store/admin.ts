@@ -1,6 +1,6 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
-import { collection, query, where, getDocs } from 'firebase/firestore';
+import { collection, query, where, getDocs } from '@/lib/firebase';
 import { db } from '@/lib/firebase';
 
 export type SchoolStatus = 'BETA' | 'ADHERENT';
@@ -63,7 +63,7 @@ export const useAdminStore = create<AdminState>()(
                     const snapshot = await getDocs(q);
 
                     const fetchedSchools: AuthorizedSchool[] = [];
-                    snapshot.forEach(doc => {
+                    snapshot.forEach((doc: any) => {
                         const data = doc.data();
                         fetchedSchools.push({
                             id: doc.id,

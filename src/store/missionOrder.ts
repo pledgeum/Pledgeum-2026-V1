@@ -1,7 +1,7 @@
 import { create } from 'zustand';
 import { persist } from 'zustand/middleware';
 import { db } from '@/lib/firebase';
-import { collection, addDoc, updateDoc, doc, getDocs, query, where } from 'firebase/firestore';
+import { collection, addDoc, updateDoc, doc, getDocs, query, where } from '@/lib/firebase';
 
 export interface MissionOrder {
     id: string;
@@ -110,7 +110,7 @@ export const useMissionOrderStore = create<MissionOrderState>()(
                 try {
                     const querySnapshot = await getDocs(collection(db, "missionOrders"));
                     const orders: MissionOrder[] = [];
-                    querySnapshot.forEach((doc) => {
+                    querySnapshot.forEach((doc: any) => {
                         orders.push({ id: doc.id, ...doc.data() } as MissionOrder);
                     });
                     set({ missionOrders: orders });

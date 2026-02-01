@@ -57,7 +57,7 @@ export async function POST(request: Request) {
             const client = await pool.connect();
             await client.query(
                 `INSERT INTO notification_logs (recipient_email, subject, status, meta_data) VALUES ($1, $2, $3, $4)`,
-                [to, subject, success ? 'SENT' : 'FAILED', JSON.stringify({ sender: user.uid, hasAttachments: attachments.length > 0 })]
+                [to, subject, success ? 'SENT' : 'FAILED', JSON.stringify({ sender: user.id, hasAttachments: attachments.length > 0 })]
             );
             client.release();
         } catch (logErr) {

@@ -13,7 +13,7 @@ import { cn } from '@/lib/utils';
 import { Wand2, CheckCircle, Eraser } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 import { useRef } from 'react';
-import { useAuth } from '@/context/AuthContext';
+import { useSession } from "next-auth/react";
 import { SignatureModal } from '@/components/ui/SignatureModal';
 
 import dynamic from 'next/dynamic';
@@ -84,7 +84,8 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
     const { submitConvention } = useConventionStore();
     const { addNotification, email } = useUserStore();
     const { reset } = useWizardStore();
-    const { user } = useAuth();
+    const { data: session } = useSession();
+    const user = session?.user;
 
     const sigCanvas = useRef<SignatureCanvas>(null);
     const [signature, setSignature] = useState<string | null>(null);
@@ -122,7 +123,7 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
                 }
             };
 
-            await submitConvention(submissionData as any, data.eleve_email, user ? user.uid : 'bypassed_user');
+            await submitConvention(submissionData as any, user?.id || data.eleve_email || '', user?.id || 'bypassed_user');
             addNotification({
                 title: 'Convention envoyée',
                 message: 'Votre demande a été transmise à l\'enseignant référent/professeur principal pour validation (sauvegardée dans Firestore).',

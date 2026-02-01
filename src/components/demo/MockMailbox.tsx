@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { db } from '@/lib/firebase';
-import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from 'firebase/firestore';
+import { collection, query, orderBy, onSnapshot, doc, updateDoc, deleteDoc } from '@/lib/firebase';
 import { Mail, X, Trash2, ExternalLink } from 'lucide-react';
 import { format } from 'date-fns';
 import { useDemoStore } from '@/store/demo';
@@ -35,16 +35,16 @@ export function MockMailbox() {
         if (!isDemoMode || !userEmail) return;
 
         const q = query(collection(db, 'demo_inbox'), orderBy('date', 'desc'));
-        const unsubscribe = onSnapshot(q, (snapshot) => {
-            const allMsgs = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() } as MockEmail));
+        const unsubscribe = onSnapshot(q, (snapshot: any) => {
+            const allMsgs = snapshot.docs.map((doc: any) => ({ id: doc.id, ...doc.data() } as MockEmail));
 
             // Filter emails for the current user (Role-based filtering)
             // Strict filtering: Only show emails sent EXACTLY to this user
             // This ensures meaningful simulation (Student doesn't see Tutor's emails)
-            const myMsgs = allMsgs.filter(msg => msg.to === userEmail);
+            const myMsgs = allMsgs.filter((msg: MockEmail) => msg.to === userEmail);
 
             // Remove duplicates if broader matching catches same email twice
-            const uniqueMsgs = Array.from(new Map(myMsgs.map(m => [m.id, m])).values());
+            const uniqueMsgs = Array.from(new Map(myMsgs.map((m: MockEmail) => [m.id, m])).values()) as MockEmail[];
 
             // Play sound if new email arrived (and not first load)
             if (!isFirstLoad.current && uniqueMsgs.length > prevEmailCount.current) {

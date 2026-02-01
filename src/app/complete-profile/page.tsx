@@ -5,7 +5,7 @@ import { useUserStore, UserRole } from '@/store/user';
 import { useProfileStatus } from '@/hooks/useProfileStatus';
 import { useRouter } from 'next/navigation';
 import { useForm } from 'react-hook-form';
-import { useAuth } from '@/context/AuthContext';
+import { useSession, signOut } from "next-auth/react";
 import { AddressAutocomplete } from '@/components/ui/AddressAutocomplete';
 
 // Field Configuration
@@ -80,7 +80,8 @@ ROLE_FIELDS['teacher_tracker'] = ROLE_FIELDS['teacher'];
 ROLE_FIELDS['company_head_tutor'] = ROLE_FIELDS['company_head'];
 
 export default function CompleteProfilePage() {
-    const { user } = useAuth();
+    const { data: session } = useSession();
+    const user = session?.user;
     const { role, profileData, updateProfileData, birthDate, name } = useUserStore();
     const { isComplete, missingFields } = useProfileStatus();
     const router = useRouter();
@@ -116,10 +117,10 @@ export default function CompleteProfilePage() {
     useEffect(() => {
         if (user?.email === 'pledgeum@gmail.com' && role === 'student') {
             const { createUserProfile } = useUserStore.getState(); // Access store action directly
-            createUserProfile(user.uid, {
+            createUserProfile(user.id || 'test-admin-id', {
                 email: user.email,
                 role: 'school_head',
-                name: user.displayName || 'Compte Test Admin'
+                name: user.name || 'Compte Test Admin'
             }).then(() => {
                 window.location.href = '/';
             });
@@ -127,10 +128,10 @@ export default function CompleteProfilePage() {
     }, [user, role]);
 
     const onSubmit = async (data: any) => {
-        if (!user?.uid) return;
+        if (!user?.id) return;
         setIsSubmitting(true);
         try {
-            await updateProfileData(user.uid, data);
+            await updateProfileData(user.id, data);
             // If strictly needed, verify completion again via store updated state
             // But usually safe to redirect
             router.push('/');
@@ -232,9 +233,7 @@ export default function CompleteProfilePage() {
             <div className="mt-6 text-center">
                 <button
                     onClick={() => {
-                        const { signOut } = require('firebase/auth');
-                        const { auth } = require('@/lib/firebase');
-                        signOut(auth).then(() => router.push('/login'));
+                        signOut().then(() => router.push('/login'));
                     }}
                     className="text-sm text-gray-500 hover:text-gray-700 underline"
                 >
