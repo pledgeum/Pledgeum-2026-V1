@@ -98,8 +98,8 @@ L'équipe Pledgeum
 
         const emailSent = await sendEmail({ to: email, subject, text: message });
 
-        if (!emailSent) {
-            throw new Error("Failed to send email via notification service");
+        if (!emailSent.success) {
+            throw new Error(`Failed to send email via notification service: ${emailSent.error}`);
         }
 
         return { success: true };

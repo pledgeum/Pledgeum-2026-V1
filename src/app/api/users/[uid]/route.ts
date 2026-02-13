@@ -19,7 +19,13 @@ export async function GET(
     try {
         // 1. Fetch User (Base) with Class Name (Left Join)
         const query = `
-            SELECT u.*, c.name as class_name 
+            SELECT 
+                u.uid, u.email, u.role, u.first_name, u.last_name, 
+                u.phone, u.address, u.job_function, u.birth_date, 
+                u.zip_code, u.city, u.class_id, u.diploma_prepared, 
+                u.legal_representatives, u.establishment_uai, u.has_accepted_tos,
+                u.prox_commune, u.prox_commune_zip, u.prox_commune_lat, u.prox_commune_lon,
+                c.name as class_name 
             FROM users u
             LEFT JOIN classes c ON u.class_id = c.id
             WHERE u.uid = $1
@@ -116,7 +122,7 @@ export async function GET(
         });
 
     } catch (error) {
-        console.error('[API_USER] Error:', error);
+        console.error('[API_USER_GET] Error:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     } finally {
         client.release();

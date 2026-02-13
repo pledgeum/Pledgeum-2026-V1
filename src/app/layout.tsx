@@ -19,6 +19,7 @@ export const metadata: Metadata = {
 
 import { SessionProvider } from "next-auth/react";
 import { ProfileGuard } from "@/components/auth/ProfileGuard";
+import ForcePasswordChangeGuard from "@/components/auth/ForcePasswordChangeGuard";
 import { DemoUI } from "@/components/demo/DemoUI";
 
 export default function RootLayout({
@@ -32,10 +33,12 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased`}
       >
         <SessionProvider>
-          <ProfileGuard>
-            <DemoUI />
-            {children}
-          </ProfileGuard>
+          <ForcePasswordChangeGuard>
+            <ProfileGuard>
+              <DemoUI />
+              {children}
+            </ProfileGuard>
+          </ForcePasswordChangeGuard>
         </SessionProvider>
       </body>
     </html>

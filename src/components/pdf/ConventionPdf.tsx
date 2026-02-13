@@ -21,6 +21,29 @@ const localStyles = StyleSheet.create({
         padding: 5,
         marginBottom: 10,
         borderRadius: 2,
+        position: 'relative', // For absolute positioning of badge if needed
+    },
+    signatureBoxValid: {
+        borderColor: '#22c55e', // Green border
+        backgroundColor: '#f0fdf4', // Light green bg
+    },
+    validBadge: {
+        position: 'absolute',
+        top: 2,
+        right: 2,
+        fontSize: 6,
+        color: '#15803d', // Dark green
+        fontWeight: 'bold',
+        backgroundColor: '#dcfce7',
+        paddingHorizontal: 3,
+        paddingVertical: 1,
+        borderRadius: 2,
+    },
+    hashText: {
+        fontSize: 4,
+        color: '#6b7280',
+        marginTop: 2,
+        fontFamily: 'Courier',
     },
     signatureLabel: {
         fontSize: pdfTheme.sizes.small,
@@ -128,6 +151,27 @@ const QrCodeFooter = ({ url, code }: { url: string, code?: string }) => (
 // --- STANDARD PDF TEMPLATE (Existing CERFA-like) ---
 function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
     const formatDate = (d?: string) => d ? new Date(d).toLocaleDateString('fr-FR') : '...';
+    // Helper to render signature content
+    const SignatureContent = ({ img, hash, date, code, signatureId }: { img?: string, hash?: string, date?: string, code?: string, signatureId?: string }) => {
+        if (!img) return null;
+        return (
+            <View>
+                <Image src={img} style={{ width: 100, height: 35, objectFit: 'contain' }} />
+                {hash && (
+                    <View style={localStyles.validBadge}>
+                        <Text>✅ SIGNÉ</Text>
+                    </View>
+                )}
+                {date && <Text style={{ fontSize: 5, color: '#059669', marginTop: 1 }}>Le {new Date(date).toLocaleString('fr-FR')}</Text>}
+                {(code || signatureId) && (
+                    <View style={[localStyles.authCodeBox, { marginTop: 1, paddingVertical: 1 }]}>
+                        <Text style={localStyles.authCodeText}>Ref: {signatureId || code}</Text>
+                    </View>
+                )}
+                {hash && <Text style={localStyles.hashText}>Hash: {hash.substring(0, 24)}...</Text>}
+            </View>
+        );
+    };
 
     return (
         <Document>
@@ -405,78 +449,79 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                 <View wrap={false}>
                     <Text style={{ marginTop: 20, fontWeight: 'bold', fontSize: 11, borderTopWidth: 1, paddingTop: 10 }}>Signatures et cachets</Text>
                     <View style={styles.signatureRow}>
-                        <View style={styles.signatureBox}>
+                        <View style={[styles.signatureBox, data.signatures?.head?.hash ? localStyles.signatureBoxValid : {}]}>
                             <Text style={styles.signatureLabel}>Le chef d’établissement</Text>
-                            {data.signatures?.headImg && <Image src={data.signatures.headImg} style={{ width: 100, height: 40 }} />}
-                            {data.signatures?.headCode && (
-                                <View style={localStyles.authCodeBox}>
-                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.headSignatureId || data.signatures.headCode}</Text>
-                                </View>
-                            )}
+                            <SignatureContent
+                                img={data.signatures?.head?.img}
+                                hash={data.signatures?.head?.hash}
+                                date={data.signatures?.head?.signedAt}
+                                code={data.signatures?.head?.code}
+                                signatureId={data.signatures?.head?.signatureId}
+                            />
                         </View>
-                        <View style={styles.signatureBox}>
+                        <View style={[styles.signatureBox, data.signatures?.company_head?.hash ? localStyles.signatureBoxValid : {}]}>
                             <Text style={styles.signatureLabel}>Le représentant de l’entreprise</Text>
-                            {data.signatures?.companyImg && <Image src={data.signatures.companyImg} style={{ width: 100, height: 40 }} />}
-                            {data.signatures?.companyCode && (
-                                <View style={localStyles.authCodeBox}>
-                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.companySignatureId || data.signatures.companyCode}</Text>
-                                </View>
-                            )}
+                            <SignatureContent
+                                img={data.signatures?.company_head?.img}
+                                hash={data.signatures?.company_head?.hash}
+                                date={data.signatures?.company_head?.signedAt}
+                                code={data.signatures?.company_head?.code}
+                                signatureId={data.signatures?.company_head?.signatureId}
+                            />
                         </View>
-                        <View style={styles.signatureBox}>
+                        <View style={[styles.signatureBox, data.signatures?.student?.hash ? localStyles.signatureBoxValid : {}]}>
                             <Text style={styles.signatureLabel}>L’élève</Text>
-                            {data.signatures?.studentImg && <Image src={data.signatures.studentImg} style={{ width: 100, height: 40 }} />}
-                            {data.signatures?.studentCode && (
-                                <View style={localStyles.authCodeBox}>
-                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.studentSignatureId || data.signatures.studentCode}</Text>
-                                </View>
-                            )}
+                            <SignatureContent
+                                img={data.signatures?.student?.img}
+                                hash={data.signatures?.student?.hash}
+                                date={data.signatures?.student?.signedAt}
+                                code={data.signatures?.student?.code}
+                                signatureId={data.signatures?.student?.signatureId}
+                            />
                         </View>
                         {/* Legal Rep Box - Always Visible */}
-                        <View style={styles.signatureBox}>
+                        <View style={[styles.signatureBox, (data.signatures?.parent?.hash || (data.est_mineur === false && data.signatures?.student?.hash)) ? localStyles.signatureBoxValid : {}]}>
                             <Text style={styles.signatureLabel}>Le rep. légal {data.est_mineur ? '' : '(l\'élève majeur)'}</Text>
-
                             {/* If Minor: Show Parent Signature */}
                             {data.est_mineur && (
-                                <>
-                                    {data.signatures?.parentImg && <Image src={data.signatures.parentImg} style={{ width: 100, height: 40 }} />}
-                                    {data.signatures?.parentCode && (
-                                        <View style={localStyles.authCodeBox}>
-                                            <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.parentSignatureId || data.signatures.parentCode}</Text>
-                                        </View>
-                                    )}
-                                </>
+                                <SignatureContent
+                                    img={data.signatures?.parent?.img}
+                                    hash={data.signatures?.parent?.hash}
+                                    date={data.signatures?.parent?.signedAt}
+                                    code={data.signatures?.parent?.code}
+                                    signatureId={data.signatures?.parent?.signatureId}
+                                />
                             )}
-
                             {/* If Major: Show Student Signature (Self-Representation) */}
                             {!data.est_mineur && (
-                                <>
-                                    {data.signatures?.studentImg && <Image src={data.signatures.studentImg} style={{ width: 100, height: 40 }} />}
-                                    {data.signatures?.studentCode && (
-                                        <View style={localStyles.authCodeBox}>
-                                            <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.studentSignatureId || data.signatures.studentCode}</Text>
-                                        </View>
-                                    )}
-                                </>
+                                <SignatureContent
+                                    img={data.signatures?.student?.img}
+                                    hash={data.signatures?.student?.hash}
+                                    date={data.signatures?.student?.signedAt}
+                                    code={data.signatures?.student?.code}
+                                    signatureId={data.signatures?.student?.signatureId}
+                                />
                             )}
                         </View>
-                        <View style={styles.signatureBox}>
+                        <View style={[styles.signatureBox, data.signatures?.tutor?.hash ? localStyles.signatureBoxValid : {}]}>
                             <Text style={styles.signatureLabel}>Le tuteur</Text>
-                            {data.signatures?.tutorImg && <Image src={data.signatures.tutorImg} style={{ width: 100, height: 40 }} />}
-                            {data.signatures?.tutorCode && (
-                                <View style={localStyles.authCodeBox}>
-                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.tutorSignatureId || data.signatures.tutorCode}</Text>
-                                </View>
-                            )}
+                            <SignatureContent
+                                img={data.signatures?.tutor?.img}
+                                hash={data.signatures?.tutor?.hash}
+                                date={data.signatures?.tutor?.signedAt}
+                                code={data.signatures?.tutor?.code}
+                                signatureId={data.signatures?.tutor?.signatureId}
+                            />
                         </View>
-                        <View style={styles.signatureBox}>
+                        <View style={[styles.signatureBox, data.signatures?.teacher?.hash ? localStyles.signatureBoxValid : {}]}>
                             <Text style={styles.signatureLabel}>L’enseignant référent/Prof. Principal</Text>
-                            {data.signatures?.teacherImg && <Image src={data.signatures.teacherImg} style={{ width: 100, height: 40 }} />}
-                            {data.signatures?.teacherCode && (
-                                <View style={localStyles.authCodeBox}>
-                                    <Text style={localStyles.authCodeText}>Code d'authentification de la signature numérique : {data.signatures.teacherSignatureId || data.signatures.teacherCode}</Text>
-                                </View>
-                            )}
+                            <SignatureContent
+                                img={data.signatures?.teacher?.img}
+                                hash={data.signatures?.teacher?.hash}
+                                date={data.signatures?.teacher?.signedAt}
+                                code={data.signatures?.teacher?.code}
+                                signatureId={data.signatures?.teacher?.signatureId}
+                            />
                         </View>
                     </View>
                 </View>

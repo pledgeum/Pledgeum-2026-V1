@@ -15,6 +15,9 @@ import { pdfService } from '@/services/pdfService';
 import { MissionOrderPdf } from '@/components/pdf/MissionOrderPdf';
 import { ProfileModal } from '@/components/ui/ProfileModal';
 import { ParentValidationModal } from '@/components/ui/ParentValidationModal';
+import { TutorValidationModal } from '@/components/conventions/modals/TutorValidationModal';
+import { CompanyValidationModal } from '@/components/conventions/modals/CompanyValidationModal';
+import { SchoolHeadValidationModal } from '@/components/conventions/modals/SchoolHeadValidationModal';
 
 import {
   FileText, LogOut, Plus, Trash2, Loader2, AlertCircle, CheckCircle,
@@ -97,6 +100,7 @@ export default function Home() {
 
   const resetWizard = useWizardStore((state) => state.reset);
   const [showWizard, setShowWizard] = useState(false);
+
   const [isNotifOpen, setIsNotifOpen] = useState(false);
   const [isMobileMenuOpen, setIsMobileMenuOpen] = useState(false);
 
@@ -111,6 +115,7 @@ export default function Home() {
   const [isDeleteModalOpen, setIsDeleteModalOpen] = useState(false);
   const [isVerificationModalOpen, setIsVerificationModalOpen] = useState(false);
   const [verificationConvention, setVerificationConvention] = useState<Convention | null>(null);
+
   const [isVerificationPdfOpen, setIsVerificationPdfOpen] = useState(false);
   const [isVerificationAttestationOpen, setIsVerificationAttestationOpen] = useState(false);
   const [allConventions, setAllConventions] = useState<Convention[]>([]); // For search functionality
@@ -130,6 +135,8 @@ export default function Home() {
   const [isClassDocModalOpen, setIsClassDocModalOpen] = useState(false);
   const [studentDocModalClassId, setStudentDocModalClassId] = useState<string | null>(null); // New state
   const [isChildModalOpen, setIsChildModalOpen] = useState(false);
+
+
 
   // Helper to check profile completion
   const isProfileComplete = () => {
@@ -1079,9 +1086,10 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
   const { addNotification, name, schoolId } = useUserStore();
   const conventions = getConventionsByRole(role, userEmail, userId);
   const [selectedConventionId, setSelectedConventionId] = useState<string | null>(null);
-  const [isSigModalOpen, setIsSigModalOpen] = useState(false);
+  // Unified state: 'parent', 'tutor', 'establishment', 'head', 'signature', or null
+  const [activeModal, setActiveModal] = useState<string | null>(null);
+
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
-  const [isParentValModalOpen, setIsParentValModalOpen] = useState(false);
   const [isAbsenceModalOpen, setIsAbsenceModalOpen] = useState(false);
   const [isAttestationModalOpen, setIsAttestationModalOpen] = useState(false);
   const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
@@ -1089,9 +1097,9 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
   // Notify parent when any modal is open
   useEffect(() => {
     if (onModalChange) {
-      onModalChange(isSigModalOpen || isPdfModalOpen || isParentValModalOpen || isAbsenceModalOpen || isAttestationModalOpen || isTrackingModalOpen);
+      onModalChange(activeModal !== null || isPdfModalOpen || isAbsenceModalOpen || isAttestationModalOpen || isTrackingModalOpen);
     }
-  }, [isSigModalOpen, isPdfModalOpen, isParentValModalOpen, isAbsenceModalOpen, isAttestationModalOpen, isTrackingModalOpen, onModalChange]);
+  }, [activeModal, isPdfModalOpen, isAbsenceModalOpen, isAttestationModalOpen, isTrackingModalOpen, onModalChange]);
 
   // Evaluation Templates State
   const [evaluationTemplates, setEvaluationTemplates] = useState<any[]>([]);
@@ -1271,8 +1279,10 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
   const finalDisplayList = (() => {
     if (role !== 'student' || !schoolId) return sortedConventions;
 
-    const current = sortedConventions.filter(c => c.schoolId === schoolId);
-    const past = sortedConventions.filter(c => c.schoolId !== schoolId);
+    // FIX: Only consider "Previous/History" if schoolId IS DEFINED and strictly DIFFERENT
+    // If c.schoolId is missing/undefined, we assume it's current (optimistic update safety)
+    const current = sortedConventions.filter(c => !c.schoolId || c.schoolId === schoolId);
+    const past = sortedConventions.filter(c => c.schoolId && c.schoolId !== schoolId);
 
     if (past.length === 0) return current;
 
@@ -1323,16 +1333,34 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
 
     setSelectedConventionId(id);
     setIsBulkSigning(false);
-    if (role === 'parent') {
-      setIsParentValModalOpen(true);
-    } else {
-      setIsSigModalOpen(true);
+
+    switch (role) {
+      case 'parent':
+        setActiveModal('parent');
+        break;
+      case 'tutor':
+        setActiveModal('tutor');
+        break;
+      case 'company_head':
+        setActiveModal('establishment');
+        break;
+      case 'company_head_tutor':
+        if (dualRoleView === 'company_head') setActiveModal('establishment');
+        else setActiveModal('tutor');
+        break;
+      case 'school_head':
+        // case 'ddfpt': // Maybe DDFPT also signs? Usually they validate, head signs.
+        setActiveModal('head');
+        break;
+      default:
+        // For other roles or direct signature
+        setActiveModal('signature');
     }
   };
 
   const handleBulkSignClick = () => {
     setIsBulkSigning(true);
-    setIsSigModalOpen(true);
+    setActiveModal('signature');
   };
 
 
@@ -1357,16 +1385,30 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
           title: 'Signature groupée',
           message: `${conventionsToSign.length} conventions ont été signées avec succès.`
         });
+
+        // INSTANT REFRESH
+        router.refresh();
+
       } catch (error) {
         addNotification({ title: 'Erreur', message: 'Erreur lors de la signature groupée.' });
       }
     } else if (selectedConventionId) {
       try {
-        await signConvention(selectedConventionId, role, signatureImage, undefined, extraAuditLog, dualSign);
+        // Execute the sign action (Store updates internally optimistically or via response)
+        // Note: signConvention in Store already performs a set() on the state.
+        const result = await signConvention(selectedConventionId, role, signatureImage, undefined, extraAuditLog, dualSign);
+
         addNotification({
           title: 'Signature enregistrée',
           message: `La convention a été signée avec succès (Méthode: ${method === 'canvas' ? 'Manuscrite' : 'OTP'}).`,
         });
+
+        // STEP B: Server Sync (The "Double Tap")
+        // Ensures any server-side logic (or ISR) is reflected
+        router.refresh();
+
+        return result;
+
       } catch (error: any) {
         console.error("Sign Error:", error);
         addNotification({
@@ -1375,7 +1417,9 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
         });
       }
     }
-    setIsSigModalOpen(false);
+    // REMOVED: setIsSigModalOpen(false); 
+    // We keep the modal open to show the Success Screen (managed inside SignatureModal).
+    // The modal will call onClose() when the user clicks "OK".
   };
   // ...
   // ... (Skipping getActionLabel etc)
@@ -1666,7 +1710,7 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
 
               {/* Status Label - Right Side */}
               <div className="flex flex-col items-end space-y-1">
-                <ConventionStatusBadge status={conv.status} />
+                <ConventionStatusBadge status={conv.status} signatures={conv.signatures} />
                 <span className="text-xs text-gray-500">
                   {conv.updatedAt && !isNaN(new Date(conv.updatedAt).getTime())
                     ? `Mis à jour le ${new Date(conv.updatedAt).toLocaleDateString()}`
@@ -1834,8 +1878,8 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
       />
 
       <SignatureModal
-        isOpen={isSigModalOpen}
-        onClose={() => setIsSigModalOpen(false)}
+        isOpen={activeModal === 'signature'}
+        onClose={() => setActiveModal(null)}
         onSign={handleSign}
 
 
@@ -1886,11 +1930,38 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
       />
 
       <ParentValidationModal
-        isOpen={isParentValModalOpen}
-        onClose={() => setIsParentValModalOpen(false)}
+        isOpen={activeModal === 'parent'}
+        onClose={() => setActiveModal(null)}
         onValidated={() => {
-          setIsParentValModalOpen(false);
-          setIsSigModalOpen(true);
+          setActiveModal('signature');
+        }}
+        convention={conventions.find(c => c.id === selectedConventionId) as Convention}
+      />
+
+      <TutorValidationModal
+        isOpen={activeModal === 'tutor'}
+        onClose={() => setActiveModal(null)}
+        onValidated={() => {
+          setActiveModal('signature');
+        }}
+        convention={conventions.find(c => c.id === selectedConventionId) as Convention}
+      />
+
+      <CompanyValidationModal
+        isOpen={activeModal === 'establishment'}
+        onClose={() => setActiveModal(null)}
+        onValidated={() => {
+          setActiveModal('signature');
+        }}
+        convention={conventions.find(c => c.id === selectedConventionId) as Convention}
+      />
+
+      {/* School Head (Chef d'établissement) */}
+      <SchoolHeadValidationModal
+        isOpen={activeModal === 'head'}
+        onClose={() => setActiveModal(null)}
+        onValidated={() => {
+          setActiveModal('signature');
         }}
         convention={conventions.find(c => c.id === selectedConventionId) as Convention}
       />

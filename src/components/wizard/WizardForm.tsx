@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import { useWizardStore } from '@/store/wizard';
 import { useConventionStore } from '@/store/convention';
 import { useUserStore } from '@/store/user';
@@ -12,7 +12,7 @@ import { Step4Internship } from './Step4Internship';
 import { cn } from '@/lib/utils';
 import { Wand2, CheckCircle, Eraser } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
-import { useRef } from 'react';
+
 import { useSession } from "next-auth/react";
 import { SignatureModal } from '@/components/ui/SignatureModal';
 
@@ -81,7 +81,7 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
     const [isSuccess, setIsSuccess] = useState(false);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState<string | null>(null);
-    const { submitConvention } = useConventionStore();
+    const submitConvention = useConventionStore((state) => state.submitConvention);
     const { addNotification, email } = useUserStore();
     const { reset } = useWizardStore();
     const { data: session } = useSession();
@@ -123,49 +123,73 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
                 }
             };
 
-            await submitConvention(submissionData as any, user?.id || data.eleve_email || '', user?.id || 'bypassed_user');
+            console.log('[Wizard] Submitting convention data...', submissionData);
+            const resultId = await submitConvention(submissionData as any, user?.id || data.eleve_email || '', user?.id || 'bypassed_user');
+            console.log('[Wizard] Submission successful, ID:', resultId);
+
             addNotification({
                 title: 'Convention envoyée',
-                message: 'Votre demande a été transmise à l\'enseignant référent/professeur principal pour validation (sauvegardée dans Firestore).',
+                message: 'Votre demande a été transmise à l\'enseignant référent/professeur principal pour validation.',
             });
 
+            console.log('[Wizard] Setting success state...');
             setIsSuccess(true);
 
             // Wait 2 seconds then redirect
             setTimeout(() => {
-                reset();
+                console.log('[Wizard] Redirecting...');
+                // Unmount UI first to prevent PDF crash
                 if (onSuccess) onSuccess();
             }, 2000);
-        } catch (err) {
-            console.error(err);
+        } catch (err: any) {
+            console.error('[Wizard] Submission Error:', err);
             setError("Une erreur est survenue lors de l'envoi de la convention. Veuillez réessayer.");
         } finally {
             setIsLoading(false);
         }
     };
 
-    if (isSuccess) {
-        return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-                <div className="text-center p-8 bg-white rounded-2xl shadow-xl max-w-md w-full animate-in fade-in zoom-in duration-300">
-                    <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-6">
-                        <CheckCircle className="h-10 w-10 text-green-600" />
-                    </div>
-                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Convention Envoyée !</h2>
-                    <p className="text-gray-500 mb-6">
-                        Votre demande a été transmise avec succès. Vous allez être redirigé vers le tableau de bord...
-                    </p>
-                    <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
-                        <div className="h-full bg-green-500 animate-pulse w-full origin-left duration-[2000ms] transition-all"></div>
-                    </div>
-                </div>
-            </div>
-        );
+    // Freeze data when success is triggered to prevent PDF crash on store reset
+    const frozenDataRef = useRef(data);
+    if (!isSuccess) {
+        frozenDataRef.current = data;
     }
 
+    const previewData = useMemo(() => {
+        const dataToUse = isSuccess ? frozenDataRef.current : data;
+        return {
+            ...dataToUse,
+            signatures: {
+                ...dataToUse.signatures || {},
+                student: signature ? {
+                    signedAt: new Date().toISOString(),
+                    img: signature,
+                    code: 'PREVIEW'
+                } : undefined
+            }
+        };
+    }, [data, signature, isSuccess]);
+
     return (
-        <div className="min-h-screen bg-gray-50 flex flex-col items-center py-10 px-4 sm:px-6 lg:px-8">
-            <div className="w-full max-w-4xl">
+        <div className="min-h-screen bg-gray-50 flex flex-col items-center py-10 px-4 sm:px-6 lg:px-8 relative">
+            {isSuccess && (
+                <div className="fixed inset-0 z-50 bg-gray-50 flex items-center justify-center animate-in fade-in zoom-in duration-300">
+                    <div className="text-center p-8 bg-white rounded-2xl shadow-xl max-w-md w-full">
+                        <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-green-100 mb-6">
+                            <CheckCircle className="h-10 w-10 text-green-600" />
+                        </div>
+                        <h2 className="text-2xl font-bold text-gray-900 mb-2">Convention Envoyée !</h2>
+                        <p className="text-gray-500 mb-6">
+                            Votre demande a été transmise avec succès. Vous allez être redirigé vers le tableau de bord...
+                        </p>
+                        <div className="h-1 w-full bg-gray-100 rounded-full overflow-hidden">
+                            <div className="h-full bg-green-500 animate-pulse w-full origin-left duration-[2000ms] transition-all"></div>
+                        </div>
+                    </div>
+                </div>
+            )}
+
+            <div className={`w-full max-w-4xl transition-opacity duration-300 ${isSuccess ? 'opacity-0 pointer-events-none absolute' : 'opacity-100'}`}>
                 <div className="flex justify-between items-center mb-8">
                     <h1 className="text-3xl font-extrabold text-blue-900 tracking-tight">Convention PFMP</h1>
                     {(email === 'demo_access@pledgeum.fr' || email === 'pledgeum@gmail.com') && (
@@ -195,7 +219,7 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
                                 <p className="text-gray-600">Veuillez vérifier le document ci-dessous avant de l'envoyer.</p>
                             </div>
 
-                            <PdfPreview data={{ ...data, signatures: { ...data.signatures, studentImg: signature || undefined } }} />
+                            <PdfPreview data={previewData} />
 
                             <div className="border-t border-gray-200 pt-6">
                                 <h3 className="text-lg font-bold text-gray-900 mb-4 text-center">Signature de l'élève</h3>
@@ -206,6 +230,7 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
                                             <button
                                                 type="button"
                                                 onClick={clearSignature}
+                                                disabled={isSuccess}
                                                 className="mt-2 text-sm text-red-500 hover:text-red-700 flex items-center"
                                             >
                                                 <Eraser className="w-4 h-4 mr-1" />
@@ -244,8 +269,8 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
                                 ) : (
                                     <button
                                         onClick={handleSubmit}
-                                        disabled={isLoading}
-                                        className={`w-full max-w-sm px-8 py-3 bg-green-600 text-white font-bold rounded-xl shadow-lg flex items-center justify-center ${isLoading ? 'opacity-75 cursor-not-allowed' : 'hover:bg-green-700 hover:scale-105 transition-all'}`}
+                                        disabled={isLoading || isSuccess}
+                                        className={`w-full max-w-sm px-8 py-3 bg-green-600 text-white font-bold rounded-xl shadow-lg flex items-center justify-center ${isLoading || isSuccess ? 'opacity-75 cursor-not-allowed' : 'hover:bg-green-700 hover:scale-105 transition-all'}`}
                                     >
                                         {isLoading ? (
                                             <>

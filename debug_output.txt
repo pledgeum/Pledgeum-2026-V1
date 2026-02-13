@@ -1,3 +1,59 @@
-Sending request...
-STATUS: 500
-BODY: {"error":"Update Failed (Verbose)","message":"column \"profile_json\" does not exist","stack":"error: column \"profile_json\" does not exist\n    at /Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/pg/lib/client.js:588:17\n    at process.processTicksAndRejections (node:internal/process/task_queues:103:5)\n    at async PUT (/Users/fabricedumasdelage/Downloads/convention-pfmp/.next/dev/server/chunks/[root-of-the-server]__3ff80efd._.js:247:32)\n    at async AppRouteRouteModule.do (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/compiled/next-server/app-route-turbo.runtime.dev.js:5:37789)\n    at async AppRouteRouteModule.handle (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/compiled/next-server/app-route-turbo.runtime.dev.js:5:45045)\n    at async responseGenerator (/Users/fabricedumasdelage/Downloads/convention-pfmp/.next/dev/server/chunks/node_modules_e0d12308._.js:17095:38)\n    at async AppRouteRouteModule.handleResponse (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/compiled/next-server/app-route-turbo.runtime.dev.js:1:187851)\n    at async handleResponse (/Users/fabricedumasdelage/Downloads/convention-pfmp/.next/dev/server/chunks/node_modules_e0d12308._.js:17157:32)\n    at async handler (/Users/fabricedumasdelage/Downloads/convention-pfmp/.next/dev/server/chunks/node_modules_e0d12308._.js:17210:13)\n    at async DevServer.renderToResponseWithComponentsImpl (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/base-server.js:1413:9)\n    at async DevServer.renderPageComponent (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/base-server.js:1465:24)\n    at async DevServer.renderToResponseImpl (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/base-server.js:1515:32)\n    at async DevServer.pipeImpl (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/base-server.js:1021:25)\n    at async NextNodeServer.handleCatchallRenderRequest (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/next-server.js:394:17)\n    at async DevServer.handleRequestImpl (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/base-server.js:912:17)\n    at async /Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/dev/next-dev-server.js:382:20\n    at async Span.traceAsyncFn (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/trace/trace.js:157:20)\n    at async DevServer.handleRequest (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/dev/next-dev-server.js:378:24)\n    at async invokeRender (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/lib/router-server.js:240:21)\n    at async handleRequest (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/lib/router-server.js:436:24)\n    at async requestHandlerImpl (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/lib/router-server.js:484:13)\n    at async Server.requestListener (/Users/fabricedumasdelage/Downloads/convention-pfmp/node_modules/next/dist/server/lib/start-server.js:226:13)","sqlState":"42703"}
+Connected to DB
+=== LATEST CONVENTION ===
+ID: conv_y8nfmpre1
+STATUS: SUBMITTED
+RAW SIGNATURES (from metadata):
+{
+  "studentAt": "2026-02-11T10:36:14.279Z",
+  "studentImg": "data:image/png;base64,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"
+}
+FULL METADATA KEYS: [
+  'type',
+  'userId',
+  'ent_nom',
+  'eleve_cp',
+  'ent_pays',
+  'prof_nom',
+  'ecole_nom',
+  'ecole_tel',
+  'eleve_nom',
+  'eleve_tel',
+  'ent_siret',
+  'ent_ville',
+  'est_mineur',
+  'prof_email',
+  'signatures',
+  'tuteur_nom',
+  'eleve_email',
+  'eleve_ville',
+  'ent_adresse',
+  'ent_rep_nom',
+  'eleve_classe',
+  'eleve_prenom',
+  'tuteur_email',
+  'ecole_adresse',
+  'eleve_adresse',
+  'ent_rep_email',
+  'rep_legal_nom',
+  'rep_legal_tel',
+  'ecole_chef_nom',
+  'stage_date_fin',
+  'stage_horaires',
+  'ent_code_postal',
+  'frais_transport',
+  'rep_legal_email',
+  'stage_activites',
+  'tuteur_fonction',
+  'diplome_intitule',
+  'ecole_chef_email',
+  'ent_rep_fonction',
+  'stage_date_debut',
+  'frais_hebergement',
+  'rep_legal_adresse',
+  'frais_restauration',
+  'stage_duree_heures',
+  'eleve_date_naissance',
+  'tuteur_meme_personne',
+  'gratification_montant',
+  'stage_adresse_differente'
+]

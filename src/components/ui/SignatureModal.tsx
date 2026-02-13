@@ -10,7 +10,7 @@ import { parseISO, format } from 'date-fns';
 interface SignatureModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSign: (method: 'canvas' | 'otp', signatureImage?: string, extraAuditLog?: any, dualSign?: boolean) => Promise<void> | void;
+    onSign: (method: 'canvas' | 'otp', signatureImage?: string, extraAuditLog?: any, dualSign?: boolean) => Promise<any> | void;
     title?: string;
     signeeName: string;
     signeeEmail: string;
@@ -38,6 +38,9 @@ export function SignatureModal({
     const [loading, setLoading] = useState(false);
     const [isDualSignChecked, setIsDualSignChecked] = useState(false);
     const [justification, setJustification] = useState('');
+    const [isSuccess, setIsSuccess] = useState(false);
+    const [emailErrorDetails, setEmailErrorDetails] = useState<string | null>(null);
+
     const sigCanvas = useRef<any>({});
     const { isDemoMode, openEmailModal } = useDemoStore();
     const { conventions, updateConvention } = useConventionStore();
@@ -73,10 +76,60 @@ export function SignatureModal({
             setOtpSent(false);
             setActiveTab('canvas');
             setIsDualSignChecked(false);
+            setIsSuccess(false); // Reset success state
         }
     }, [isOpen]);
 
     if (!isOpen) return null;
+
+    // SUCCESS VIEW
+    if (isSuccess) {
+        return (
+            <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
+                <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col items-center p-6 text-center space-y-4 animate-in fade-in zoom-in-95">
+                    <div className="bg-green-100 p-4 rounded-full">
+                        <CheckCircle className="w-12 h-12 text-green-600" />
+                    </div>
+                    <h3 className="text-2xl font-bold text-gray-900">Convention signée avec succès ! ✅</h3>
+                    <p className="text-gray-600 text-lg">
+                        La convention a bien été signée.
+                        {emailErrorDetails ? (
+                            <span className="block mt-2 text-orange-600 font-bold text-base">
+                                Attention : L'email de confirmation n'a pas pu être envoyé.
+                            </span>
+                        ) : (
+                            " Un email de confirmation a été envoyé."
+                        )}
+                    </p>
+
+                    {emailErrorDetails ? (
+                        <div className="bg-orange-50 px-4 py-3 rounded-lg border border-orange-200 text-left w-full">
+                            <div className="flex items-start">
+                                <AlertTriangle className="w-5 h-5 text-orange-600 mr-2 mt-0.5 shrink-0" />
+                                <div>
+                                    <h4 className="text-sm font-bold text-orange-800">Échec de l'envoi d'email</h4>
+                                    <p className="text-xs text-orange-700 mt-1 font-mono break-all">
+                                        {emailErrorDetails}
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    ) : (
+                        <div className={convention?.rep_legal_email ? "bg-green-50 px-6 py-3 rounded-lg border border-green-200 font-mono text-base font-bold text-green-900 break-all w-full" : "bg-red-50 px-6 py-3 rounded-lg border border-red-200 font-mono text-base font-bold text-red-900 break-all w-full"}>
+                            {convention?.rep_legal_email ? `Email envoyé à : ${convention.rep_legal_email}` : "ERREUR : Email parent manquant !"}
+                        </div>
+                    )}
+
+                    <button
+                        onClick={onClose}
+                        className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition-colors mt-4"
+                    >
+                        OK, c'est noté
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     const handleClear = () => {
         sigCanvas.current.clear();
@@ -89,7 +142,7 @@ export function SignatureModal({
         }
 
         // We pass the isDualSignChecked state to the onSign callback
-        await onSign('canvas', signature, undefined, isDualSignChecked);
+        return await onSign('canvas', signature, undefined, isDualSignChecked);
     };
 
     const handleCanvasSubmit = async () => {
@@ -104,7 +157,17 @@ export function SignatureModal({
         setLoading(true);
         try {
             const dataUrl = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
-            await handleSignatureSave(dataUrl);
+            const result = await handleSignatureSave(dataUrl);
+            console.log('[MODAL] Transitioning to Success Step', result); // [DEBUG]
+
+            // Check for Warnings (Email Failures) from API
+            if (result && result.warning === 'EMAIL_FAILED') {
+                setEmailErrorDetails(result.debugError || "Erreur d'envoi d'email");
+            } else {
+                setEmailErrorDetails(null);
+            }
+
+            setIsSuccess(true); // Switch to success view
         } catch (e: any) {
             console.error(e);
             alert(e.message || "Erreur lors de la signature");
@@ -118,7 +181,6 @@ export function SignatureModal({
 
         if (isDemoMode) {
             // Fake Send - Open Interceptor Modal
-            // Simulate "Sent"
             setTimeout(() => {
                 setLoading(false);
                 setOtpSent(true);
@@ -157,7 +219,7 @@ export function SignatureModal({
         if (justification && convention && justification !== convention.derogationJustification) {
             await updateConvention(conventionId, { derogationJustification: justification });
         }
-        await onSign('otp', dataUrl, auditLog, isDualSignChecked);
+        return await onSign('otp', dataUrl, auditLog, isDualSignChecked);
     };
 
     const handleOtpSubmit = async () => {
@@ -207,6 +269,7 @@ export function SignatureModal({
                     };
 
                     await handleOtpOnSign(dataUrl, fakeAuditLog);
+                    setIsSuccess(true); // Switch to success view
                 } else {
                     alert("Code incorrect (Le code de démo est 1234)");
                 }
@@ -254,7 +317,16 @@ export function SignatureModal({
 
                 // Pass the audit log from the API response
                 const { auditLog } = await res.json();
-                await handleOtpOnSign(dataUrl, auditLog);
+                const result = await handleOtpOnSign(dataUrl, auditLog);
+
+                // Check for Warnings (Email Failures) from API
+                if (result && result.warning === 'EMAIL_FAILED') {
+                    setEmailErrorDetails(result.debugError || "Erreur d'envoi d'email");
+                } else {
+                    setEmailErrorDetails(null);
+                }
+
+                setIsSuccess(true); // Switch to success view
             } else {
                 alert("Code incorrect ou expiré.");
             }

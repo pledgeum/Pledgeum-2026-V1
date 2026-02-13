@@ -1,153 +1,119 @@
+
 'use client';
 
 import { useState } from 'react';
-import { signOut, useSession } from 'next-auth/react';
 import { useRouter } from 'next/navigation';
-import { validatePassword } from '@/lib/validation';
-import { Loader2, Lock, LogOut, CheckCircle2 } from 'lucide-react';
-import { useUserStore } from '@/store/user';
+import { useSession } from 'next-auth/react';
 
 export default function UpdatePasswordPage() {
-    const [newPassword, setNewPassword] = useState('');
-    const [confirmPassword, setConfirmPassword] = useState('');
-    const [error, setError] = useState<string | null>(null);
+    const [password, setPassword] = useState('');
+    const [confirm, setConfirm] = useState('');
+    const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
     const router = useRouter();
-    const { data: session, update } = useSession();
+    const { update } = useSession(); // Used to update session client-side
 
-    const handleUpdate = async (e: React.FormEvent) => {
+    const handleSubmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        setError(null);
+        setError('');
+
+        if (password !== confirm) {
+            setError('Les mots de passe ne correspondent pas.');
+            return;
+        }
+
+        if (password.length < 8) {
+            setError('Le mot de passe doit faire au moins 8 caractères.');
+            return;
+        }
+
         setLoading(true);
 
-        // 1. Validate Complexity
-        const validation = validatePassword(newPassword);
-        if (!validation.isValid) {
-            setError(validation.error);
-            setLoading(false);
-            return;
-        }
-
-        // 2. Validate Match
-        if (newPassword !== confirmPassword) {
-            setError("Les mots de passe ne correspondent pas.");
-            setLoading(false);
-            return;
-        }
-
         try {
-            if (!session?.user?.email) {
-                setError("Utilisateur non connecté.");
-                setLoading(false);
-                return;
-            }
-
-            // Call API to update password
-            const response = await fetch('/api/auth/update-password', {
+            const res = await fetch('/api/auth/update-password', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ password: newPassword })
+                body: JSON.stringify({ password })
             });
 
-            if (!response.ok) {
-                const data = await response.json();
-                throw new Error(data.error || "Erreur lors de la mise à jour.");
+            const data = await res.json();
+
+            if (!res.ok) {
+                throw new Error(data.error || 'Erreur lors de la mise à jour.');
             }
 
-            // Success - Update session and Redirect
+            // Force session update to reflect must_change_password = false
             await update({ must_change_password: false });
+
+            // Redirect to dashboard
             router.push('/');
             router.refresh();
 
         } catch (err: any) {
-            console.error(err);
-            setError("Erreur lors de la mise à jour : " + err.message);
+            setError(err.message);
         } finally {
             setLoading(false);
         }
     };
 
-    const handleLogout = async () => {
-        await signOut({ callbackUrl: '/login' });
-    };
-
     return (
-        <div className="min-h-screen flex items-center justify-center bg-gray-50 px-4">
-            <div className="max-w-md w-full space-y-8 bg-white p-8 rounded-xl shadow-lg transition-all">
-
-                <div className="text-center">
-                    <div className="mx-auto h-12 w-12 bg-blue-100 rounded-full flex items-center justify-center mb-4">
-                        <Lock className="h-6 w-6 text-blue-600" />
-                    </div>
-                    <h2 className="text-3xl font-extrabold text-gray-900">Mise à jour requise</h2>
-                    <p className="mt-2 text-sm text-gray-600">
-                        Pour garantir la sécurité de votre compte, veuillez mettre à jour votre mot de passe avec nos nouveaux critères.
+        <div className="flex min-h-screen items-center justify-center bg-gray-50 px-4 py-12 sm:px-6 lg:px-8">
+            <div className="w-full max-w-md space-y-8 bg-white p-8 shadow-lg rounded-xl border border-gray-100">
+                <div>
+                    <h2 className="mt-6 text-center text-3xl font-bold tracking-tight text-gray-900">
+                        Sécurisez votre compte
+                    </h2>
+                    <p className="mt-2 text-center text-sm text-gray-600">
+                        C'est votre première connexion. Veuillez définir un nouveau mot de passe personnel.
                     </p>
                 </div>
-
-                <div className="bg-blue-50 p-4 rounded-lg border border-blue-100">
-                    <h3 className="text-sm font-medium text-blue-900 mb-2 flex items-center">
-                        <CheckCircle2 className="w-4 h-4 mr-2" />
-                        Critères de sécurité
-                    </h3>
-                    <ul className="text-sm text-blue-800 space-y-1 list-disc list-inside pl-1">
-                        <li>12 caractères minimum</li>
-                        <li>Au monde une majuscule et une minuscule</li>
-                        <li>Au moins un chiffre</li>
-                        <li>Au moins un caractère spécial</li>
-                    </ul>
-                </div>
-
-                <form className="mt-8 space-y-6" onSubmit={handleUpdate}>
-                    <div className="space-y-4">
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Nouveau mot de passe</label>
+                <form className="mt-8 space-y-6" onSubmit={handleSubmit}>
+                    <input type="hidden" name="remember" value="true" />
+                    <div className="-space-y-px rounded-md shadow-sm">
+                        <div className="mb-4">
+                            <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">Nouveau mot de passe</label>
                             <input
+                                id="password"
+                                name="password"
                                 type="password"
                                 required
-                                className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
-                                value={newPassword}
-                                onChange={(e) => setNewPassword(e.target.value)}
-                                placeholder="••••••••••••"
+                                className="relative block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 px-3"
+                                placeholder="Nouveau mot de passe"
+                                value={password}
+                                onChange={(e) => setPassword(e.target.value)}
                             />
                         </div>
                         <div>
-                            <label className="block text-sm font-medium text-gray-700 mb-1">Confirmer le mot de passe</label>
+                            <label htmlFor="confirm-password" className="block text-sm font-medium text-gray-700 mb-1">Confirmer mot de passe</label>
                             <input
+                                id="confirm-password"
+                                name="confirm-password"
                                 type="password"
                                 required
-                                className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm transition-colors"
-                                value={confirmPassword}
-                                onChange={(e) => setConfirmPassword(e.target.value)}
-                                placeholder="••••••••••••"
+                                className="relative block w-full rounded-md border-0 py-1.5 text-gray-900 ring-1 ring-inset ring-gray-300 placeholder:text-gray-400 focus:z-10 focus:ring-2 focus:ring-inset focus:ring-indigo-600 sm:text-sm sm:leading-6 px-3"
+                                placeholder="Confirmer mot de passe"
+                                value={confirm}
+                                onChange={(e) => setConfirm(e.target.value)}
                             />
                         </div>
                     </div>
 
                     {error && (
-                        <div className="text-red-600 text-sm text-center bg-red-50 p-3 rounded-md border border-red-100">
+                        <div className="text-red-500 text-sm text-center">
                             {error}
                         </div>
                     )}
 
-                    <button
-                        type="submit"
-                        disabled={loading}
-                        className="group relative w-full flex justify-center py-2.5 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-blue-600 hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 disabled:opacity-70 shadow-sm transition-all"
-                    >
-                        {loading ? <Loader2 className="animate-spin h-5 w-5" /> : "Mettre à jour mon mot de passe"}
-                    </button>
+                    <div>
+                        <button
+                            type="submit"
+                            disabled={loading}
+                            className="group relative flex w-full justify-center rounded-md bg-indigo-600 px-3 py-2 text-sm font-semibold text-white hover:bg-indigo-500 focus-visible:outline focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-indigo-600 disabled:opacity-50"
+                        >
+                            {loading ? 'Mise à jour...' : 'Mettre à jour mon mot de passe'}
+                        </button>
+                    </div>
                 </form>
-
-                <div className="text-center mt-6">
-                    <button
-                        onClick={handleLogout}
-                        className="inline-flex items-center text-sm font-medium text-gray-500 hover:text-gray-800 transition-colors"
-                    >
-                        <LogOut className="w-4 h-4 mr-2" />
-                        Se déconnecter
-                    </button>
-                </div>
             </div>
         </div>
     );

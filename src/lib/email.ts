@@ -8,10 +8,10 @@ interface EmailOptions {
     attachments?: any[];
 }
 
-export async function sendEmail({ to, subject, text, attachments }: EmailOptions): Promise<boolean> {
+export async function sendEmail({ to, subject, text, attachments }: EmailOptions): Promise<{ success: boolean; error?: string }> {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !process.env.EMAIL_HOST || !process.env.EMAIL_PORT) {
         console.error('Email Error: Missing configuration.');
-        return false;
+        return { success: false, error: 'Missing email configuration (EMAIL_USER, EMAIL_PASS, etc.)' };
     }
 
     const port = Number(process.env.EMAIL_PORT);
@@ -31,10 +31,10 @@ export async function sendEmail({ to, subject, text, attachments }: EmailOptions
                 read: false,
                 from: process.env.EMAIL_FROM || 'Pledgeum <noreply@pledgeum.fr>'
             });
-            return true;
-        } catch (e) {
+            return { success: true };
+        } catch (e: any) {
             console.error('[DEMO] Failed to save email to inbox', e);
-            return true;
+            return { success: true }; // Treat as success for demo flow to avoid blocking
         }
     }
 
@@ -59,9 +59,10 @@ export async function sendEmail({ to, subject, text, attachments }: EmailOptions
         });
 
         console.log('Email sent successfully:', info.messageId);
-        return true;
-    } catch (error) {
+        return { success: true };
+    } catch (error: any) {
         console.error('Nodemailer Error:', error);
-        return false;
+        console.error('SMTP Error Details:', JSON.stringify(error, null, 2));
+        return { success: false, error: error.message || 'Unknown SMTP Error' };
     }
 }

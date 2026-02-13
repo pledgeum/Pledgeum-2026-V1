@@ -157,8 +157,9 @@ export function SignatureTimeline({ convention, onRemind, onEditEmail }: Signatu
 }
 
 function getStepStatus(step: string, c: Convention): 'completed' | 'current' | 'pending' {
-    const s = c.status;
+    const s = c.status as string;
     const isMinor = c.est_mineur;
+    const signatures = c.signatures as any;
 
     // Status Flow Ref:
     // Minor: SUBMITTED -> SIGNED_PARENT -> VALIDATED_TEACHER -> SIGNED_COMPANY / SIGNED_TUTOR (Order independent) -> VALIDATED_HEAD
@@ -166,18 +167,25 @@ function getStepStatus(step: string, c: Convention): 'completed' | 'current' | '
 
     switch (step) {
         case 'student':
-            // Student always starts by creating/submitting
+            // Robustness: Check signature timestamp first
+            if (signatures?.student?.signedAt || signatures?.studentAt) return 'completed';
+
+            // Fallback to Status Logic
             if (s === 'DRAFT') return 'current';
             return 'completed';
 
         case 'parent':
             // FIX: If major, parent step is marked completed immediately (simulated skip)
             if (!isMinor) return 'completed';
+            if (signatures?.parent?.signedAt || signatures?.parentAt) return 'completed';
+
             if (s === 'SUBMITTED') return 'current';
             if (['SIGNED_PARENT', 'VALIDATED_TEACHER', 'SIGNED_COMPANY', 'SIGNED_TUTOR', 'VALIDATED_HEAD', 'COMPLETED'].includes(s)) return 'completed';
             return 'pending';
 
         case 'teacher':
+            if (signatures?.teacher?.signedAt || signatures?.teacherAt) return 'completed';
+
             if (isMinor) {
                 if (s === 'SIGNED_PARENT') return 'current';
                 if (['VALIDATED_TEACHER', 'SIGNED_COMPANY', 'SIGNED_TUTOR', 'VALIDATED_HEAD', 'COMPLETED'].includes(s)) return 'completed';
@@ -190,7 +198,7 @@ function getStepStatus(step: string, c: Convention): 'completed' | 'current' | '
 
         case 'company':
             // Check specific signature first
-            if (c.signatures?.companyAt) return 'completed';
+            if (signatures?.company?.signedAt || signatures?.companyAt) return 'completed';
 
             // Open for signing if Teacher validated
             if (['VALIDATED_TEACHER', 'SIGNED_TUTOR'].includes(s)) return 'current';
@@ -198,14 +206,14 @@ function getStepStatus(step: string, c: Convention): 'completed' | 'current' | '
             // If status is SIGNED_COMPANY it implies company signed? 
             // But if dual sign, maybe tutor signed first -> SIGNED_TUTOR. Company still needs to sign.
             // If status is SIGNED_COMPANY, typically Company signed. 
-            // So relying on c.signatures.companyAt is safest for "completed".
+            // So relying on signatures.companyAt is safest for "completed".
 
             if (s === 'SIGNED_COMPANY') return 'completed'; // Redundant fallback
             if (['VALIDATED_HEAD', 'COMPLETED'].includes(s)) return 'completed'; // Final states
             return 'pending';
 
         case 'tutor':
-            if (c.signatures?.tutorAt) return 'completed';
+            if (signatures?.tutor?.signedAt || signatures?.tutorAt) return 'completed';
 
             // Open for signing if Teacher validated
             if (['VALIDATED_TEACHER', 'SIGNED_COMPANY'].includes(s)) return 'current';
@@ -215,6 +223,8 @@ function getStepStatus(step: string, c: Convention): 'completed' | 'current' | '
             return 'pending';
 
         case 'head':
+            if (signatures?.head?.signedAt || signatures?.headAt) return 'completed';
+
             // Head signs when BOTH Company and Tutor have signed.
             // Simplified check: If status is SIGNED_COMPANY or SIGNED_TUTOR, we might be waiting for the other?
             // Head needs BOTH. 
@@ -223,7 +233,7 @@ function getStepStatus(step: string, c: Convention): 'completed' | 'current' | '
             // "VALIDATED_HEAD" is completion.
 
             // Logic: If both Company & Tutor signed, Head can sign.
-            const bothSigned = c.signatures?.companyAt && c.signatures?.tutorAt;
+            const bothSigned = (signatures?.company?.signedAt || signatures?.companyAt) && (signatures?.tutor?.signedAt || signatures?.tutorAt);
             if (bothSigned && s !== 'VALIDATED_HEAD' && s !== 'COMPLETED') return 'current';
 
             if (['VALIDATED_HEAD', 'COMPLETED'].includes(s)) return 'completed';

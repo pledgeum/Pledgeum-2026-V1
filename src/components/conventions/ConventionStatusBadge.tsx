@@ -17,7 +17,7 @@ export type WorkflowStatus =
 
 const statusConfig: Record<WorkflowStatus, { label: string; className: string }> = {
     DRAFT: { label: 'Brouillon', className: 'bg-gray-100 text-gray-800 border-gray-200' },
-    SUBMITTED: { label: 'Soumise (En attente signature parent)', className: 'bg-blue-100 text-blue-800 border-blue-200' },
+    SUBMITTED: { label: 'Soumise (En attente signature parent)', className: 'bg-green-100 text-green-800 border-green-200' },
     SIGNED_PARENT: { label: 'Signée par le Parent', className: 'bg-blue-200 text-blue-900 border-blue-300' },
     VALIDATED_TEACHER: { label: 'Validée par le Prof.', className: 'bg-indigo-100 text-indigo-800 border-indigo-200' },
     SIGNED_COMPANY: { label: 'Signée par l\'Entreprise', className: 'bg-purple-100 text-purple-800 border-purple-200' },
@@ -29,13 +29,24 @@ const statusConfig: Record<WorkflowStatus, { label: string; className: string }>
     CANCELLED: { label: 'Annulée', className: 'bg-red-100 text-red-800 border-red-200' },
 };
 
-export const ConventionStatusBadge = ({ status }: { status: string }) => {
+export const ConventionStatusBadge = ({ status, signatures }: { status: string, signatures?: any }) => {
     // Default to DRAFT if unknown
     const config = statusConfig[status as WorkflowStatus] || statusConfig['DRAFT'];
 
+    // Robustness: Override color/label if Student Signed but status lags
+    // This ensures "Green" feedback immediately after signature
+    const isStudentSigned = signatures?.student?.signedAt || signatures?.studentAt;
+    const effectiveClass = (status === 'DRAFT' && isStudentSigned)
+        ? "bg-green-100 text-green-800 border-green-200" // Explicitly Green as requested
+        : config.className;
+
+    const effectiveLabel = (status === 'DRAFT' && isStudentSigned)
+        ? "Signée par l'élève (En cours de validation)" // Custom label
+        : config.label;
+
     return (
-        <Badge variant="outline" className={`px-2 py-1 ${config.className}`}>
-            {config.label}
+        <Badge variant="outline" className={`px-2 py-1 ${effectiveClass}`}>
+            {effectiveLabel}
         </Badge>
     );
 };

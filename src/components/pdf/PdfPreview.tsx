@@ -4,14 +4,15 @@ import { Convention } from '@/store/convention';
 import QRCode from 'qrcode';
 import { useState, useEffect } from 'react';
 import { generateVerificationUrl } from '@/app/actions/sign';
-import { PDFViewer, PDFDownloadLink } from '@react-pdf/renderer';
+import { PDFDownloadLink } from '@react-pdf/renderer';
+import { PdfViewerWrapper } from '@/components/ui/PdfViewerWrapper';
 
 interface PdfPreviewProps {
     data: Partial<Convention>;
     onClose?: () => void;
 }
 
-export default function PdfPreview({ data, onClose }: PdfPreviewProps) {
+const PdfPreview = ({ data, onClose }: PdfPreviewProps) => {
     const isModal = !!onClose;
     const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
     const [hashDisplay, setHashDisplay] = useState<string>('');
@@ -72,9 +73,9 @@ export default function PdfPreview({ data, onClose }: PdfPreviewProps) {
                 </div>
             </div>
             <div className="flex-1 bg-gray-100 overflow-hidden relative">
-                <PDFViewer width="100%" height="100%" style={{ width: '100%', height: '100%' }} className="w-full h-full">
+                <PdfViewerWrapper className="w-full h-full" height="100%">
                     <ConventionPdf data={normalizedData} qrCodeUrl={qrCodeUrl} hashCode={hashDisplay} />
-                </PDFViewer>
+                </PdfViewerWrapper>
             </div>
         </div>
     );
@@ -88,4 +89,6 @@ export default function PdfPreview({ data, onClose }: PdfPreviewProps) {
     }
 
     return Content;
-}
+};
+
+export default React.memo(PdfPreview);

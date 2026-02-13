@@ -18,6 +18,9 @@ const EXCLUDED_PATHS = [
     '/favicon.ico'
 ];
 
+// List of roles that do NOT need a UAI attached to their profile
+const rolesExemptFromUai = ['parent', 'tutor', 'company_head', 'company_admin', 'company_head_tutor'];
+
 export function ProfileGuard({ children }: { children: React.ReactNode }) {
     const { data: session, status } = useSession();
     const loading = status === "loading";
@@ -42,6 +45,17 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
                 return;
             }
 
+            // Check for password change requirement immediately
+            if ((user as any).must_change_password) {
+                if (pathname === '/auth/update-password') {
+                    // Safety Brake: Already there, allow render
+                    setIsChecking(false);
+                    return;
+                }
+                router.push('/auth/update-password');
+                return;
+            }
+
             // User is logged in. 
             // Always ensure profile is loaded and matches current user
             const storeId = useUserStore.getState().id;
@@ -58,7 +72,7 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
             const needsFetch = !fetchAttempted.current ||
                 (profileData && Object.keys(profileData).length === 0) ||
                 (storeId !== user.id) ||
-                (!storeUai && !isLoadingProfile);
+                (!storeUai && !isLoadingProfile && !rolesExemptFromUai.includes(user.role as any));
 
             if (needsFetch && !isLoadingProfile) {
                 console.log("[ProfileGuard] Fetching profile. Reason: ", { attempted: fetchAttempted.current, storeId, sessionId: user.id, hasUai: !!storeUai });
@@ -76,6 +90,8 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
             }
 
 
+
+
             // Check exclusions AFTER data is potentially loaded
             const isExcluded = EXCLUDED_PATHS.some(p => pathname?.startsWith(p));
             if (isExcluded) {
@@ -85,6 +101,18 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
             }
 
             // Profile loaded. Now check completeness.
+
+            // Enforce UAI for non-exempt roles (Students, Teachers, Admins)
+            // If they don't have a UAI, they shouldn't be here (unless excluded path)
+            if (!storeUai && !rolesExemptFromUai.includes(user.role as any)) {
+                const target = '/onboarding/establishment';
+                if (pathname !== target && !pathname?.startsWith('/onboarding')) {
+                    console.log("ProfileGuard: Redirecting to establishment onboarding due to missing UAI");
+                    router.push(target);
+                    return;
+                }
+            }
+
             if (!isComplete) {
                 // DISABLED PERMANENTLY: Stop forcing redirection to complete-profile
                 // router.push('/complete-profile');

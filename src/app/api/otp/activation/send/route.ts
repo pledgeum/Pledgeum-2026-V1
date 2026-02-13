@@ -31,8 +31,8 @@ export async function POST(request: Request) {
             text: `Bonjour,\n\nVoici votre code de vérification pour activer votre compte : ${code}\n\nCe code est valable 10 minutes.\n\nCordialement,\nL'équipe.`
         });
 
-        if (!emailSent) {
-            console.error("Failed to send activation email to", email);
+        if (!emailSent.success) {
+            console.error("Failed to send activation email to", email, emailSent.error);
             return NextResponse.json({ error: "Erreur lors de l'envoi de l'email" }, { status: 500 });
         }
 

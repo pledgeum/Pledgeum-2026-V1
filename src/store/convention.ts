@@ -36,7 +36,18 @@ export interface AuditLog {
     ip?: string;
 }
 
-export interface Convention extends ConventionData {
+export interface SignatureDetail {
+    signedAt: string;
+    name?: string;
+    hash?: string;
+    ip?: string;
+    code?: string;
+    signatureId?: string;
+    img?: string;
+    method?: 'OTP' | 'CANVAS';
+}
+
+export interface Convention extends Omit<ConventionData, 'signatures'> {
     auditLogs?: AuditLog[];
     certificateHash?: string;
     attestationHash?: string;
@@ -47,6 +58,9 @@ export interface Convention extends ConventionData {
     createdAt: string;
     updatedAt: string;
     lastReminderAt?: string; // Timestamp of the last reminder sent
+    metadata?: Record<string, any>; // Flexible metadata storage for backward compatibility or extra fields
+    dateStart?: string;
+    dateEnd?: string;
 
     // New Fields
     absences?: Absence[];
@@ -66,24 +80,13 @@ export interface Convention extends ConventionData {
     derogationJustification?: string;
 
     signatures: {
-        teacherAt?: string;
-        teacherImg?: string;
-        teacherCode?: string;
-        studentAt?: string;
-        studentImg?: string;
-        studentCode?: string;
-        parentAt?: string;
-        parentImg?: string;
-        parentCode?: string;
-        companyAt?: string;
-        companyImg?: string;
-        companyCode?: string;
-        tutorAt?: string;
-        tutorImg?: string;
-        tutorCode?: string;
-        headAt?: string;
-        headImg?: string;
-        headCode?: string;
+        student?: SignatureDetail;
+        parent?: SignatureDetail;
+        teacher?: SignatureDetail;
+        company_head?: SignatureDetail;
+        tutor?: SignatureDetail;
+        head?: SignatureDetail;
+        [key: string]: SignatureDetail | undefined;
     };
     feedbacks: {
         author: string;
@@ -98,7 +101,7 @@ interface ConventionState {
     isLoading?: boolean;
     addConvention: (data: ConventionData, studentId: string) => void;
     updateStatus: (id: string, newStatus: ConventionStatus) => void;
-    signConvention: (id: string, role: string, signatureImage?: string, code?: string, extraAuditLog?: AuditLog, dualSign?: boolean) => Promise<void>;
+    signConvention: (id: string, role: string, signatureImage?: string, code?: string, extraAuditLog?: AuditLog, dualSign?: boolean) => Promise<any>;
     addFeedback: (id: string, author: string, message: string) => void;
     assignTrackingTeacher: (conventionId: string, trackingTeacherEmail: string) => Promise<void>;
     getConventionsByRole: (role: string, userEmail: string, currentUserId?: string) => Convention[];
@@ -183,18 +186,41 @@ const MOCK_CONVENTION: Convention = {
 
     // Signatures (All signed)
     signatures: {
-        studentAt: "2023-01-15T10:00:00Z",
-        studentCode: "ELEVETEST-12345",
-        parentAt: "2023-01-15T18:00:00Z",
-        parentCode: "PARENTTE-12345",
-        teacherAt: "2023-01-16T09:00:00Z",
-        teacherCode: "PROFREFE-12345",
-        companyAt: "2023-01-16T14:00:00Z",
-        companyCode: "ENTREPRI-12345",
-        tutorAt: "2023-01-16T14:05:00Z",
-        tutorCode: "TUTEURST-12345",
-        headAt: "2023-01-17T08:30:00Z",
-        headCode: "DIRECTEU-12345",
+        student: {
+            signedAt: "2023-01-15T10:00:00Z",
+            code: "ELEVETEST-12345",
+            name: "Lucas Martin",
+            hash: "mock_hash_student"
+        },
+        parent: {
+            signedAt: "2023-01-15T18:00:00Z",
+            code: "PARENTTE-12345",
+            name: "Paul Martin",
+            hash: "mock_hash_parent"
+        },
+        teacher: {
+            signedAt: "2023-01-16T09:00:00Z",
+            code: "PROFREFE-12345",
+            name: "M. Dupont",
+            hash: "mock_hash_teacher"
+        },
+        company_head: {
+            signedAt: "2023-01-16T14:00:00Z",
+            code: "ENTREPRI-12345",
+            name: "Mme Directrice",
+            hash: "mock_hash_company"
+        },
+        tutor: {
+            signedAt: "2023-01-16T14:05:00Z",
+            code: "TUTEURST-12345",
+            name: "M. Tuteur",
+            hash: "mock_hash_tutor"
+        },
+        head: {
+            signedAt: "2023-01-17T08:30:00Z",
+            code: "DIRECTEU-12345",
+            name: "Mme Martin"
+        }
     },
     // Attestation
     attestationSigned: true,
@@ -417,7 +443,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                     c.id === id ? {
                         ...c,
                         status: newStatus as ConventionStatus, // Cast to ensure type safety
-                        signatures: newSignatures,
+                        signatures: newMetadata.signatures || c.signatures, // Use nested signatures from metadata
                         updatedAt: now,
                         auditLogs: [
                             ...(c.auditLogs || []),
@@ -432,6 +458,8 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                     } : c
                 )
             }));
+
+            return updatedData; // Return full data for UI handling (warnings)
 
             // Notifications are currently handled in the logic below this block in the original file.
             // We should PRESERVE the notification logic or move it to the API. 
@@ -581,9 +609,24 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
 
             const { data: createdConvention } = await response.json();
 
+            // Map DB columns (snake_case) to Frontend model (camelCase)
+            // This mirrors the logic in fetchConventions to ensure consistency
+            const mappedConvention = {
+                ...(createdConvention.metadata || {}),
+                ...createdConvention,
+                studentId: createdConvention.studentId || createdConvention.student_uid || data.studentId, // Fallback to arg
+                schoolId: createdConvention.schoolId || createdConvention.establishment_uai || createdConvention.establishmentUai || data.schoolId, // Fallback to data
+                createdAt: createdConvention.createdAt || createdConvention.created_at || new Date().toISOString(),
+                updatedAt: createdConvention.updatedAt || createdConvention.updated_at || new Date().toISOString(),
+                stage_date_debut: createdConvention.dateStart || createdConvention.date_start || (createdConvention.metadata && createdConvention.metadata.stage_date_debut) || data.stage_date_debut,
+                stage_date_fin: createdConvention.dateEnd || createdConvention.date_end || (createdConvention.metadata && createdConvention.metadata.stage_date_fin) || data.stage_date_fin,
+                // Ensure signatures object is preserved (it's in metadata but flattened in some views)
+                signatures: createdConvention.metadata?.signatures || createdConvention.signatures || {}
+            };
+
             // Add to local state
             set((state) => ({
-                conventions: [...state.conventions, createdConvention],
+                conventions: [...state.conventions, mappedConvention],
                 isLoading: false
             }));
 
@@ -945,7 +988,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
         // 1. Check Local State First (Fast)
         for (const conv of conventions) {
             const s = conv.signatures;
-            if (s.studentCode === code || s.parentCode === code || s.teacherCode === code || s.companyCode === code || s.tutorCode === code || s.headCode === code) {
+            if (s.student?.code === code || s.parent?.code === code || s.teacher?.code === code || s.company_head?.code === code || s.tutor?.code === code || s.head?.code === code) {
                 return conv;
             }
             if (conv.attestation_signature_code === code) {

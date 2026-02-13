@@ -14,12 +14,12 @@ export async function generateVerificationUrl(data: Convention, type: 'conventio
         // For convention, include signatories
         ...(type === 'convention' ? {
             sigs: [
-                { n: data.eleve_nom + ' ' + data.eleve_prenom, r: 'Élève', d: data.signatures?.studentAt },
-                { n: data.rep_legal_nom ? data.rep_legal_nom + ' ' + data.rep_legal_prenom : 'Représentant Légal', r: 'Représentant Légal', d: data.signatures?.parentAt },
-                { n: data.tuteur_nom, r: 'Tuteur', d: data.signatures?.tutorAt },
-                { n: data.prof_nom, r: 'Enseignant Référent', d: data.signatures?.teacherAt },
-                { n: data.ent_rep_nom, r: 'Représentant Entreprise', d: data.signatures?.companyAt },
-                { n: data.ecole_chef_nom, r: "Chef d'Établissement", d: data.signatures?.headAt },
+                { n: data.eleve_nom + ' ' + data.eleve_prenom, r: 'Élève', d: data.signatures?.student?.signedAt || data.signatures?.studentAt },
+                { n: data.rep_legal_nom ? data.rep_legal_nom + ' ' + data.rep_legal_prenom : 'Représentant Légal', r: 'Représentant Légal', d: data.signatures?.parent?.signedAt || data.signatures?.parentAt },
+                { n: data.tuteur_nom, r: 'Tuteur', d: data.signatures?.tutor?.signedAt || data.signatures?.tutorAt },
+                { n: data.prof_nom, r: 'Enseignant Référent', d: data.signatures?.teacher?.signedAt || data.signatures?.teacherAt },
+                { n: data.ent_rep_nom, r: 'Représentant Entreprise', d: data.signatures?.company?.signedAt || data.signatures?.companyAt },
+                { n: data.ecole_chef_nom, r: "Chef d'Établissement", d: data.signatures?.head?.signedAt || data.signatures?.headAt },
             ].filter(s => s.d) // Only keep signed ones
         } : {}),
         // For attestation, include hours

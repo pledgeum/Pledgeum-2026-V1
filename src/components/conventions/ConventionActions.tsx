@@ -12,7 +12,7 @@ interface ConventionActionsProps {
     onSign?: () => void; // Trigger external signature modal
 }
 
-export const ConventionActions = ({ convention, onUpdate }: ConventionActionsProps) => {
+export const ConventionActions = ({ convention, onUpdate, onSign }: ConventionActionsProps) => {
     const { data: session } = useSession();
     const { role } = useUserStore();
     const userRole = role; // Map usage
@@ -63,6 +63,15 @@ export const ConventionActions = ({ convention, onUpdate }: ConventionActionsPro
         );
     }
 
+    // 1.5 Parent: SUBMITTED -> SIGNED_PARENT (Via Modal)
+    if (userRole === 'parent' && convention.status === 'SUBMITTED') {
+        return (
+            <Button onClick={onSign} className="bg-blue-600 hover:bg-blue-700 text-white">
+                <FileSignature className="w-4 h-4 mr-2" /> Vérifier et Signer
+            </Button>
+        );
+    }
+
     // 2. Teacher (PP): SUBMITTED/SIGNED_PARENT -> VALIDATED_TEACHER
     // Should verify if this teacher is the main teacher of the class?
     // For now, any teacher with access (RLS handles read access).
@@ -79,6 +88,29 @@ export const ConventionActions = ({ convention, onUpdate }: ConventionActionsPro
                 </Button>
             </div>
         );
+    }
+
+    // 2.5 Partners (Company/Tutor): VALIDATED_TEACHER -> SIGNED_COMPANY / SIGNED_TUTOR
+    // They can sign if teacher validated.
+    // Order: Doesn't strict matter, but usually Company first? 
+    // Let's allow parallel signing if status is VALIDATED_TEACHER or one of them signed.
+    const isReadyForPartner = convention.status === 'VALIDATED_TEACHER' || convention.status === 'SIGNED_COMPANY' || convention.status === 'SIGNED_TUTOR';
+
+    if (isReadyForPartner) {
+        if (userRole === 'company_head' && !convention.signatures?.companyAt) {
+            return (
+                <Button onClick={onSign} className="bg-purple-600 hover:bg-purple-700 text-white">
+                    <FileSignature className="w-4 h-4 mr-2" /> Signer pour l'Entreprise
+                </Button>
+            );
+        }
+        if (userRole === 'tutor' && !convention.signatures?.tutorAt) {
+            return (
+                <Button onClick={onSign} className="bg-orange-600 hover:bg-orange-700 text-white">
+                    <FileSignature className="w-4 h-4 mr-2" /> Signer en tant que Tuteur
+                </Button>
+            );
+        }
     }
 
     // 3. School Head: SIGNED_COMPANY/SIGNED_TUTOR -> VALIDATED_HEAD (Final)

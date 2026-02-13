@@ -76,7 +76,16 @@ export const conventionSchema = z.object({
 
     })).optional(),
 
-    signatures: z.any().optional(), // Allow passing signatures during creation
+    signatures: z.record(z.string(), z.object({
+        signedAt: z.string(),
+        name: z.string().optional(),
+        hash: z.string().optional(),
+        ip: z.string().optional(),
+        code: z.string().optional(),
+        signatureId: z.string().optional(),
+        img: z.string().optional(),
+        method: z.string().optional(),
+    })).optional(),
 
     // Sécurité / Cloisonnement
     schoolId: z.string().optional(),

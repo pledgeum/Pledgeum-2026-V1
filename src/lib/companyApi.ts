@@ -1,3 +1,5 @@
+'use server';
+
 export interface CompanyResult {
     siret: string;
     nom_complet: string;

@@ -84,36 +84,36 @@ export function SignatureVerificationModal({ isOpen, onClose, onViewDocument }: 
                 signerName = convention.tuteur_nom;
                 date = convention.attestationDate || '';
             } else {
-                const s = convention.signatures;
-                if (s.studentCode === code.trim()) {
+                const s = convention.signatures as any;
+                if ((s.student?.code || s.studentCode) === code.trim()) {
                     role = 'Élève';
                     signerName = `${convention.eleve_prenom} ${convention.eleve_nom}`;
-                    date = s.studentAt || '';
+                    date = s.student?.signedAt || s.studentAt || '';
                 }
-                else if (s.parentCode === code.trim()) {
+                else if ((s.parent?.code || s.parentCode) === code.trim()) {
                     role = 'Représentant Légal';
                     signerName = convention.rep_legal_nom || '';
-                    date = s.parentAt || '';
+                    date = s.parent?.signedAt || s.parentAt || '';
                 }
-                else if (s.teacherCode === code.trim()) {
+                else if ((s.teacher?.code || s.teacherCode) === code.trim()) {
                     role = 'Enseignant Référent/Professeur Principal';
                     signerName = convention.prof_nom;
-                    date = s.teacherAt || '';
+                    date = s.teacher?.signedAt || s.teacherAt || '';
                 }
-                else if (s.companyCode === code.trim()) {
+                else if ((s.company?.code || s.companyCode) === code.trim()) {
                     role = 'Représentant Entreprise';
                     signerName = convention.ent_rep_nom;
-                    date = s.companyAt || '';
+                    date = s.company?.signedAt || s.companyAt || '';
                 }
-                else if (s.tutorCode === code.trim()) {
+                else if ((s.tutor?.code || s.tutorCode) === code.trim()) {
                     role = 'Tuteur';
                     signerName = convention.tuteur_nom;
-                    date = s.tutorAt || '';
+                    date = s.tutor?.signedAt || s.tutorAt || '';
                 }
-                else if (s.headCode === code.trim()) {
+                else if ((s.head?.code || s.headCode) === code.trim()) {
                     role = 'Chef d\'Établissement';
                     signerName = convention.ecole_chef_nom;
-                    date = s.headAt || '';
+                    date = s.head?.signedAt || s.headAt || '';
                 }
             }
             setResult({ convention, role, type, signerName, date });

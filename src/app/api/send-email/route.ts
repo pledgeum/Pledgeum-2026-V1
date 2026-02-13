@@ -50,14 +50,14 @@ export async function POST(request: Request) {
             text = body.text;
         }
 
-        const success = await sendEmail({ to, subject, text, attachments: attachments.length > 0 ? attachments : undefined });
+        const result = await sendEmail({ to, subject, text, attachments: attachments.length > 0 ? attachments : undefined });
 
         // --- POSTGRES LOGGING ---
         try {
             const client = await pool.connect();
             await client.query(
                 `INSERT INTO notification_logs (recipient_email, subject, status, meta_data) VALUES ($1, $2, $3, $4)`,
-                [to, subject, success ? 'SENT' : 'FAILED', JSON.stringify({ sender: user.id, hasAttachments: attachments.length > 0 })]
+                [to, subject, result.success ? 'SENT' : 'FAILED', JSON.stringify({ sender: user.id, hasAttachments: attachments.length > 0, error: result.error })]
             );
             client.release();
         } catch (logErr) {
@@ -66,8 +66,8 @@ export async function POST(request: Request) {
         }
         // ------------------------
 
-        if (!success) {
-            return NextResponse.json({ error: "Failed to send email via shared utility." }, { status: 500 });
+        if (!result.success) {
+            return NextResponse.json({ error: result.error || "Failed to send email via shared utility." }, { status: 500 });
         }
 
         return NextResponse.json({ success: true });
