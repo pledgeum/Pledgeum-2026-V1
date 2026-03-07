@@ -2,7 +2,7 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { doc, getDoc, setDoc, serverTimestamp } from '@/lib/firebase';
+import { doc, getDoc } from 'firebase/firestore';
 import { db } from '@/lib/firebase';
 import { useSession } from "next-auth/react";
 import { useUserStore } from '@/store/user';
@@ -72,42 +72,53 @@ export default function EvaluationFillingPage() {
     const fetchData = async () => {
         setIsLoading(true);
         try {
-            // 1. Fetch Template
-            const templateRef = doc(db, 'evaluation_templates', templateId);
-            const templateSnap = await getDoc(templateRef);
-            if (!templateSnap.exists()) {
+            // 1. Fetch Template (Migrated to PostgreSQL API)
+            const templateRes = await fetch(`/api/templates`); // We fetch all or specific if we had a pure GET /[id] route, but here we can just use the GET / route and filter if needed, OR we should add a GET to /[id] 
+            // Wait, we don't have a GET on /api/templates/[id] yet. Let's add it or just fetch from the list.
+            // Actually, the easiest is to add a GET handler to /api/templates/[id]/route.ts
+            // Let me create the GET handler first or just use the list. Using the list is safe for now as it's small, but GET /[id] is better.
+
+            const templateResult = await fetch(`/api/templates/${templateId}`);
+            if (!templateResult.ok) {
                 toast.error("Template introuvable");
                 router.back();
                 return;
             }
-            const data = templateSnap.data() as any;
+
+            const templateDataJson = await templateResult.json();
+            const data = templateDataJson.template;
+
+            if (!data) {
+                toast.error("Template introuvable");
+                router.back();
+                return;
+            }
+
             // Handle both structure formats (flat or nested under 'structure')
-            // Older templates might be flat, newer are nested.
             const headers = data?.structure?.headers || data?.headers || [];
             const rows = data?.structure?.rows || data?.rows || [];
             const synthesisEnabled = data?.synthesis?.enabled ?? data?.structure?.synthesisEnabled ?? data?.synthesisEnabled ?? false;
             const synthesisTitle = data?.synthesis?.title || data?.structure?.synthesisTitle || data?.synthesisTitle || "Synthèse globale";
 
             const templateData = {
-                id: templateSnap.id,
+                id: data.id,
                 ...data,
                 headers,
                 rows,
                 synthesisEnabled,
                 synthesisTitle
-            } as EvaluationTemplate;
+            };
 
             setTemplate(templateData);
 
-            // 2. Fetch Convention
-            const conventionRef = doc(db, 'conventions', conventionId);
-            const conventionSnap = await getDoc(conventionRef);
-            if (!conventionSnap.exists()) {
+            // 2. Fetch Convention from PostgreSQL API
+            const conventionResponse = await fetch(`/api/conventions/${conventionId}`);
+            if (!conventionResponse.ok) {
                 toast.error("Convention introuvable");
                 router.back();
                 return;
             }
-            const conventionData = { id: conventionSnap.id, ...conventionSnap.data() } as Convention;
+            const conventionData = await conventionResponse.json() as Convention;
             setConvention(conventionData);
 
             // 3. Check Permissions
@@ -140,24 +151,26 @@ export default function EvaluationFillingPage() {
                 setReadOnly(true);
             }
 
-            // 4. Fetch Existing Submission
-            const submissionId = `${conventionId}_${templateId}`;
-            const submissionRef = doc(db, 'evaluations', submissionId);
-            const submissionSnap = await getDoc(submissionRef);
+            // 4. Fetch Existing Submission from Postgres API
+            const submissionResponse = await fetch(`/api/evaluations/${conventionId}/${templateId}`);
 
-            if (submissionSnap.exists()) {
-                const data = submissionSnap.data() as EvaluationSubmission;
-                setAnswers(data.answers || {});
-                setSynthesis(data.synthesis || '');
-                setEvaluationData(data);
-            } else {
-                if (!canEdit) {
-                    // Viewer trying to view non-existent evaluation -> Empty State
-                    setEvaluationData(null);
+            if (submissionResponse.ok) {
+                const submissionResult = await submissionResponse.json();
+
+                if (submissionResult.evaluation) {
+                    const data = submissionResult.evaluation as EvaluationSubmission;
+                    setAnswers(data.answers || {});
+                    setSynthesis(data.synthesis || '');
+                    setEvaluationData(data);
                 } else {
-                    // Editor creating new evaluation -> Initial State
-                    setEvaluationData({} as any);
+                    if (!canEdit) {
+                        setEvaluationData(null);
+                    } else {
+                        setEvaluationData({} as any);
+                    }
                 }
+            } else {
+                setEvaluationData(canEdit ? {} as any : null);
             }
 
         } catch (error) {
@@ -196,22 +209,21 @@ export default function EvaluationFillingPage() {
         if (readOnly || !user || !template || !convention) return;
         setIsSaving(true);
         try {
-            const submissionId = `${conventionId}_${templateId}`;
-            const submissionRef = doc(db, 'evaluations', submissionId);
+            const response = await fetch('/api/evaluations', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    conventionId,
+                    templateId,
+                    evaluatorEmail: user.email,
+                    answers,
+                    synthesis
+                })
+            });
 
-            const submissionData: EvaluationSubmission = {
-                id: submissionId,
-                templateId,
-                conventionId,
-                studentId: convention.studentId,
-                answers,
-                synthesis,
-                updatedAt: serverTimestamp(),
-                updatedBy: user.id || 'unknown'
-            };
+            if (!response.ok) throw new Error("Erreur serveur API");
 
-            await setDoc(submissionRef, submissionData, { merge: true });
-            toast.success("Évaluation sauvegardée");
+            toast.success("Évaluation sauvegardée avec succès");
             router.push('/');
         } catch (error) {
             console.error("Error saving evaluation:", error);

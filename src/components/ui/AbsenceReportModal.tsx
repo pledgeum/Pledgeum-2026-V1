@@ -38,18 +38,27 @@ export function AbsenceReportModal({ isOpen, onClose, convention, currentUserEma
 
     const getDayDuration = (dateStr: string): number => {
         if (!convention.stage_horaires || !dateStr) return 7;
-        const d = new Date(dateStr);
-        const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
-        const dayName = days[d.getDay()];
-        const schedule = (convention.stage_horaires as any)[dayName];
-        if (!schedule) return 0;
-        const calc = (start?: string, end?: string) => {
-            if (!start || !end) return 0;
-            const [sh, sm] = start.split(':').map(Number);
-            const [eh, em] = end.split(':').map(Number);
-            return Math.max(0, (eh * 60 + em) - (sh * 60 + sm)) / 60;
-        };
-        return calc(schedule.matin_debut, schedule.matin_fin) + calc(schedule.apres_midi_debut, schedule.apres_midi_fin);
+        try {
+            const d = new Date(dateStr);
+            const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
+            const dayName = days[d.getDay()];
+            const schedule = (convention.stage_horaires as any)[dayName];
+
+            if (!schedule) return 7; // Default 7h if no specific schedule found
+
+            const calc = (start?: string, end?: string) => {
+                if (!start || !end || !start.includes(':') || !end.includes(':')) return 0;
+                const [sh, sm] = start.split(':').map(Number);
+                const [eh, em] = end.split(':').map(Number);
+                if (isNaN(sh) || isNaN(sm) || isNaN(eh) || isNaN(em)) return 0;
+                return Math.max(0, (eh * 60 + em) - (sh * 60 + sm)) / 60;
+            };
+
+            const total = calc(schedule.matin_debut, schedule.matin_fin) + calc(schedule.apres_midi_debut, schedule.apres_midi_fin);
+            return total > 0 ? (Math.round(total * 10) / 10) : 7;
+        } catch (e) {
+            return 7; // Fallback sécurisé
+        }
     };
 
     const handleCreate = async (e: React.FormEvent) => {
@@ -70,7 +79,7 @@ export function AbsenceReportModal({ isOpen, onClose, convention, currentUserEma
             setFormData({ ...formData, reason: '', duration: 7 });
         } catch (error) {
             console.error("Failed to report:", error);
-            alert("Erreur lors du signalement.");
+            alert(`Erreur lors du signalement: ${error instanceof Error ? error.message : "Erreur inconnue"}`);
         } finally {
             setLoading(false);
         }

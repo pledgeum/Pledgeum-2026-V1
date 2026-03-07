@@ -77,7 +77,18 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
             if (needsFetch && !isLoadingProfile) {
                 console.log("[ProfileGuard] Fetching profile. Reason: ", { attempted: fetchAttempted.current, storeId, sessionId: user.id, hasUai: !!storeUai });
                 fetchAttempted.current = true;
+
+                // Add a local timeout as an ultimate safety net for the fetch
+                const fetchTimeout = setTimeout(() => {
+                    if (isLoadingProfile) { // Check if it's still loading after timeout
+                        console.error("ProfileGuard: Profile fetch timed out (UI Fallback)");
+                        setLoadError(true); // Set error to display fallback UI
+                    }
+                }, 15000); // 15 seconds timeout
+
                 const success = await fetchUserProfile(user.id || '');
+                clearTimeout(fetchTimeout); // Clear timeout if fetch completes
+
                 if (!success) {
                     setLoadError(true);
                 }

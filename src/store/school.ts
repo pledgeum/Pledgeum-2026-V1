@@ -142,12 +142,14 @@ interface SchoolState {
 
     schoolName: string;
     schoolAddress: string;
+    schoolCity: string;
     schoolPhone: string;
     schoolHeadName: string;
     schoolHeadEmail: string;
     updateSchoolIdentity: (data: Partial<{
         schoolName: string;
         schoolAddress: string;
+        schoolCity: string;
         schoolPhone: string;
         schoolHeadName: string;
         schoolHeadEmail: string;
@@ -279,6 +281,7 @@ export const useSchoolStore = create<SchoolState>()(
                             identityUpdates = {
                                 schoolName: est.name || state.schoolName,
                                 schoolAddress: est.address || state.schoolAddress,
+                                schoolCity: est.city || state.schoolCity,
                                 schoolPhone: est.phone || est.telephone || state.schoolPhone,
                                 schoolHeadName: est.headName || state.schoolHeadName,
                                 schoolHeadEmail: est.admin_email || state.schoolHeadEmail
@@ -470,6 +473,7 @@ export const useSchoolStore = create<SchoolState>()(
             // Default: Lycée Ferdinand Buisson
             schoolName: "Lycée Polyvalent Ferdinand Buisson",
             schoolAddress: "6 rue Auguste Houzeau, 76504 Elbeuf",
+            schoolCity: "Elbeuf",
             schoolPhone: "02 32 96 48 00",
             schoolHeadName: "M. le Proviseur",
             schoolHeadEmail: "pledgeum@gmail.com",
@@ -869,6 +873,7 @@ export const useSchoolStore = create<SchoolState>()(
                     schoolName: "Lycée d'Excellence Démo",
                     schoolAddress: "1 Avenue de la République",
                     schoolPhone: "0100000000",
+                    schoolCity: "Paris",
                     schoolHeadName: "Proviseur Démo",
                     schoolHeadEmail: "demo@ecole.fr"
                 };
@@ -877,6 +882,7 @@ export const useSchoolStore = create<SchoolState>()(
                     schoolIdentity = {
                         schoolName: "Lycée de Démonstration (Sandbox)",
                         schoolAddress: "1 Avenue de la République, 76500 Elbeuf",
+                        schoolCity: "Elbeuf",
                         schoolPhone: "02 35 77 00 00",
                         schoolHeadName: "Fabrice Dumasdelage",
                         schoolHeadEmail: "fabrice.dumasdelage@gmail.com"

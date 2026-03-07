@@ -6,7 +6,7 @@ import { useSchoolStore } from '@/store/school';
 import { useDocumentStore, ClassDocument } from '@/store/documents';
 import { useSession } from "next-auth/react";
 import { useUserStore } from '@/store/user';
-import { uploadClassDocument } from '@/app/actions/documents';
+import { openBase64PDF } from '@/lib/utils';
 
 interface ClassDocumentModalProps {
     isOpen: boolean;
@@ -18,27 +18,28 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
     const { documents, fetchDocuments, fetchUserDocuments, uploadDocument, assignDocumentToClasses, deleteDocument, toggleSharing, loading, error } = useDocumentStore();
     const { data: session } = useSession();
     const user = session?.user;
-    const { role, profileData, name } = useUserStore();
+    const { role: userRole, profileData, name } = useUserStore();
+
+    // Access control check
+    const allowedRoles = ['admin', 'teacher', 'main_teacher'];
+    const currentRole = (user as any)?.role || userRole;
 
     const [activeTab, setActiveTab] = useState<'upload' | 'library'>('upload');
     const [editingDocId, setEditingDocId] = useState<string | null>(null);
 
     const [file, setFile] = useState<File | null>(null);
-    const [selectedClassIds, setSelectedClassIds] = useState<string[]>([]);
+    const [selectedClassNames, setSelectedClassNames] = useState<string[]>([]);
     const [uploading, setUploading] = useState(false);
     const [sharedWithSchool, setSharedWithSchool] = useState(false);
 
     useEffect(() => {
-        if (isOpen) {
-            if (activeTab === 'library' && user?.id) {
-                fetchUserDocuments(user.id, profileData?.ecole_nom || '');
-            } else {
-                fetchDocuments();
-            }
+        if (isOpen && allowedRoles.includes(currentRole)) {
+            fetchDocuments();
         }
-    }, [isOpen, activeTab, fetchDocuments, fetchUserDocuments, user, profileData]);
+    }, [isOpen, fetchDocuments, currentRole]);
 
     if (!isOpen) return null;
+    if (!allowedRoles.includes(currentRole)) return null;
 
     const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
         if (e.target.files && e.target.files[0]) {
@@ -62,31 +63,26 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
     };
 
     const handleUpload = async () => {
-        if (!file || selectedClassIds.length === 0 || !user) return;
+        if (!file || selectedClassNames.length === 0 || !user) return;
 
         setUploading(true);
         try {
-            const formData = new FormData();
-            formData.append('file', file);
-            formData.append('classIds', JSON.stringify(selectedClassIds));
-            formData.append('uploadedBy', user.id || '');
-            formData.append('type', 'OTHER');
-            formData.append('sharingData', JSON.stringify({
-                sharedWithSchool,
-                sharedBy: name || user.email || 'Enseignant',
-                schoolName: profileData?.ecole_nom
-            }));
+            const success = await uploadDocument(
+                file,
+                selectedClassNames,
+                user.id || '',
+                'OTHER',
+                { isShared: sharedWithSchool }
+            );
 
-            const result = await uploadClassDocument(formData);
-
-            if (result.success) {
+            if (success) {
                 setFile(null);
-                setSelectedClassIds([]);
+                setSelectedClassNames([]);
                 setSharedWithSchool(false);
                 alert("Document ajouté avec succès !");
-                fetchDocuments(); // Refresh list associated effectively
+                // fetchDocuments is called inside uploadDocument store method
             } else {
-                alert("Erreur lors de l'upload : " + result.error);
+                alert("Erreur lors de l'upload.");
             }
         } catch (err) {
             console.error(err);
@@ -98,7 +94,7 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
 
     const handleDelete = async (doc: ClassDocument) => {
         if (!confirm("Êtes-vous sûr de vouloir supprimer ce document ?")) return;
-        await deleteDocument(doc.id, doc.url);
+        await deleteDocument(doc.id);
     };
 
     return (
@@ -189,8 +185,8 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                                 <label key={cls.id} className="flex items-center space-x-2 text-sm cursor-pointer hover:bg-gray-50 p-1 rounded">
                                                     <input
                                                         type="checkbox"
-                                                        checked={selectedClassIds.includes(cls.id)}
-                                                        onChange={() => toggleClass(cls.id, selectedClassIds, setSelectedClassIds)}
+                                                        checked={selectedClassNames.includes(cls.name)}
+                                                        onChange={() => toggleClass(cls.name, selectedClassNames, setSelectedClassNames)}
                                                         className="rounded text-blue-600 focus:ring-blue-500"
                                                     />
                                                     <span className="truncate">{cls.name}</span>
@@ -219,9 +215,9 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
 
                                     <button
                                         onClick={handleUpload}
-                                        disabled={!file || selectedClassIds.length === 0 || uploading}
+                                        disabled={!file || selectedClassNames.length === 0 || uploading}
                                         className={`w-full flex justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white 
-                                    ${(!file || selectedClassIds.length === 0 || uploading) ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
+                                    ${(!file || selectedClassNames.length === 0 || uploading) ? 'bg-gray-400 cursor-not-allowed' : 'bg-blue-600 hover:bg-blue-700'}`}
                                     >
                                         {uploading ? <Loader2 className="w-5 h-5 animate-spin" /> : 'Mettre en ligne et attribuer'}
                                     </button>
@@ -255,10 +251,7 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                                                             checked={doc.sharedWithSchool || false}
                                                                             onChange={async (e) => {
                                                                                 const isShared = e.target.checked;
-                                                                                await toggleSharing(doc.id, isShared, {
-                                                                                    schoolName: profileData?.ecole_nom || '',
-                                                                                    sharedBy: name || user.email || 'Enseignant'
-                                                                                });
+                                                                                await toggleSharing(doc.id, isShared);
                                                                             }}
                                                                             className="sr-only peer"
                                                                         />
@@ -271,15 +264,18 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                                             </div>
                                                         )}
                                                         <p className="text-xs text-gray-500 truncate mt-1">
-                                                            Pour : {(classes || []).filter(c => doc.classIds && doc.classIds.includes(c.id)).map(c => c.name).join(', ') || 'Classes inconnues'}
-                                                            {/* • {doc.createdAt ? new Date(doc.createdAt).toLocaleDateString() : 'Date inconnue'} */}
+                                                            Pour : {doc.classIds?.join(', ') || 'Toutes les classes'}
                                                         </p>
                                                     </div>
                                                 </div>
                                                 <div className="flex items-center ml-4 space-x-2">
-                                                    <a href={doc.url} target="_blank" rel="noopener noreferrer" className="p-1 text-gray-400 hover:text-blue-600" title="Télécharger">
+                                                    <button
+                                                        onClick={() => openBase64PDF(doc.url, doc.name)}
+                                                        className="p-1 text-gray-400 hover:text-blue-600"
+                                                        title="Télécharger"
+                                                    >
                                                         <Download className="w-4 h-4" />
-                                                    </a>
+                                                    </button>
                                                     <button onClick={() => handleDelete(doc)} className="p-1 text-gray-400 hover:text-red-600" title="Supprimer">
                                                         <Trash2 className="w-4 h-4" />
                                                     </button>
@@ -324,9 +320,12 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                                 </div>
 
                                                 <div className="flex space-x-2">
-                                                    <a href={doc.url} target="_blank" rel="noopener noreferrer" className="text-gray-400 hover:text-blue-600 p-1">
+                                                    <button
+                                                        onClick={() => openBase64PDF(doc.url, doc.name)}
+                                                        className="text-gray-400 hover:text-blue-600 p-1"
+                                                    >
                                                         <Download className="w-4 h-4" />
-                                                    </a>
+                                                    </button>
                                                     {doc.uploadedBy === user?.id && (
                                                         <button onClick={() => handleDelete(doc)} className="text-gray-400 hover:text-red-500 p-1" title="Supprimer ce document">
                                                             <Trash2 className="w-4 h-4" />
@@ -346,19 +345,7 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                                                     checked={doc.sharedWithSchool || false}
                                                                     onChange={async (e) => {
                                                                         const isShared = e.target.checked;
-                                                                        // Optimistic update handled by store or we just wait
-                                                                        // We also need to make sure schoolName is set if it wasn't before?
-                                                                        // Actually toggleSharing just toggles the boolean. 
-                                                                        // If the doc was uploaded BEFORE sharing was implemented, it might lack 'schoolName' and 'sharedBy'.
-                                                                        // We might need a more robust 'updateSharing' function that sets these if missing.
-                                                                        // FOR NOW: Let's assume toggle only works well if we also patch metadata. 
-                                                                        // But toggleSharing in store ONLY updates 'sharedWithSchool'.
-                                                                        // I should update the store's toggleSharing to also set schoolName/sharedBy if enabling.
-                                                                        // Let's stick to the UI first.
-                                                                        await toggleSharing(doc.id, isShared, {
-                                                                            schoolName: profileData?.ecole_nom || '',
-                                                                            sharedBy: name || user.email || 'Enseignant'
-                                                                        });
+                                                                        await toggleSharing(doc.id, isShared);
                                                                     }}
                                                                     className="sr-only peer"
                                                                 />
@@ -390,11 +377,10 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                                                         checked={(doc.classIds || []).includes(cls.id)}
                                                                         onChange={async () => {
                                                                             const current = doc.classIds || [];
-                                                                            const newIds = current.includes(cls.id)
-                                                                                ? current.filter(id => id !== cls.id)
-                                                                                : [...current, cls.id];
+                                                                            const newIds = current.includes(cls.name)
+                                                                                ? current.filter(id => id !== cls.name)
+                                                                                : [...current, cls.name];
 
-                                                                            // Optimistic UI update could be complex with store, so let's call store directly
                                                                             assignDocumentToClasses(doc.id, newIds);
                                                                         }}
                                                                         className="rounded text-blue-600 focus:ring-blue-500 h-3 w-3"
@@ -414,10 +400,9 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
                                                     </div>
                                                 ) : (
                                                     <div className="flex flex-wrap gap-1 mt-1">
-                                                        {(doc.classIds && doc.classIds.length > 0) ? doc.classIds.map(cid => {
-                                                            const cName = classes.find(c => c.id === cid)?.name || 'Inconnue';
+                                                        {(doc.classIds && doc.classIds.length > 0) ? doc.classIds.map(cName => {
                                                             return (
-                                                                <span key={cid} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
+                                                                <span key={cName} className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-100 text-gray-800">
                                                                     {cName}
                                                                 </span>
                                                             );

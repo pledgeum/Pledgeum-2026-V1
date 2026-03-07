@@ -3,6 +3,7 @@
 import { useEffect } from 'react';
 import { FileText, Download, Loader2 } from 'lucide-react';
 import { useDocumentStore } from '@/store/documents';
+import { openBase64PDF } from '@/lib/utils';
 
 interface StudentDocumentModalProps {
     classId: string | null;
@@ -86,19 +87,13 @@ export function StudentDocumentModal({ classId, onClose }: StudentDocumentModalP
                                                 </div>
                                             </div>
                                             {doc.url ? (
-                                                <a
-                                                    href={doc.url}
-                                                    target="_blank"
-                                                    rel="noopener noreferrer"
+                                                <button
+                                                    onClick={() => openBase64PDF(doc.url, doc.name)}
                                                     className="flex items-center px-3 py-1.5 border border-transparent text-xs font-medium rounded-full text-indigo-700 bg-indigo-100 hover:bg-indigo-200 transition-colors cursor-pointer"
-                                                    onClick={(e) => {
-                                                        console.log("Downloading document:", doc.name, doc.url);
-                                                        // Optional: prevent default if you want to handle download manually, but _blank is usually best for PDF
-                                                    }}
                                                 >
                                                     <Download className="w-3 h-3 mr-1" />
                                                     Télécharger
-                                                </a>
+                                                </button>
                                             ) : (
                                                 <span className="text-xs text-gray-400 italic">Indisponible</span>
                                             )}

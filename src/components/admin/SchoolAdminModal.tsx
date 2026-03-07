@@ -100,9 +100,8 @@ function CheckableDropdown({ label, options, selected, onChange }: CheckableDrop
     );
 }
 
-import { pdf } from '@react-pdf/renderer';
-import { StudentCredentialsPdf } from '@/components/pdf/StudentCredentialsPdf';
-import { TeacherCredentialsPdf } from '@/components/pdf/TeacherCredentialsPdf';
+
+// PDF logic isolated
 
 interface SchoolAdminModalProps {
     isOpen: boolean;
@@ -128,17 +127,34 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
     } = useSchoolStore();
     const { conventions } = useConventionStore();
     // Removed local selected state in favor of derived visibility state
+    // Removed local selected state in favor of derived visibility state
+    const { email, role, schoolId } = useUserStore();
+    const [fetchedPartners, setFetchedPartners] = useState<PartnerCompany[]>([]);
+    const [isFetchingPartners, setIsFetchingPartners] = useState(false);
+
+    useEffect(() => {
+        if (schoolId && activeTab === 'partners') {
+            setIsFetchingPartners(true);
+            fetch(`/api/partners/search?uai=${schoolId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.partners) setFetchedPartners(data.partners);
+                })
+                .catch(err => console.error("Error fetching partners:", err))
+                .finally(() => setIsFetchingPartners(false));
+        }
+    }, [schoolId, activeTab]);
 
     // Derived Filter Data
     const uniqueActivities = useMemo(() => {
-        const set = new Set(partnerCompanies.map(p => p.activity).filter(Boolean));
+        const set = new Set(fetchedPartners.map(p => p.activity).filter(Boolean));
         return Array.from(set).sort();
-    }, [partnerCompanies]);
+    }, [fetchedPartners]);
 
     const uniqueJobs = useMemo(() => {
-        const set = new Set(partnerCompanies.flatMap(p => p.jobs || []).filter(Boolean));
+        const set = new Set(fetchedPartners.flatMap(p => p.jobs || []).filter(Boolean));
         return Array.from(set).sort();
-    }, [partnerCompanies]);
+    }, [fetchedPartners]);
 
     // Siret -> Classes Map from Conventions
     const classesBySiret = useMemo(() => {
@@ -181,15 +197,11 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
 
     // Filtered List (Simulating what student sees)
     const filteredPartners = useMemo(() => {
-        return partnerCompanies.filter(p => {
+        return fetchedPartners.filter(p => {
             // Activity Filter (Hidden Check)
             if (p.activity && hiddenActivities.includes(p.activity)) return false;
 
-            // Jobs Filter (More complex: Hide if ALL jobs are hidden? Or hide jobs from display?)
-            // Requirement: "Student doesn't see them on map".
-            // Implementation: We hide the COMPANY if its activity is hidden.
-            // For jobs/files: We hide the COMPANY if NONE of its jobs are visible? 
-            // Or we just use it as a robust filter: If I uncheck "Plumber", Plumbers disappear.
+            // Jobs Filter
             if (p.jobs && p.jobs.length > 0) {
                 const hasVisibleJob = p.jobs.some(j => !hiddenJobs.includes(j));
                 if (!hasVisibleJob) return false;
@@ -199,17 +211,12 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
             const partnerClasses = classesBySiret.get(p.siret);
             if (partnerClasses) {
                 const hasVisibleClass = Array.from(partnerClasses).some(c => !hiddenClasses.includes(c));
-                // If the company is linked ONLY to hidden classes, hide it.
-                // If it's linked to NO classes (new partner), it remains visible unless filtering strictly by class.
-                // Strategy: If existing links are ALL hidden, hide.
                 if (!hasVisibleClass && partnerClasses.size > 0) return false;
             }
 
             return true;
         });
-    }, [partnerCompanies, hiddenActivities, hiddenJobs, hiddenClasses, classesBySiret]);
-
-    const { email, role, schoolId } = useUserStore();
+    }, [fetchedPartners, hiddenActivities, hiddenJobs, hiddenClasses, classesBySiret]);
 
     // Permissions
     // "Head" check remains for identity strictness, but "Admin" capability is broader.
@@ -457,6 +464,8 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
             skipEmptyLines: true,
             complete: async (results) => {
                 console.log("Parse complete. Rows:", results.data.length);
+                const totalRows = results.data.length;
+                useSchoolStore.getState().setImportProgress({ current: 0, total: totalRows, status: "Analyse des entreprises..." });
 
                 // Helper to find key case-insensitively
                 const findKey = (row: any, search: string[]) => {
@@ -477,6 +486,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
 
                 for (const row of results.data as any[]) {
                     processedCount++;
+                    useSchoolStore.getState().setImportProgress({ current: processedCount, total: totalRows, status: "Recherche SIRENE..." });
                     // Flexible Column Matching
                     const activite = findKey(row, ['activite', 'activity']) || '';
                     const metiersRaw = findKey(row, ['metier', 'job', 'poste']) || '';
@@ -564,20 +574,42 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                     const state = useUserStore.getState();
                     const schoolId = state.schoolId;
 
-                    // Await import
-                    await importPartners(partnersToAdd, schoolId);
+                    if (!schoolId) {
+                        alert("Erreur: Aucun identifiant d'établissement trouvé.");
+                        setIsPartnerImporting(false);
+                        return;
+                    }
 
-                    if (schoolId) alert(`${addedCount} partenaires importés et sauvegardés.`);
-                    else alert(`${addedCount} partenaires importés (Locale seulement - ID établissement manquant).`);
+                    try {
+                        useSchoolStore.getState().setImportProgress({ current: processedCount, total: totalRows, status: "Sauvegarde en BDD..." });
+                        const response = await fetch('/api/partners/import', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ partners: partnersToAdd, schoolId })
+                        });
+
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.error || "Erreur serveur lors de l'import.");
+                        }
+
+                        const result = await response.json();
+                        alert(`Import Réussi.\nCréés: ${result.stats.created}\nMis à jour: ${result.stats.updated}`);
+                        fetch(`/api/partners/search?uai=${schoolId}`).then(res => res.json()).then(data => { if (data.partners) setFetchedPartners(data.partners); });
+                    } catch (err: any) {
+                        alert(`Erreur d'import : ${err.message}`);
+                    }
                 } else {
                     alert(`Aucune entreprise valide trouvée.`);
                 }
 
                 setIsPartnerImporting(false);
+                useSchoolStore.getState().setImportProgress(null);
                 if (partnerFileInputRef.current) partnerFileInputRef.current.value = '';
             },
             error: (error) => {
                 setIsPartnerImporting(false);
+                useSchoolStore.getState().setImportProgress(null);
                 console.error("CSV Import Error:", error);
                 alert(`Erreur technique lors de l'import CSV: ${error.message}`);
                 if (partnerFileInputRef.current) partnerFileInputRef.current.value = '';
@@ -693,13 +725,12 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
 
             // 3. Generate PDF Blob
             console.log("Generating PDF blob for", studentsToPrint.length, "students...");
-            const blob = await pdf(
-                <StudentCredentialsPdf
-                    students={studentsToPrint}
-                    classInfo={updatedClass}
-                    schoolName={schoolName}
-                />
-            ).toBlob();
+            const { generateStudentCredentialsBlob } = await import('@/components/pdf/CredentialPdfGenerator');
+            const blob = await generateStudentCredentialsBlob(
+                studentsToPrint,
+                updatedClass,
+                schoolName
+            );
 
             // 4. Download (Native)
             const url = URL.createObjectURL(blob);
@@ -926,7 +957,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                 alert(`Collaborateur ajouté, mais l'email n'a pas pu être envoyé : ${err.message}`);
             }
 
-            setNewCollab({ name: '', email: '', role: 'DDFPT' });
+            setNewCollab({ name: '', email: '', role: 'ddfpt' });
         }
     };
 
@@ -1592,7 +1623,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                                     className="block w-full text-xs border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
                                                                     value={
                                                                         collaborators.find(c =>
-                                                                            c.role === 'CPE' && c.email === cls.cpe?.email
+                                                                            c.role === 'cpe' && c.email === cls.cpe?.email
                                                                         )?.id || ""
                                                                     }
                                                                     onChange={(e) => {
@@ -1619,13 +1650,13 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                                     }}
                                                                 >
                                                                     <option value="">-- Sélectionner --</option>
-                                                                    {collaborators.filter(c => c.role === 'CPE').map((c) => (
+                                                                    {collaborators.filter(c => c.role === 'cpe').map((c) => (
                                                                         <option key={c.id} value={c.id}>
                                                                             {c.name}
                                                                         </option>
                                                                     ))}
                                                                 </select>
-                                                                {collaborators.filter(c => c.role === 'CPE').length === 0 && (
+                                                                {collaborators.filter(c => c.role === 'cpe').length === 0 && (
                                                                     <p className="text-[10px] text-orange-600 mt-1 italic">Aucun CPE dans "Collaborateurs".</p>
                                                                 )}
                                                             </div>
@@ -1661,13 +1692,12 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                                         const updatedClass = freshClasses.find(c => c.id === cls.id);
 
                                                                         if (updatedClass && updatedClass.teachersList.length > 0) {
-                                                                            const blob = await pdf(
-                                                                                <TeacherCredentialsPdf
-                                                                                    teachers={updatedClass.teachersList}
-                                                                                    schoolName={schoolName}
-                                                                                    className={updatedClass.name}
-                                                                                />
-                                                                            ).toBlob();
+                                                                            const { generateTeacherCredentialsBlob } = await import('@/components/pdf/CredentialPdfGenerator');
+                                                                            const blob = await generateTeacherCredentialsBlob(
+                                                                                updatedClass.teachersList,
+                                                                                updatedClass,
+                                                                                schoolName
+                                                                            );
                                                                             const url = URL.createObjectURL(blob);
                                                                             const a = document.createElement('a');
                                                                             a.href = url;
@@ -2000,7 +2030,9 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                             {isPartnerImporting ? (
                                                 <>
                                                     <Loader2 className="animate-spin w-4 h-4 mr-2" />
-                                                    Analyse en cours...
+                                                    {importProgress && importProgress.total > 0
+                                                        ? `${importProgress.status} (${importProgress.current}/${importProgress.total})`
+                                                        : "Analyse en cours..."}
                                                 </>
                                             ) : (
                                                 <>
@@ -2071,12 +2103,17 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                 <div className="p-4 border-b border-gray-100 flex justify-between items-center bg-gray-50">
                                     <h5 className="font-bold text-gray-700 flex items-center">
                                         <Building2 className="w-4 h-4 mr-2" />
-                                        Liste des Partenaires ({filteredPartners.length} / {partnerCompanies.length})
+                                        Liste des Partenaires ({filteredPartners.length} / {fetchedPartners.length})
                                     </h5>
                                 </div>
-                                {filteredPartners.length === 0 ? (
+                                {isFetchingPartners ? (
+                                    <div className="p-8 text-center text-gray-500 italic">
+                                        <Loader2 className="animate-spin w-8 h-8 mx-auto mb-2 text-blue-600" />
+                                        <p>Chargement des partenaires...</p>
+                                    </div>
+                                ) : filteredPartners.length === 0 ? (
                                     <div className="p-8 text-center text-gray-500">
-                                        {partnerCompanies.length === 0 ? (
+                                        {fetchedPartners.length === 0 ? (
                                             <>
                                                 <p>Aucune entreprise partenaire enregistrée.</p>
                                                 <p className="text-xs mt-1">Utilisez l'import CSV pour peupler la base.</p>
@@ -2093,9 +2130,10 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">SIRET</th>
                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Raison Sociale</th>
                                                     <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Activité</th>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Ville</th>
-                                                    <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Filières (Métiers)</th>
-                                                    <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase tracking-wider">Actions</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Ville</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Filières</th>
+                                                    <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase tracking-wider">Classes</th>
+                                                    <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase tracking-wider">Actions</th>
                                                 </tr>
                                             </thead>
                                             <tbody className="bg-white divide-y divide-gray-200">
@@ -2110,6 +2148,15 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                                 {partner.jobs && partner.jobs.map((job, i) => (
                                                                     <span key={i} className="inline-flex px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800">
                                                                         {job}
+                                                                    </span>
+                                                                ))}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {(partner as any).classes?.map((c: string, i: number) => (
+                                                                    <span key={i} className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-bold tracking-wide">
+                                                                        {c}
                                                                     </span>
                                                                 ))}
                                                             </div>

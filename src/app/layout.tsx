@@ -22,6 +22,8 @@ import { ProfileGuard } from "@/components/auth/ProfileGuard";
 import ForcePasswordChangeGuard from "@/components/auth/ForcePasswordChangeGuard";
 import { DemoUI } from "@/components/demo/DemoUI";
 
+import { Toaster } from "react-hot-toast";
+
 export default function RootLayout({
   children,
 }: Readonly<{
@@ -40,6 +42,7 @@ export default function RootLayout({
             </ProfileGuard>
           </ForcePasswordChangeGuard>
         </SessionProvider>
+        <Toaster position="top-right" />
       </body>
     </html>
   );

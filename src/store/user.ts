@@ -86,17 +86,26 @@ export const useUserStore = create<UserState>((set, get) => ({
             unreadCount: state.unreadCount + 1
         };
     }),
-
-    clearNotifications: () => set({ notifications: [], unreadCount: 0 }),
+    // clearNotifications has been moved below as an async function.
 
     fetchUserProfile: async (uid: string) => {
-        // Postgres-only: No Firestore fallback.
-        set({ isLoadingProfile: true });
+        if (!uid || uid === 'undefined') {
+            console.error("UserStore: uid is missing");
+            set({ isLoadingProfile: false });
+            return false;
+        }
+
         set({ isLoadingProfile: true });
 
         try {
-            // 1. Fetch from PostgreSQL API
-            const res = await fetch(`/api/users/${uid}`);
+            // Add a timeout to fetch to prevent hanging forever
+            const controller = new AbortController();
+            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+
+            const res = await fetch(`/api/users/${uid}`, {
+                signal: controller.signal
+            });
+            clearTimeout(timeoutId);
 
             if (res.ok) {
                 const { user } = await res.json();
@@ -105,11 +114,11 @@ export const useUserStore = create<UserState>((set, get) => ({
                     id: uid,
                     name: (user.profileData?.firstName && user.profileData?.lastName)
                         ? `${user.profileData.firstName} ${user.profileData.lastName}`
-                        : user.email, // Fallback
+                        : user.email,
                     email: user.email,
                     role: user.role,
                     uai: user.uai,
-                    schoolId: user.uai, // Alias
+                    schoolId: user.uai,
                     birthDate: user.birthDate,
                     profileData: user.profileData || {},
                     legalRepresentatives: user.legalRepresentatives || [],
@@ -117,13 +126,10 @@ export const useUserStore = create<UserState>((set, get) => ({
                     isLoadingProfile: false
                 });
 
-                // Track connection asynchronously
                 get().trackConnection(uid);
                 return true;
             } else if (res.status === 404) {
-                // 2. User Not Found -> Auto-Create (Init) using Session Info
-                // This should now be handled by the caller or a separate init method
-                console.log("UserStore: User not found in Postgres. Please initialize.");
+                console.log("UserStore: User not found in Postgres.");
                 set({ isLoadingProfile: false });
                 return false;
             } else {
@@ -132,8 +138,8 @@ export const useUserStore = create<UserState>((set, get) => ({
                 return false;
             }
 
-        } catch (error) {
-            console.error("UserStore: Critical API Error", error);
+        } catch (error: any) {
+            console.error("UserStore: Profile Fetch Error", error);
             set({ isLoadingProfile: false });
             return false;
         }
@@ -253,16 +259,43 @@ export const useUserStore = create<UserState>((set, get) => ({
 
     fetchNotifications: async (userEmail: string) => {
         if (!userEmail) return;
-        // Notifications are currently disabled/not migrated to Postgres yet.
-        // Firestore logic removed as per request to eliminate all Firestore dependencies.
+        try {
+            const res = await fetch('/api/notifications');
+            if (res.ok) {
+                const notifications = await res.json();
+                set({
+                    notifications,
+                    unreadCount: notifications.filter((n: any) => !n.read).length
+                });
+            }
+        } catch (e) {
+            console.error("Failed to fetch notifications", e);
+        }
     },
 
     markAsRead: async (id: string) => {
-        set(state => ({
-            notifications: state.notifications.map(n => n.id === id ? { ...n, read: true } : n),
-            unreadCount: state.notifications.filter(n => !n.read && n.id !== id).length
-        }));
-        // Logic removed
+        try {
+            const res = await fetch(`/api/notifications/${id}/read`, { method: 'PATCH' });
+            if (res.ok) {
+                set(state => ({
+                    notifications: state.notifications.map(n => n.id === id ? { ...n, read: true } : n),
+                    unreadCount: Math.max(0, state.unreadCount - 1)
+                }));
+            }
+        } catch (e) {
+            console.error("Failed to mark as read", e);
+        }
+    },
+
+    clearNotifications: async () => {
+        try {
+            const res = await fetch('/api/notifications', { method: 'DELETE' });
+            if (res.ok) {
+                set({ notifications: [], unreadCount: 0 });
+            }
+        } catch (e) {
+            console.error("Failed to clear notifications", e);
+        }
     },
 
     reset: () => set({

@@ -9,6 +9,7 @@ import { authConfig } from "./auth.config";
 export const { handlers, signIn, signOut, auth } = NextAuth({
     ...authConfig,
     callbacks: {
+        ...authConfig.callbacks,
         async jwt({ token, user, trigger, session }) {
             if (user) {
                 token.id = user.id;
@@ -46,24 +47,33 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                     const { email, password } = parsedCredentials.data;
 
                     try {
-                        const result = await pool.query('SELECT * FROM users WHERE email = $1', [email.toLowerCase().trim()]);
+                        const result = await pool.query('SELECT * FROM users WHERE LOWER(email) = LOWER($1)', [email.trim()]);
                         const user = result.rows[0];
 
-                        if (!user) return null;
+                        if (!user) {
+                            console.log(`[AUTH] User not found: ${email}`);
+                            return null;
+                        }
 
-                        if (!user.password_hash) return null;
+                        if (!user.password_hash) {
+                            console.log(`[AUTH] No password hash for: ${email}`);
+                            return null;
+                        }
 
                         const passwordsMatch = await bcrypt.compare(password, user.password_hash);
 
                         if (passwordsMatch) {
                             return {
-                                id: user.id || user.uid,
+                                id: user.uid || user.id,
                                 email: user.email,
                                 role: user.role, // Role comes directly from DB
                                 establishment_uai: user.establishment_uai,
-                                name: `${user.first_name} ${user.last_name}`,
+                                name: (user.first_name && user.last_name) ? `${user.first_name} ${user.last_name}` : user.email,
                                 must_change_password: user.must_change_password // Expose flag
                             };
+                        } else {
+                            console.log(`[AUTH] Invalid password for: ${email}`);
+                            return null;
                         }
                     } catch (error) {
                         console.error("Auth error:", error);

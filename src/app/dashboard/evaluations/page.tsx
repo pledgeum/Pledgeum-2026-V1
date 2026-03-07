@@ -6,8 +6,6 @@ import { Plus, FileText, Loader2, Trash2 } from 'lucide-react';
 import { useSession } from "next-auth/react";
 import { useUserStore } from '@/store/user';
 import { useSchoolStore } from '@/store/school';
-import { updateDoc, arrayUnion, arrayRemove, query, collection, getDocs, where, deleteDoc, doc } from '@/lib/firebase';
-import { db } from '@/lib/firebase';
 import { toast } from 'sonner';
 import { Users, Check } from 'lucide-react';
 
@@ -41,18 +39,15 @@ export default function EvaluationsListPage() {
     const fetchEvaluations = async () => {
         if (!user) return;
         try {
-            let q;
-            if (role === 'at_ddfpt') {
-                q = query(collection(db, "evaluation_templates"));
+            const res = await fetch('/api/templates', { cache: 'no-store' });
+            if (!res.ok) throw new Error("Failed to fetch templates");
+            const data = await res.json();
+
+            if (data.success) {
+                setEvaluations(data.templates);
             } else {
-                q = query(
-                    collection(db, "evaluation_templates"),
-                    where("authorId", "==", user.id)
-                );
+                toast.error(data.error || "Erreur récupération.");
             }
-            const snapshot = await getDocs(q);
-            const data = snapshot.docs.map(doc => ({ id: doc.id, ...doc.data() }));
-            setEvaluations(data);
         } catch (error) {
             console.error("Error fetching evaluations:", error);
             toast.error("Erreur lors du chargement des évaluations.");
@@ -66,9 +61,16 @@ export default function EvaluationsListPage() {
         if (!confirm("Voulez-vous vraiment supprimer ce modèle ?")) return;
 
         try {
-            await deleteDoc(doc(db, "evaluation_templates", id));
-            setEvaluations(evaluations.filter(e => e.id !== id));
-            toast.success("Modèle supprimé.");
+            const res = await fetch(`/api/templates/${id}`, { method: 'DELETE' });
+            if (!res.ok) throw new Error("Failed to delete template");
+            const data = await res.json();
+
+            if (data.success) {
+                setEvaluations(evaluations.filter(e => e.id !== id));
+                toast.success("Modèle supprimé.");
+            } else {
+                toast.error(data.error || "Erreur de suppression");
+            }
         } catch (error) {
             console.error("Error deleting evaluation:", error);
             toast.error("Erreur lors de la suppression.");
@@ -77,19 +79,35 @@ export default function EvaluationsListPage() {
 
     const handleAssignClass = async (templateId: string, classId: string, isAssigned: boolean) => {
         try {
-            const templateRef = doc(db, "evaluation_templates", templateId);
+            const template = evaluations.find(e => e.id === templateId);
+            if (!template) return;
+
+            let newAssignedClasses = [...(template.assignedClassIds || [])];
+
             if (isAssigned) {
-                await updateDoc(templateRef, {
-                    assignedClassIds: arrayRemove(classId)
-                });
-                setEvaluations(evaluations.map(e => e.id === templateId ? { ...e, assignedClassIds: (e.assignedClassIds || []).filter((id: string) => id !== classId) } : e));
-                toast.success("Assignation retirée.");
+                newAssignedClasses = newAssignedClasses.filter((id) => id !== classId);
             } else {
-                await updateDoc(templateRef, {
-                    assignedClassIds: arrayUnion(classId)
-                });
-                setEvaluations(evaluations.map(e => e.id === templateId ? { ...e, assignedClassIds: [...(e.assignedClassIds || []), classId] } : e));
-                toast.success("Classe assignée.");
+                newAssignedClasses.push(classId);
+            }
+
+            const res = await fetch(`/api/templates/${templateId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ assignedClassIds: newAssignedClasses })
+            });
+
+            if (!res.ok) {
+                const textError = await res.text().catch(() => "Erreur inattendue illisible");
+                console.error("Erreur API Brute :", textError);
+                throw new Error(textError.substring(0, 100) || "Failed to update assignments");
+            }
+            const data = await res.json();
+
+            if (data.success) {
+                setEvaluations(evaluations.map(e => e.id === templateId ? { ...e, assignedClassIds: newAssignedClasses } : e));
+                toast.success(isAssigned ? "Assignation retirée." : "Classe assignée.");
+            } else {
+                toast.error(data.error || "Erreur lors de l'assignation.");
             }
         } catch (error) {
             console.error("Error updating assignment:", error);
@@ -211,7 +229,7 @@ export default function EvaluationsListPage() {
 
                             <div className="flex items-center justify-between text-xs text-gray-400 pt-4 border-t border-gray-100 mt-auto">
                                 <span>{evalItem.structure?.rows?.length || 0} critères</span>
-                                <span>Créé le {evalItem.createdAt?.toDate ? new Date(evalItem.createdAt.toDate()).toLocaleDateString() : 'Récemment'}</span>
+                                <span>Créé le {evalItem.createdAt ? new Date(evalItem.createdAt).toLocaleDateString() : 'Récemment'}</span>
                             </div>
                         </div>
                     ))}

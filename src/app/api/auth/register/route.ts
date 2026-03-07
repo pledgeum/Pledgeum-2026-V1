@@ -60,7 +60,7 @@ export async function POST(req: Request) {
                       AND temp_code = $2
                 `, [tempId, tempCode]);
 
-                if (ghostRes.rowCount > 0) {
+                if ((ghostRes.rowCount ?? 0) > 0) {
                     const ghostUid = ghostRes.rows[0].uid;
                     console.log(`[REGISTER] MATCHE FOUND: Ghost UID ${ghostUid}. Updating to Real Account.`);
 

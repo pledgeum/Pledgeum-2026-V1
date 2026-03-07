@@ -1,16 +1,17 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
+import dynamic from 'next/dynamic';
 import { ConventionPdf } from './ConventionPdf';
 import { Convention } from '@/store/convention';
 import QRCode from 'qrcode';
-import { useState, useEffect } from 'react';
 import { generateVerificationUrl } from '@/app/actions/sign';
-import { PDFDownloadLink } from '@react-pdf/renderer';
 import { PdfViewerWrapper } from '@/components/ui/PdfViewerWrapper';
 
 interface PdfPreviewProps {
     data: Partial<Convention>;
     onClose?: () => void;
 }
+
+// ConventionPdf is imported statically but this file is only loaded dynamically with ssr: false
 
 const PdfPreview = ({ data, onClose }: PdfPreviewProps) => {
     const isModal = !!onClose;
@@ -32,11 +33,36 @@ const PdfPreview = ({ data, onClose }: PdfPreviewProps) => {
 
     // Data Normalization for PDF
     // The PDF component expects 'stage_date_debut' (historical) but API provides 'dateStart' (clean)
+    // IMPORTANT: Top-level data.signatures MUST override data.metadata.signatures to prevent stale state issues
     const normalizedData = {
-        ...data,
-        ...(data.metadata || {}), // Flatten metadata
+        ...(data.metadata || {}), // Flatten metadata first
+        ...data,                  // Let top-level properties (like latest status/updatedAt) take precedence
+        signatures: data.signatures || (data.metadata as any)?.signatures || {}, // Explicitly prioritize top-level fresh signatures
         stage_date_debut: data.dateStart || (data.metadata as any)?.stage_date_debut || (data as any).stage_date_debut,
         stage_date_fin: data.dateEnd || (data.metadata as any)?.stage_date_fin || (data as any).stage_date_fin,
+    };
+
+    const [isGenerating, setIsGenerating] = useState(false);
+
+    const handleDownload = async () => {
+        setIsGenerating(true);
+        try {
+            const { generateConventionBlob } = await import('./CredentialPdfGenerator');
+            const blob = await generateConventionBlob(normalizedData as any, qrCodeUrl, hashDisplay);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `convention_${data.eleve_nom || 'eleve'}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            alert('Erreur lors de la génération du PDF');
+        } finally {
+            setIsGenerating(false);
+        }
     };
 
     const Content = (
@@ -45,21 +71,18 @@ const PdfPreview = ({ data, onClose }: PdfPreviewProps) => {
                 <h3 className="text-lg font-bold text-gray-900">Aperçu de la Convention</h3>
                 <div className="flex items-center gap-2">
                     {data.status === 'VALIDATED_HEAD' && (
-                        <PDFDownloadLink
-                            document={<ConventionPdf data={normalizedData} qrCodeUrl={qrCodeUrl} hashCode={hashDisplay} />}
-                            fileName={`convention_${data.eleve_nom || 'eleve'}.pdf`}
-                            className="px-3 py-1.5 bg-blue-600 text-white text-sm font-medium rounded hover:bg-blue-700 transition-colors flex items-center gap-2"
+                        <button
+                            onClick={handleDownload}
+                            disabled={isGenerating}
+                            className="flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white px-3 py-1.5 rounded text-sm font-medium transition-colors disabled:opacity-50"
                         >
-                            {/* @ts-ignore */}
-                            {({ blob, url, loading, error }) => (
-                                loading ? 'Chargement...' : (
-                                    <>
-                                        <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
-                                        <span className="hidden sm:inline">Télécharger</span>
-                                    </>
-                                )
+                            {isGenerating ? 'Génération...' : (
+                                <>
+                                    <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" /></svg>
+                                    <span className="hidden sm:inline">Télécharger</span>
+                                </>
                             )}
-                        </PDFDownloadLink>
+                        </button>
                     )}
 
                     {onClose && (
@@ -72,8 +95,9 @@ const PdfPreview = ({ data, onClose }: PdfPreviewProps) => {
                     )}
                 </div>
             </div>
-            <div className="flex-1 bg-gray-100 overflow-hidden relative">
-                <PdfViewerWrapper className="w-full h-full" height="100%">
+            <div className="flex-1 overflow-hidden relative bg-gray-100 flex items-center justify-center p-4">
+                <PdfViewerWrapper height="100%" className="w-full h-full shadow-lg">
+                    {/* The document prop for PdfViewerWrapper will be passed to PdfRenderer dynamically */}
                     <ConventionPdf data={normalizedData} qrCodeUrl={qrCodeUrl} hashCode={hashDisplay} />
                 </PdfViewerWrapper>
             </div>

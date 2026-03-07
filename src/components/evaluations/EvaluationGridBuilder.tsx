@@ -4,8 +4,6 @@ import React, { useState, useEffect } from 'react';
 import { Plus, Trash2, Save, GripVertical, Settings2, X, Loader2, AlignLeft, Hash, CheckSquare, ChevronDown } from 'lucide-react';
 import { useSession } from "next-auth/react";
 import { useUserStore } from '@/store/user';
-import { db } from '@/lib/firebase';
-import { doc, updateDoc, collection, addDoc, serverTimestamp } from '@/lib/firebase';
 import { toast } from 'sonner';
 import { useRouter } from 'next/navigation';
 
@@ -121,21 +119,27 @@ export const EvaluationGridBuilder = ({ initialData, templateId, mode = 'create'
                 synthesis: synthesisEnabled ? {
                     enabled: true,
                     title: synthesisTitle
-                } : null,
-                updatedAt: serverTimestamp(),
-                // Only set these on create, but merging usually safe
-                ...(mode === 'create' ? {
-                    authorId: user.id,
-                    schoolId: profileData?.ecole_id || null,
-                    createdAt: serverTimestamp()
-                } : {})
+                } : null
             };
 
             if (mode === 'edit' && templateId) {
-                await updateDoc(doc(db, "evaluation_templates", templateId), payload);
+                const res = await fetch(`/api/templates/${templateId}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) throw new Error("Erreur serveur lors de la mise à jour");
                 toast.success("Modèle mis à jour avec succès !");
+
             } else {
-                await addDoc(collection(db, "evaluation_templates"), payload);
+                const res = await fetch('/api/templates', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                if (!res.ok) throw new Error("Erreur serveur lors de la création");
                 toast.success("Modèle enregistré avec succès !");
             }
 

@@ -1,7 +1,6 @@
-
 import { NextResponse } from 'next/server';
 import { updateConventionStatus, WorkflowStatus } from '@/lib/workflow';
-import { adminAuth } from '@/lib/firebase-admin';
+import { auth } from "@/auth";
 
 export async function POST(
     req: Request,
@@ -12,17 +11,17 @@ export async function POST(
         const body = await req.json();
         const { status, reason, pdfHash } = body;
 
-        // Security Check: Verify User Token
-        const authHeader = req.headers.get('Authorization');
-        if (!authHeader?.startsWith('Bearer ')) {
+        // Security Check: Verify User Token via NextAuth Session
+        const session = await auth();
+        if (!session || !session.user) {
             return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
         }
-        const idToken = authHeader.split('Bearer ')[1];
-        const decodedToken = await adminAuth.verifyIdToken(idToken);
-        const userRole = decodedToken.role;
-        const userEmail = decodedToken.email;
+
+        const userRole = (session.user as any).role;
+        const userEmail = session.user.email;
 
         // Authorization Logic
+        // ... (rest remains similar but using session data)
         // 1. Fetch Convention Owner Identity to verify ownership if needed
         // Ideally we fetch this from DB, but for now we rely on logical checks.
         // NOTE: For 'SUBMITTED', we trust the caller has write access to the doc via Firestore rules, 

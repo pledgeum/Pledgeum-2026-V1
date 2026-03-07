@@ -8,12 +8,23 @@ interface Props {
     isOpen: boolean;
     onClose: () => void;
     currentTeacherEmail?: string; // Optional if not strictly used for logic yet
+    currentUserRole?: string;
     classId?: string; // Added to allow pre-selection
 }
 
-export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentTeacherEmail, classId }) => {
+export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentTeacherEmail, currentUserRole, classId }) => {
     const { conventions, assignTrackingTeacher } = useConventionStore();
-    const { classes, schoolAddress } = useSchoolStore();
+    const { classes, schoolAddress, schoolCity, fetchClassTeachers } = useSchoolStore();
+
+    // Permissions: Admins see all classes, Teachers only see the ones where they are the 'maniTeacher'
+    const isPrivileged = ['admin', 'school_admin', 'business_manager', 'ddfpt', 'at_ddfpt'].includes(currentUserRole || '');
+    const authorizedClasses = isPrivileged
+        ? classes
+        : classes.filter(c => c.mainTeacher?.email === currentTeacherEmail);
+
+    const renderCount = React.useRef(0);
+    const effectCount = React.useRef(0);
+    renderCount.current += 1;
 
     const [selectedClassId, setSelectedClassId] = useState<string>(classId || '');
     const [distances, setDistances] = useState<Record<string, number>>({}); // Key: "studentId-teacherId" -> distance
@@ -21,15 +32,26 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
     const [assigningState, setAssigningState] = useState<string | null>(null); // "studentId-teacherId" being assigned
 
     useEffect(() => {
-        if (classId) {
+        if (!isOpen) return;
+        if (classId && authorizedClasses.some(c => c.id === classId)) {
             setSelectedClassId(classId);
-        } else if (classes.length > 0 && !selectedClassId) {
-            setSelectedClassId(classes[0].id);
+        } else if (authorizedClasses.length > 0 && !authorizedClasses.some(c => c.id === selectedClassId)) {
+            setSelectedClassId(authorizedClasses[0].id);
         }
-    }, [classes, selectedClassId, classId]);
+    }, [authorizedClasses, selectedClassId, classId, isOpen]);
+
+    // Fetch teachers specifically for this class if missing (Store only fetches them on demand in Admin)
+    useEffect(() => {
+        if (isOpen && selectedClassId) {
+            fetchClassTeachers(selectedClassId);
+        }
+    }, [isOpen, selectedClassId, fetchClassTeachers]);
+
+    // Debug View State
+    const [debugContext, setDebugContext] = useState<any>({});
 
     // Filter Data
-    const selectedClass = classes.find(c => c.id === selectedClassId);
+    const selectedClass = authorizedClasses.find(c => c.id === selectedClassId);
     const classStudentsConventions = conventions.filter(
         c => c.eleve_classe === selectedClass?.name && ['VALIDATED_HEAD', 'SIGNED_TUTOR', 'SIGNED_COMPANY', 'VALIDATED_TEACHER', 'SIGNED_PARENT', 'SUBMITTED'].includes(c.status)
     );
@@ -42,6 +64,7 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
 
     // Calculate Distances
     const calculateAllDistances = async () => {
+        effectCount.current += 1;
         if (!selectedClass || uniqueConventions.length === 0) return;
         setIsLoadingDistances(true);
 
@@ -57,53 +80,125 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
             return coords;
         };
 
-        // 1. Get Teacher Coords
-        // Priority: Teacher Preferred Commune -> School Address
-        const teacherCoordsMap: Record<string, { lat: number, lon: number } | null> = {};
+        try {
+            // Helper function to figure out the best baseline address for the school.
+            // If the city is known perfectly, use it. Otherwise attempt to extract from address.
+            const extractCityFromAddress = (address: string): string => {
+                if (!address) return '';
+                const match = address.match(/\b(\d{5})\s+(.*?)(?:cedex|cs|bp|\n|$)/i);
+                if (match) return `${match[1]} ${match[2].trim()}`;
+                const parts = address.split(/[\n,]/);
+                return parts[parts.length - 1].trim();
+            };
 
-        // Default School Coords
-        const schoolCoords = await getCoordsCached(schoolAddress);
+            const cleanSchoolAddress = schoolCity || extractCityFromAddress(schoolAddress);
+            console.log("[Matrice] Original School:", schoolAddress, "City:", schoolCity, "-> Cleaned School:", cleanSchoolAddress);
 
-        for (const teacher of teachers) {
-            if (teacher.preferredCommune) {
-                teacherCoordsMap[teacher.id] = await getCoordsCached(teacher.preferredCommune);
-            } else {
-                teacherCoordsMap[teacher.id] = schoolCoords;
-            }
-        }
+            // 1. Get Teacher Coords (Parallel)
+            const teacherCoordsMap: Record<string, { lat: number, lon: number } | null> = {};
+            const schoolCoords = await getCoordsCached(cleanSchoolAddress);
+            console.log("[Matrice] School Coords resolved:", schoolCoords);
 
-        // 2. Loop Conventions (Students)
-        for (const conv of uniqueConventions) {
-            const companyAddress = `${conv.ent_adresse}, ${conv.ent_code_postal} ${conv.ent_ville}`;
-            const companyCoords = await getCoordsCached(companyAddress);
+            await Promise.all(teachers.map(async (teacher) => {
+                if (teacher.preferredCommune) {
+                    teacherCoordsMap[teacher.id] = await getCoordsCached(teacher.preferredCommune);
+                } else {
+                    teacherCoordsMap[teacher.id] = schoolCoords;
+                }
+            }));
+            console.log("[Matrice] Teachers Coords map:", teacherCoordsMap);
 
-            if (companyCoords) {
-                for (const teacher of teachers) {
-                    const tCoords = teacherCoordsMap[teacher.id] || schoolCoords;
-                    if (tCoords) {
-                        const dist = calculateDistance(companyCoords.lat, companyCoords.lon, tCoords.lat, tCoords.lon);
-                        newDistances[`${conv.id}-${teacher.id}`] = Math.round(dist * 10) / 10;
+            // 2. Fetch Bulk Coordinates from local DB using SIRETs
+            // Remove ANY whitespaces from SIRET strings explicitly
+            const sirets = Array.from(new Set(uniqueConventions.map(c => c.ent_siret ? c.ent_siret.replace(/\s+/g, '') : null).filter(Boolean))) as string[];
+            let dbCoordsMap: Record<string, { lat: number, lon: number }> = {};
+            if (sirets.length > 0) {
+                try {
+                    const res = await fetch(`/api/partners/coords-by-siret?sirets=${sirets.join(',')}`);
+                    if (res.ok) {
+                        dbCoordsMap = await res.json();
+                        console.log("[Matrice] DB Coords Map fetched:", dbCoordsMap);
                     }
+                } catch (err) {
+                    console.error("Erreur lors de la récupération en masse des coordonnées DB:", err);
                 }
             }
-        }
 
-        setDistances(newDistances);
-        setIsLoadingDistances(false);
+            // 3. Loop Conventions (Students) - Parallel batches for speed
+            await Promise.all(uniqueConventions.map(async (conv) => {
+                let companyCoords: { lat: number, lon: number } | null = null;
+                const cleanSiret = conv.ent_siret ? conv.ent_siret.replace(/\s+/g, '') : null;
+
+                // Prioritize checking our local Partner DB via SIRET
+                if (cleanSiret && dbCoordsMap[cleanSiret]) {
+                    companyCoords = dbCoordsMap[cleanSiret];
+                } else {
+                    // Fallback to Government open API if missing from DB or no SIRET
+                    let companyAddress = conv.ent_adresse;
+                    if (companyAddress && !companyAddress.includes(conv.ent_code_postal)) {
+                        companyAddress = `${companyAddress}, ${conv.ent_code_postal} ${conv.ent_ville}`;
+                    }
+                    companyCoords = companyAddress ? await getCoordsCached(companyAddress) : null;
+                    console.log(`[Matrice] Fallback api gouv for ${conv.ent_nom} (${companyAddress}):`, companyCoords);
+                }
+
+                if (!companyCoords) {
+                    console.warn(`[Matrice] Company coords NULL for ${conv.ent_nom} (SIRET: ${cleanSiret})`);
+                    for (const teacher of teachers) {
+                        newDistances[`${conv.id}-${teacher.email}`] = -1;
+                    }
+                }
+
+                if (companyCoords) {
+                    for (const teacher of teachers) {
+                        const tCoords = teacherCoordsMap[teacher.id] || schoolCoords;
+                        if (tCoords) {
+                            const dist = calculateDistance(companyCoords.lat, companyCoords.lon, tCoords.lat, tCoords.lon);
+                            newDistances[`${conv.id}-${teacher.email}`] = Math.round(dist * 10) / 10;
+                        }
+                    }
+                }
+            }));
+
+            setDebugContext({
+                _distancesComputed: Object.keys(newDistances).length,
+                _dbCoordsMapFound: Object.keys(dbCoordsMap).length,
+                _teachersCount: teachers.length,
+                _teachersCoordsResolved: Object.keys(teacherCoordsMap).filter(k => teacherCoordsMap[k] !== null).length,
+                schoolCityToGeocode: cleanSchoolAddress,
+                schoolCoords,
+                siretsToFetch: sirets,
+                _sampleKeysDistances: Object.keys(newDistances).slice(0, 3),
+                _sampleTeachersGiven: teachers.map(t => t.id).slice(0, 3)
+            });
+
+            setDistances(newDistances);
+        } catch (e) {
+            console.error("Erreur lors du calcul des distances pour la matrice :", e);
+        } finally {
+            setIsLoadingDistances(false);
+        }
     };
 
-    // Auto-calc on class change? Maybe better manual or on mount if small?
+    // Mémorise la dernière classe étudiée pour éviter toute boucle infinie asynchrone
+    const calculatedClassRef = React.useRef<string | null>(null);
+
     // Let's do it on mount/class change for UX magic effect
     useEffect(() => {
-        if (isOpen && selectedClassId) {
-            calculateAllDistances();
+        if (isOpen && selectedClassId && teachers.length > 0 && uniqueConventions.length > 0) {
+            // Verrou strict : on ne relance le calcul que si on change de classe
+            if (calculatedClassRef.current !== selectedClassId) {
+                console.log("🚀 Lancement du calcul des distances...", { conventionsCount: uniqueConventions.length });
+                calculatedClassRef.current = selectedClassId;
+                calculateAllDistances();
+            }
         }
-    }, [isOpen, selectedClassId, uniqueConventions.length]); // Dependencies
+    }, [isOpen, selectedClassId, uniqueConventions.length, teachers.length]); // Dependencies
 
-    const handleAssign = async (convId: string, teacherId: string, teacherEmail: string) => {
+    const handleAssign = async (convId: string, teacherId: string, teacherEmail: string, distanceKm?: number) => {
         try {
-            setAssigningState(`${convId}-${teacherId}`);
-            await assignTrackingTeacher(convId, teacherEmail);
+            setAssigningState(`${convId}-${teacherEmail}`);
+            await assignTrackingTeacher(convId, teacherEmail, distanceKm);
         } catch (e) {
             alert("Erreur lors de l'attribution");
         } finally {
@@ -131,6 +226,8 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
                     </button>
                 </div>
 
+                {/* Debug Panel Removed */}
+
                 {/* Controls */}
                 <div className="px-6 py-4 border-b border-gray-100 flex gap-4 items-center">
                     <label className="text-sm font-medium text-gray-700">Classe :</label>
@@ -139,7 +236,7 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
                         onChange={(e) => setSelectedClassId(e.target.value)}
                         className="w-48 px-3 py-2 border rounded-md text-sm"
                     >
-                        {classes.map(c => (
+                        {authorizedClasses.map(c => (
                             <option key={c.id} value={c.id}>{c.name}</option>
                         ))}
                     </select>
@@ -189,15 +286,15 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
                                             </div>
                                         </td>
                                         {teachers.map(t => {
-                                            const key = `${conv.id}-${t.id}`;
+                                            const key = `${conv.id}-${t.email}`;
                                             const dist = distances[key];
-                                            const isAssigned = conv.prof_suivi_email === t.email;
+                                            const isAssigned = (conv as any).visit?.tracking_teacher_email === t.email || conv.prof_suivi_email === t.email;
                                             const isAssigning = assigningState === key;
 
                                             return (
                                                 <td
                                                     key={t.id}
-                                                    onClick={() => handleAssign(conv.id, t.id, t.email || '')}
+                                                    onClick={() => handleAssign(conv.id, t.id, t.email || '', dist)}
                                                     className={`
                                                 relative p-0 border border-gray-200 cursor-pointer transition-all
                                                 ${isAssigned ? 'bg-green-100 hover:bg-green-200 ring-2 ring-inset ring-green-500' : 'hover:bg-blue-50'}
@@ -208,12 +305,14 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
                                                             <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
                                                         ) : isAssigned ? (
                                                             <>
-                                                                <span className="text-green-800 font-bold">{dist !== undefined ? `${dist} km` : '?'}</span>
+                                                                <span className="text-green-800 font-bold">{dist !== undefined ? (dist === -1 ? <span title="Adresse introuvable">⚠️ N/A</span> : `${dist} km`) : '?'}</span>
                                                                 <span className="text-[10px] text-green-700">Assigné</span>
                                                             </>
                                                         ) : (
-                                                            <span className={`text-gray-600 font-medium ${dist !== undefined && dist < 10 ? 'text-green-600 font-bold' : ''}`}>
-                                                                {dist !== undefined ? `${dist} km` : '-'}
+                                                            <span className={`text-gray-600 font-medium ${dist !== undefined && dist < 10 && dist !== -1 && !Number.isNaN(dist) ? 'text-green-600 font-bold' : ''}`}>
+                                                                {dist !== undefined ? (dist === -1 ? <span title="Adresse introuvable">⚠️ N/A</span> : `${dist} km`) : (
+                                                                    <span className="animate-pulse">⏳</span>
+                                                                )}
                                                             </span>
                                                         )}
                                                     </div>

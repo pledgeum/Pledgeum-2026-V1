@@ -4,9 +4,20 @@
 export const auth = {
     currentUser: null,
     signOut: async () => { console.log("Mock signOut called"); },
-    onAuthStateChanged: (cb: any) => { return () => { }; },
-    signInWithEmailAndPassword: async () => { throw new Error("Firebase Auth is disabled"); },
-    createUserWithEmailAndPassword: async () => { throw new Error("Firebase Auth is disabled"); },
+    onAuthStateChanged: (cb: any) => {
+        console.log("Mock onAuthStateChanged called");
+        // Immediately trigger with null to signal no user (forcing redirect/guard check)
+        cb(null);
+        return () => { };
+    },
+    signInWithEmailAndPassword: async () => {
+        console.error("CRITICAL: Firebase Auth signInWithEmailAndPassword called but is DISABLED.");
+        throw new Error("Firebase Auth is disabled in this environment. Use NextAuth.");
+    },
+    createUserWithEmailAndPassword: async () => {
+        console.error("CRITICAL: Firebase Auth createUserWithEmailAndPassword called but is DISABLED.");
+        throw new Error("Firebase Auth is disabled in this environment.");
+    },
 } as any;
 
 export const db = {

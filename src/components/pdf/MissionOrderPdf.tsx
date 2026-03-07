@@ -121,16 +121,16 @@ export function MissionOrderPdf({ missionOrder, convention, qrCodeUrl }: Mission
                         {(missionOrder.signatureImg || convention.signatures?.headImg) ? (
                             <>
                                 <Image
-                                    src={missionOrder.signatureImg || convention.signatures?.headImg || ''}
+                                    src={(missionOrder.signatureImg || (typeof convention.signatures?.headImg === 'string' ? convention.signatures?.headImg : (convention.signatures?.headImg as any)?.img) || '') as string}
                                     style={styles.signatureExample}
                                 />
                                 <View style={{ alignItems: 'center' }}>
                                     <Text style={{ fontSize: 8, color: pdfTheme.colors.secondaryText }}>
-                                        Signé le {new Date(missionOrder.signatureDate || convention.signatures?.headAt || new Date().toISOString()).toLocaleDateString()}
+                                        Signé le {new Date(missionOrder.signatureDate || (typeof convention.signatures?.headImg === 'object' ? (convention.signatures?.headImg as any)?.signedAt : null) || convention.signatures?.headAt || new Date().toISOString()).toLocaleDateString()}
                                     </Text>
-                                    {(missionOrder.signatureHash || convention.signatures?.headCode) && (
+                                    {(missionOrder.signatureHash || (typeof convention.signatures?.headImg === 'object' ? (convention.signatures?.headImg as any)?.hash : null) || convention.signatures?.headCode) && (
                                         <Text style={{ fontSize: 6, color: pdfTheme.colors.secondaryText }}>
-                                            Réf: {missionOrder.signatureHash || convention.signatures?.headCode}
+                                            Réf: {(missionOrder.signatureHash || (typeof convention.signatures?.headImg === 'object' ? (convention.signatures?.headImg as any)?.hash : null) || convention.signatures?.headCode) as string}
                                         </Text>
                                     )}
                                 </View>

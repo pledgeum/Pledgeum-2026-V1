@@ -76,11 +76,11 @@ export default function SignupPage() {
             if (collaborator) {
                 detectedName = collaborator.name;
                 const roleMap: Partial<Record<CollaboratorRole, UserRole>> = {
-                    'DDFPT': 'ddfpt',
-                    'BDE': 'business_manager',
-                    'ADJOINT_GEST': 'assistant_manager',
-                    'SEC_INTENDANCE': 'stewardship_secretary',
-                    'AT_DDFPT': 'at_ddfpt'
+                    'ddfpt': 'ddfpt',
+                    'business_manager': 'business_manager',
+                    'assistant_manager': 'assistant_manager',
+                    'stewardship_secretary': 'stewardship_secretary',
+                    'at_ddfpt': 'at_ddfpt'
                 };
                 if (collaborator.role && roleMap[collaborator.role]) {
                     detectedRole = roleMap[collaborator.role]!;

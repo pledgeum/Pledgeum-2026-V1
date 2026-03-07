@@ -14,7 +14,7 @@ export async function GET(
     try {
         const query = `
             SELECT 
-                u.uid, u.first_name, u.last_name, u.email
+                u.uid, u.first_name, u.last_name, u.email, u.prox_commune as preferred_commune
             FROM teacher_assignments ta
             JOIN users u ON ta.teacher_uid = u.uid
             WHERE ta.class_id = $1
@@ -26,7 +26,8 @@ export async function GET(
             id: row.uid,
             firstName: row.first_name,
             lastName: row.last_name,
-            email: row.email
+            email: row.email,
+            preferredCommune: row.preferred_commune
         }));
 
         return NextResponse.json({ teachers });

@@ -32,6 +32,7 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
 
     const loadDemoData = () => {
         setData({
+            schoolId: "0750000A",
             ecole_nom: "Lycée Professionnel Jean Jaurès",
             ecole_adresse: "123 Avenue de la République, 75011 Paris",
             ecole_tel: "0143123456",
@@ -219,7 +220,7 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
                                 <p className="text-gray-600">Veuillez vérifier le document ci-dessous avant de l'envoyer.</p>
                             </div>
 
-                            <PdfPreview data={previewData} />
+                            <PdfPreview key={`wizard-pdf-${signature ? 'signed' : 'unsigned'}`} data={previewData} />
 
                             <div className="border-t border-gray-200 pt-6">
                                 <h3 className="text-lg font-bold text-gray-900 mb-4 text-center">Signature de l'élève</h3>

@@ -2,6 +2,7 @@
 import { useState, useEffect } from 'react';
 import { FileText, Download, Loader2 } from 'lucide-react';
 import { useDocumentStore } from '@/store/documents';
+import { openBase64PDF } from '@/lib/utils';
 
 export function StudentDocumentButton({ classId }: { classId?: string }) {
     const { documents, fetchDocuments } = useDocumentStore();
@@ -44,19 +45,21 @@ export function StudentDocumentButton({ classId }: { classId?: string }) {
                             <p className="text-xs text-center text-gray-400 py-2">Aucun document.</p>
                         ) : (
                             documents.map(doc => (
-                                <a
+                                <button
                                     key={doc.id}
-                                    href={doc.url}
-                                    target="_blank"
-                                    rel="noopener noreferrer"
-                                    className="block p-2 hover:bg-indigo-50 rounded flex items-center justify-between group"
+                                    onClick={(e) => {
+                                        e.preventDefault();
+                                        e.stopPropagation();
+                                        openBase64PDF(doc.url, doc.name);
+                                    }}
+                                    className="w-full text-left p-2 hover:bg-indigo-50 rounded flex items-center justify-between group cursor-pointer"
                                 >
                                     <div className="flex items-center overflow-hidden mr-2">
                                         <FileText className="w-3 h-3 text-indigo-400 mr-2 shrink-0" />
                                         <span className="text-xs text-gray-700 break-words" title={doc.name}>{doc.name}</span>
                                     </div>
                                     <Download className="w-3 h-3 text-gray-400 group-hover:text-indigo-600 shrink-0" />
-                                </a>
+                                </button>
                             ))
                         )}
                     </div>

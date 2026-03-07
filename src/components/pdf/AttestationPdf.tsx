@@ -65,8 +65,8 @@ const QrCodeFooter = ({ url, code }: { url: string, code?: string }) => (
         <Image src={url} style={{ width: 50, height: 50 }} />
         <Text style={{ fontSize: 6, color: '#666', marginTop: 2 }}>Authenticité vérifiable</Text>
         {code && (
-            <Text style={{ fontSize: 5, color: '#999', marginTop: 1, fontFamily: 'Courier' }}>
-                Code d'authentification de la signature numérique : {code}
+            <Text style={{ fontSize: 5, color: '#4b5563', marginTop: 1, fontFamily: 'Courier', fontWeight: 'bold' }}>
+                Certificat d'Authenticité Numérique : {code}
             </Text>
         )}
     </View>

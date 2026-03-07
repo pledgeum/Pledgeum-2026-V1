@@ -79,6 +79,15 @@ export interface Convention extends Omit<ConventionData, 'signatures'> {
     cpe_email?: string;
     derogationJustification?: string;
 
+    visit?: {
+        tracking_teacher_email: string;
+        tracking_teacher_first_name?: string;
+        tracking_teacher_last_name?: string;
+        distance_km?: number;
+        status?: string;
+        scheduled_date?: string;
+    };
+
     signatures: {
         student?: SignatureDetail;
         parent?: SignatureDetail;
@@ -103,7 +112,7 @@ interface ConventionState {
     updateStatus: (id: string, newStatus: ConventionStatus) => void;
     signConvention: (id: string, role: string, signatureImage?: string, code?: string, extraAuditLog?: AuditLog, dualSign?: boolean) => Promise<any>;
     addFeedback: (id: string, author: string, message: string) => void;
-    assignTrackingTeacher: (conventionId: string, trackingTeacherEmail: string) => Promise<void>;
+    assignTrackingTeacher: (conventionId: string, trackingTeacherEmail: string, distanceKm?: number) => Promise<void>;
     getConventionsByRole: (role: string, userEmail: string, currentUserId?: string) => Convention[];
     submitConvention: (data: ConventionData, studentId: string, userId: string) => Promise<string>;
     createConvention: (data: any) => Promise<string>;
@@ -400,8 +409,9 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
     // Logique métier de transition d'état lors d'une signature
     signConvention: async (id, role, signatureImage, providedCode, extraAuditLog, dualSign = false) => {
         const { conventions } = get();
-        const convention = conventions.find(c => c.id === id);
-        if (!convention) return;
+        const foundConvention = conventions.find(c => c.id === id);
+        if (!foundConvention) return;
+        const convention = foundConvention as Convention;
 
         const code = providedCode || generateSignatureCode();
 
@@ -444,6 +454,11 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                         ...c,
                         status: newStatus as ConventionStatus, // Cast to ensure type safety
                         signatures: newMetadata.signatures || c.signatures, // Use nested signatures from metadata
+                        metadata: {
+                            ...(c.metadata || {}),
+                            signatures: newMetadata.signatures || c.signatures, // Update nested metadata so it doesn't poison components doing full merges
+                            ...(updatedData.metadata?.certificateHash ? { certificateHash: updatedData.metadata.certificateHash } : {})
+                        },
                         updatedAt: now,
                         auditLogs: [
                             ...(c.auditLogs || []),
@@ -479,17 +494,19 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             const isLocal = origin.includes('localhost');
             const dashboardLink = isLocal ? 'http://localhost:3000/' : 'https://www.pledgeum.fr/';
 
+            if (!convention) return;
+
             if (newStatus === 'SUBMITTED') {
                 // Student has signed -> Notify Parent (if minor) or Teacher (if major)
                 if (convention.est_mineur && convention.rep_legal_email) {
                     await sendNotification(
-                        convention.rep_legal_email,
+                        convention.rep_legal_email!,
                         `Convention PFMP à signer - ${convention.eleve_prenom} ${convention.eleve_nom}`,
                         `Bonjour,\n\nVotre enfant ${convention.eleve_prenom} ${convention.eleve_nom} a signé sa convention de stage.\nMerci de la signer à votre tour : ${dashboardLink}`
                     );
                 } else {
                     await sendNotification(
-                        convention.prof_email,
+                        convention.prof_email!,
                         `Convention PFMP à valider - ${convention.eleve_prenom} ${convention.eleve_nom}`,
                         `Bonjour,\n\nL'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Majeur) a signé sa convention.\nMerci de la valider : ${dashboardLink}`
                     );
@@ -499,23 +516,23 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 // Parent has signed -> Notify Teacher to Validate
                 const parentName = convention.rep_legal_prenom ? `${convention.rep_legal_prenom} ${convention.rep_legal_nom}` : convention.rep_legal_nom;
                 await sendNotification(
-                    convention.prof_email,
+                    convention.prof_email!,
                     `Convention PFMP à valider - ${convention.eleve_prenom} ${convention.eleve_nom} - ${convention.ecole_nom}`,
                     `Bonjour,\n\nLe représentant légal (${parentName}) de l'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Classe: ${convention.eleve_classe}) a signé la convention pour le stage chez ${convention.ent_nom} (${convention.ent_ville}).\n\nMerci de vérifier et valider la convention : ${dashboardLink}\n\nCordialement.`
                 );
             }
             else if (newStatus === 'VALIDATED_TEACHER') {
                 const { sendConventionInvitation } = await import('@/app/actions/notifications');
-                await sendConventionInvitation(convention.id, 'company_head', convention.ent_rep_email, convention.ent_rep_nom);
+                await sendConventionInvitation(convention.id, 'company_head', convention.ent_rep_email!, convention.ent_rep_nom);
             }
             else if (newStatus === 'SIGNED_COMPANY') {
                 const { sendConventionInvitation } = await import('@/app/actions/notifications');
-                await sendConventionInvitation(convention.id, 'tutor', convention.tuteur_email, convention.tuteur_prenom ? `${convention.tuteur_prenom} ${convention.tuteur_nom}` : convention.tuteur_nom);
+                await sendConventionInvitation(convention.id, 'tutor', convention.tuteur_email!, convention.tuteur_prenom ? `${convention.tuteur_prenom} ${convention.tuteur_nom}` : convention.tuteur_nom);
             }
             else if (newStatus === 'SIGNED_TUTOR') {
                 const tutorName = convention.tuteur_prenom ? `${convention.tuteur_prenom} ${convention.tuteur_nom}` : convention.tuteur_nom;
                 await sendNotification(
-                    convention.ecole_chef_email,
+                    convention.ecole_chef_email!,
                     `Convention PFMP à valider - ${convention.eleve_prenom} ${convention.eleve_nom} - ${convention.ecole_nom}`,
                     `Bonjour,\n\nLe tuteur (${tutorName}) a signé la convention de l'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Classe: ${convention.eleve_classe}) pour le stage chez ${convention.ent_nom} (${convention.ent_ville}).\n\nMerci de procéder à la validation finale : ${dashboardLink}\n\nCordialement.`
                 );
@@ -526,12 +543,12 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 const msg = `Bonjour,\n\nLa convention de stage de l'élève ${convention.eleve_prenom} ${convention.eleve_nom} (Classe: ${convention.eleve_classe}) chez ${convention.ent_nom} (${convention.ent_ville}) a été signée par tous et validée par le Chef d'Établissement (${convention.ecole_chef_nom}).\n\nVous pouvez télécharger le document final sur votre tableau de bord : ${dashboardLink}\n\nBon stage !`;
 
                 const recipients = [
-                    convention.eleve_email,
-                    convention.prof_email,
-                    convention.ent_rep_email,
-                    convention.tuteur_email,
+                    convention.eleve_email!,
+                    convention.prof_email!,
+                    convention.ent_rep_email!,
+                    convention.tuteur_email!,
                     // Parent only if minor
-                    convention.est_mineur ? convention.rep_legal_email : null,
+                    convention.est_mineur ? convention.rep_legal_email! : null,
                 ].filter(Boolean) as string[];
 
                 // Send in parallel
@@ -792,43 +809,24 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             const convention = get().conventions.find(c => c.id === conventionId);
             if (!convention) throw new Error("Convention introuvable");
 
-            const newAbsence: Absence = {
-                ...absenceData,
-                id: Math.random().toString(36).substr(2, 9),
-                reportedAt: new Date().toISOString()
-            };
+            const response = await fetch(`/api/conventions/${conventionId}/absences`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(absenceData),
+            });
 
-            const updatedAbsences = [...(convention.absences || []), newAbsence];
-
-            if (!useDemoStore.getState().isDemoMode) {
-                await updateDoc(doc(db, "conventions", conventionId), {
-                    absences: updatedAbsences
-                });
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || "Erreur lors de la déclaration");
             }
 
-            // Notifications
-            const subject = `[PFMP] Signalement d'absence - ${convention.eleve_prenom} ${convention.eleve_nom}`;
-            const message = `
-                Une absence a été signalée pour l'élève ${convention.eleve_prenom} ${convention.eleve_nom}.
-                Type : ${newAbsence.type === 'absence' ? 'Absence' : 'Retard'}
-                Date : ${new Date(newAbsence.date).toLocaleDateString('fr-FR')}
-                Durée : ${newAbsence.duration} heures
-                Justification : ${newAbsence.reason || 'Aucune'}
-                Signalé par : ${newAbsence.reportedBy}
-            `;
-
-            const recipients = [convention.prof_email];
-            if (convention.est_mineur && convention.rep_legal_email) recipients.push(convention.rep_legal_email);
-            if (convention.cpe_email) recipients.push(convention.cpe_email!);
-
-            recipients.filter((e): e is string => !!e).forEach(async (email) => {
-                await sendNotification(email, subject, message);
-                console.log(`[EMAIL] Absence report sent to ${email}`);
-            });
+            const newAbsence = await response.json();
 
             set((state) => ({
                 conventions: state.conventions.map(c =>
-                    c.id === conventionId ? { ...c, absences: updatedAbsences } : c
+                    c.id === conventionId
+                        ? { ...c, absences: [...(c.absences || []), newAbsence] }
+                        : c
                 )
             }));
         } catch (error) {
@@ -842,17 +840,27 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             const convention = get().conventions.find(c => c.id === conventionId);
             if (!convention) throw new Error("Convention introuvable");
 
-            const updatedAbsences = convention.absences?.map(a =>
-                a.id === absenceId ? { ...a, reason } : a
-            ) || [];
-
-            await updateDoc(doc(db, "conventions", conventionId), {
-                absences: updatedAbsences
+            const response = await fetch(`/api/absences/${absenceId}/justify`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ reason }),
             });
+
+            if (!response.ok) {
+                const errData = await response.json();
+                throw new Error(errData.error || "Erreur lors de la justification");
+            }
+
+            const updatedAbsence = await response.json();
 
             set((state) => ({
                 conventions: state.conventions.map(c =>
-                    c.id === conventionId ? { ...c, absences: updatedAbsences } : c
+                    c.id === conventionId
+                        ? {
+                            ...c,
+                            absences: c.absences?.map(a => a.id === absenceId ? updatedAbsence : a) || []
+                        }
+                        : c
                 )
             }));
         } catch (error) {
@@ -924,23 +932,30 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
         }
     },
 
-    assignTrackingTeacher: async (conventionId, trackingTeacherEmail) => {
+    assignTrackingTeacher: async (conventionId, trackingTeacherEmail, distanceKm) => {
         try {
-            if (!useDemoStore.getState().isDemoMode) {
-                await updateDoc(doc(db, "conventions", conventionId), {
-                    prof_suivi_email: trackingTeacherEmail
-                });
-            }
+            const res = await fetch(`/api/conventions/${conventionId}/visits/assign`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ trackingTeacherEmail, distanceKm })
+            });
+
+            if (!res.ok) throw new Error("Erreur lors de l'assignation de la visite en base");
+
             set((state) => ({
                 conventions: state.conventions.map(c =>
-                    c.id === conventionId ? { ...c, prof_suivi_email: trackingTeacherEmail } : c
+                    c.id === conventionId ? {
+                        ...c,
+                        prof_suivi_email: trackingTeacherEmail,
+                        visit: { tracking_teacher_email: trackingTeacherEmail }
+                    } : c
                 )
             }));
+
             console.log(`[STORE] Assigned tracking teacher ${trackingTeacherEmail} to convention ${conventionId}`);
 
             // === Automatic Mission Order Creation ===
             if (trackingTeacherEmail) {
-                const { getCoordinates, calculateDistance } = await import('@/lib/geocoding');
                 const { useSchoolStore } = await import('@/store/school');
                 const { useMissionOrderStore } = await import('@/store/missionOrder');
 
@@ -950,17 +965,17 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 if (convention && schoolAddress) {
                     const companyAddress = `${convention.ent_adresse}, ${convention.ent_code_postal} ${convention.ent_ville}`;
 
-                    // 1. Geocode both addresses
-                    // Used simplified 0,0 fallback if fail, or improve error handling
-                    const schoolCoords = await getCoordinates(schoolAddress);
-                    const companyCoords = await getCoordinates(companyAddress);
-
-                    let distanceKm = 0;
-                    if (schoolCoords && companyCoords) {
-                        distanceKm = calculateDistance(
-                            schoolCoords.lat, schoolCoords.lon,
-                            companyCoords.lat, companyCoords.lon
-                        );
+                    // Fallback to recalculate distance if UI failed to provide it, although it should
+                    let finalDistance = distanceKm;
+                    if (finalDistance === undefined) {
+                        const { getCoordinates, calculateDistance } = await import('@/lib/geocoding');
+                        const schoolCoords = await getCoordinates(schoolAddress);
+                        const companyCoords = await getCoordinates(companyAddress);
+                        if (schoolCoords && companyCoords) {
+                            finalDistance = calculateDistance(schoolCoords.lat, schoolCoords.lon, companyCoords.lat, companyCoords.lon);
+                        } else {
+                            finalDistance = 0;
+                        }
                     }
 
                     // 2. Create Mission Order
@@ -970,10 +985,10 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                         studentId: convention.studentId, // or name
                         schoolAddress,
                         companyAddress,
-                        distanceKm: Math.round(distanceKm * 10) / 10 // Round to 1 decimal
+                        distanceKm: Math.round(finalDistance * 10) / 10
                     });
 
-                    console.log(`[ODM] Created Mission Order for ${trackingTeacherEmail} (Dist: ${distanceKm}km)`);
+                    console.log(`[ODM] Created Mission Order for ${trackingTeacherEmail} (Dist: ${finalDistance}km)`);
                 }
             }
         } catch (error) {
@@ -982,38 +997,54 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
         }
     },
 
-    verifySignature: async (code) => {
+    verifySignature: async (rawCode) => {
+        // Aggressive sanitization: keep only alphanumeric
+        const code = (rawCode || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().trim();
+        if (!code) return null;
+
         const { conventions } = get();
 
         // 1. Check Local State First (Fast)
         for (const conv of conventions) {
-            const s = conv.signatures;
-            if (s.student?.code === code || s.parent?.code === code || s.teacher?.code === code || s.company_head?.code === code || s.tutor?.code === code || s.head?.code === code) {
+            const s = conv.signatures || {};
+
+            const matches = (stored?: string) => {
+                if (!stored) return false;
+                const cleanStored = stored.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+                return cleanStored.startsWith(code);
+            };
+
+            // Check all roles
+            if (matches(s.student?.code) || matches(s.parent?.code) || matches(s.teacher?.code) ||
+                matches(s.company_head?.code) || matches(s.tutor?.code) || matches(s.head?.code)) {
                 return conv;
             }
-            if (conv.attestation_signature_code === code) {
+
+            // Check specific fields
+            if (matches(conv.attestation_signature_code) || matches(conv.certificateHash) || matches(conv.attestationHash)) {
                 return conv;
             }
-            // Check Hashes
-            if (conv.certificateHash === code || conv.attestationHash === code) {
+
+            // Check ID prefix (e.g. conv_9A...) or just the code
+            const cleanId = (conv.id || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+            if (cleanId.startsWith(code) || cleanId.includes(code)) {
                 return conv;
             }
         }
 
-        // 2. Global Firestore Query (Fallback for deleted accounts / unloaded conventions)
+        // 2. Global PostgreSQL API Lookup
         try {
-            // We need to import 'or' from firebase/firestore, assuming it is available. 
-            // If not, we run parallel queries.
-            // Using parallel queries here to be safe and compatible without potentially missing 'or' import/support issues for now, or just use 'or' if I add the import.
-            // Let's rely on multiple queries for robustness if indices are missing for complex ORs.
-            // Actually, for single field equalities, OR is fine.
-            // But let's do parallel queries since we haven't checked 'or' import in the file yet.
-            // Wait, I can just add the import in a separate edit or assume I can add it here? 
-            // I'll stick to parallel queries for maximum compatibility without needing complex index setups.
+            console.log(`[CONVENTION_STORE] Verifying signature code via API: ${code}`);
+            const response = await fetch(`/api/verify?code=${encodeURIComponent(code)}`);
 
-            console.log("[CONVENTION_STORE] validateCode: Firestore logic disabled. Please implement Postgres API lookup.");
-            return null;
-
+            if (response.ok) {
+                const data = await response.json();
+                if (data.success && data.convention) {
+                    return data.convention;
+                }
+            } else {
+                console.warn("[CONVENTION_STORE] Global verify failed:", response.status);
+            }
         } catch (e) {
             console.error("Error verifying signature globally:", e);
         }

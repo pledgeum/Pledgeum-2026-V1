@@ -1,20 +1,17 @@
 import { create } from 'zustand';
-import { db, storage } from '@/lib/firebase';
-import { collection, addDoc, query, where, getDocs, deleteDoc, doc, orderBy, updateDoc } from '@/lib/firebase';
-import { ref, uploadBytes, getDownloadURL, deleteObject } from '@/lib/firebase';
 
 export interface ClassDocument {
     id: string;
     name: string;
     url: string;
-    classIds: string[]; // List of class IDs this doc is assigned to
-    className?: string; // For display convenience if needed (e.g. "T.ASSP 1") or logic
-    uploadedBy: string; // User ID
-    createdAt: string; // ISO String
+    classIds: string[];
+    className?: string;
+    uploadedBy: string;
+    createdAt: string;
     type: 'RECOMMENDATION' | 'EVALUATION' | 'OTHER';
     sharedWithSchool?: boolean;
-    sharedBy?: string; // Display name of the user who shared it
-    schoolName?: string; // To scope sharing to just their school
+    sharedBy?: string;
+    schoolName?: string;
 }
 
 interface DocumentState {
@@ -24,10 +21,10 @@ interface DocumentState {
 
     fetchDocuments: (classId?: string) => Promise<void>;
     fetchUserDocuments: (userId: string, schoolName?: string) => Promise<void>;
-    uploadDocument: (file: File, classIds: string[], uploadedBy: string, type?: ClassDocument['type'], sharingData?: { sharedWithSchool: boolean, sharedBy: string, schoolName: string }) => Promise<boolean>;
-    toggleSharing: (docId: string, sharedWithSchool: boolean, metadata?: { schoolName: string, sharedBy: string }) => Promise<boolean>;
+    uploadDocument: (file: File, classIds: string[], uploadedBy: string, type?: ClassDocument['type'], sharingData?: { isShared: boolean }) => Promise<boolean>;
+    toggleSharing: (docId: string, sharedWithSchool: boolean) => Promise<boolean>;
     assignDocumentToClasses: (docId: string, classIds: string[]) => Promise<boolean>;
-    deleteDocument: (docId: string, fileUrl: string) => Promise<boolean>;
+    deleteDocument: (docId: string) => Promise<boolean>;
 }
 
 export const useDocumentStore = create<DocumentState>((set, get) => ({
@@ -38,64 +35,63 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     fetchDocuments: async (classId) => {
         set({ loading: true, error: null });
         try {
-            let q;
-            const docsRef = collection(db, 'class_documents');
-
-            if (classId) {
-                // If specific class requested (e.g. Student view)
-                q = query(docsRef, where('classIds', 'array-contains', classId));
-            } else {
-                // Fetch all (e.g. Admin/Teacher view - might want to filter by their classes later)
-                // For now, fetching all to let UI filter or separate by user permissions
-                q = query(docsRef);
-            }
-
-            const snapshot = await getDocs(q);
-            const docs = snapshot.docs.map(d => ({ id: d.id, ...d.data() } as ClassDocument));
-
-            // Sort by createdAt desc locally since Firestore index for array-contains + sort might be missing
-            docs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-            set({ documents: docs, loading: false });
+            const response = await fetch('/api/documents' + (classId ? `?classId=${classId}` : ''));
+            if (!response.ok) throw new Error('Failed to fetch documents');
+            const data = await response.json();
+            set({ documents: data, loading: false });
         } catch (error: any) {
             console.error("Error fetching documents:", error);
             set({ error: error.message, loading: false });
         }
     },
 
-    uploadDocument: async (file, classIds, uploadedBy, type = 'OTHER', sharingData) => {
-        if (!storage) {
-            set({ error: "Storage not configured" });
-            return false;
-        }
-
+    fetchUserDocuments: async (userId, schoolName) => {
+        // In PostgreSQL version, the API handles role-based filtering, so we can just call fetchDocuments()
+        // or refine the API if specific user-only view is needed. 
+        // For now, let's keep it simple and just fetch all allowed documents.
         set({ loading: true, error: null });
         try {
-            // 1. Upload to Storage
-            const storageRef = ref(storage, `class_documents/${Date.now()}_${file.name}`);
-            const snapshot = await uploadBytes(storageRef, file);
-            const url = await getDownloadURL(snapshot.ref);
+            const response = await fetch('/api/documents');
+            if (!response.ok) throw new Error('Failed to fetch documents');
+            const data = await response.json();
+            set({ documents: data, loading: false });
+        } catch (error: any) {
+            console.error("Error fetching user documents:", error);
+            set({ error: error.message, loading: false });
+        }
+    },
 
-            // 2. Save metadata to Firestore
-            const docData: Omit<ClassDocument, 'id'> = {
-                name: file.name,
-                url,
-                classIds,
-                uploadedBy,
-                createdAt: new Date().toISOString(),
-                type,
-                ...sharingData // sharedWithSchool, sharedBy, schoolName
-            };
+    uploadDocument: async (file, classIds, uploadedBy, type = 'OTHER', sharingData) => {
+        set({ loading: true, error: null });
+        try {
+            const toBase64 = (file: File) => new Promise<string>((resolve, reject) => {
+                const reader = new FileReader();
+                reader.readAsDataURL(file);
+                reader.onload = () => resolve(reader.result as string);
+                reader.onerror = error => reject(error);
+            });
 
-            const docRef = await addDoc(collection(db, 'class_documents'), docData);
+            const base64Data = await toBase64(file);
 
-            // 3. Update local state
-            const newDoc = { id: docRef.id, ...docData };
-            set(state => ({
-                documents: [newDoc, ...state.documents],
-                loading: false
-            }));
+            const response = await fetch('/api/documents', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    fileName: file.name,
+                    fileData: base64Data,
+                    sizeBytes: file.size,
+                    isShared: sharingData?.isShared,
+                    classIds
+                })
+            });
 
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.error || 'Upload failed');
+            }
+
+            // Refresh list
+            await get().fetchDocuments();
             return true;
         } catch (error: any) {
             console.error("Error uploading document:", error);
@@ -104,20 +100,19 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         }
     },
 
-    toggleSharing: async (docId, sharedWithSchool, metadata) => {
+    toggleSharing: async (docId, sharedWithSchool) => {
         set({ loading: true, error: null });
         try {
-            const docRef = doc(db, 'class_documents', docId);
-            const updateData: any = { sharedWithSchool };
-            if (sharedWithSchool && metadata) {
-                updateData.schoolName = metadata.schoolName;
-                updateData.sharedBy = metadata.sharedBy;
-            }
+            const response = await fetch(`/api/documents/${docId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ isShared: sharedWithSchool })
+            });
 
-            await updateDoc(docRef, updateData);
+            if (!response.ok) throw new Error('Failed to update sharing');
 
             set(state => ({
-                documents: state.documents.map(d => d.id === docId ? { ...d, ...updateData } : d),
+                documents: state.documents.map(d => d.id === docId ? { ...d, sharedWithSchool } : d),
                 loading: false
             }));
             return true;
@@ -131,8 +126,13 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
     assignDocumentToClasses: async (docId, classIds) => {
         set({ loading: true, error: null });
         try {
-            const docRef = doc(db, 'class_documents', docId);
-            await updateDoc(docRef, { classIds });
+            const response = await fetch(`/api/documents/${docId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ classIds })
+            });
+
+            if (!response.ok) throw new Error('Failed to update classes');
 
             set(state => ({
                 documents: state.documents.map(d => d.id === docId ? { ...d, classIds } : d),
@@ -146,58 +146,15 @@ export const useDocumentStore = create<DocumentState>((set, get) => ({
         }
     },
 
-    fetchUserDocuments: async (userId, schoolName) => {
-        set({ loading: true, error: null });
-        try {
-            const docsRef = collection(db, 'class_documents');
-            const queries = [];
-
-            // 1. My Documents
-            queries.push(query(docsRef, where('uploadedBy', '==', userId)));
-
-            // 2. Shared Documents (from my school)
-            if (schoolName) {
-                queries.push(query(docsRef,
-                    where('sharedWithSchool', '==', true),
-                    where('schoolName', '==', schoolName)
-                ));
-            }
-
-            const snapshots = await Promise.all(queries.map(q => getDocs(q)));
-
-            // Merge and Deduplicate
-            const docsMap = new Map();
-            snapshots.forEach(snap => {
-                snap.docs.forEach(d => {
-                    docsMap.set(d.id, { id: d.id, ...d.data() } as ClassDocument);
-                });
-            });
-
-            const docs = Array.from(docsMap.values());
-
-            // Sort
-            docs.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-
-            set({ documents: docs, loading: false });
-        } catch (error: any) {
-            console.error("Error fetching user documents:", error);
-            set({ error: error.message, loading: false });
-        }
-    },
-
-    deleteDocument: async (docId, fileUrl) => {
-        if (!storage) return false;
+    deleteDocument: async (docId) => {
         set({ loading: true });
         try {
-            // 1. Delete from Storage
-            // Extract path from URL or pass path directly. Simplest is creating ref from URL.
-            const fileRef = ref(storage, fileUrl);
-            await deleteObject(fileRef).catch(err => console.warn("Storage deletion failed (might be already gone):", err));
+            const response = await fetch(`/api/documents/${docId}`, {
+                method: 'DELETE'
+            });
 
-            // 2. Delete from Firestore
-            await deleteDoc(doc(db, 'class_documents', docId));
+            if (!response.ok) throw new Error('Failed to delete document');
 
-            // 3. Update locally
             set(state => ({
                 documents: state.documents.filter(d => d.id !== docId),
                 loading: false

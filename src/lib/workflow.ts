@@ -25,6 +25,13 @@ export async function updateConventionStatus(
         actorId?: string,
         pdfHash?: string,
         signatures?: any, // Generic signatures object to merge
+        auditLog?: { // Standardized AuditLog structure
+            date: string,
+            action: string,
+            actorEmail: string,
+            details: string,
+            ip?: string
+        },
         signer?: {
             email: string,
             name: string,
@@ -60,6 +67,14 @@ export async function updateConventionStatus(
                 ...(finalMetadata.signatures || {}),
                 ...metadataParts.signatures
             };
+        }
+
+        // Handle Audit Logs
+        if (metadataParts.auditLog) {
+            finalMetadata.auditLogs = [
+                ...(finalMetadata.auditLogs || []),
+                metadataParts.auditLog
+            ];
         }
 
         // Handle transitions & specific fields

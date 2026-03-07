@@ -27,23 +27,80 @@ export async function POST(
             return NextResponse.json({ error: 'Role is required' }, { status: 400 });
         }
 
-        // --- 1. Determine New Status & Metadata Updates ---
-        // This logic mimics the state machine in the store, but securely on the server.
-        // For simplicity in this migration step, we trust the "role" implies the next step if valid.
-        // A full state machine re-implementation on server is ideal, but here we focus on the DB update mechanism.
+        // --- 1. Fetch Current Convention Data ---
+        const convRes = await pool.query('SELECT metadata, status FROM conventions WHERE id = $1', [conventionId]);
+        if (convRes.rowCount === 0) {
+            return NextResponse.json({ error: 'Convention not found' }, { status: 404 });
+        }
+        const convention = convRes.rows[0];
+        const metadata = convention.metadata || {};
+        const sigs = metadata.signatures || {};
 
+        // --- 2. Secure Age Calculation ---
+        let isMinor = metadata.est_mineur;
+        if (metadata.eleve_date_naissance) {
+            const birthDate = new Date(metadata.eleve_date_naissance);
+            const today = new Date();
+            let age = today.getFullYear() - birthDate.getFullYear();
+            const m = today.getMonth() - birthDate.getMonth();
+            if (m < 0 || (m === 0 && today.getDate() < birthDate.getDate())) {
+                age--;
+            }
+            isMinor = age < 18;
+        }
+
+        // --- 3. Prerequisites Guards ---
+        if (role === 'parent') {
+            if (!isMinor) return NextResponse.json({ error: "L'élève est majeur, la signature parentale n'est pas requise." }, { status: 400 });
+            if (!sigs.student) return NextResponse.json({ error: "L'élève doit signer en premier." }, { status: 400 });
+        }
+
+        if (role === 'teacher') {
+            if (!sigs.student) return NextResponse.json({ error: "L'élève doit signer en premier." }, { status: 400 });
+        }
+
+        if (role === 'tutor' || role === 'company_head' || role === 'company_head_tutor') {
+            if (!sigs.teacher) return NextResponse.json({ error: "L'enseignant référent doit signer en premier." }, { status: 400 });
+            if (isMinor && !sigs.parent) return NextResponse.json({ error: "Le représentant légal doit signer avant que l'entreprise ne puisse signer." }, { status: 400 });
+        }
+
+        if (role === 'school_head') {
+            if (!sigs.teacher) return NextResponse.json({ error: "L'enseignant référent doit signer en premier." }, { status: 400 });
+            if (isMinor && !sigs.parent) return NextResponse.json({ error: "Le représentant légal doit signer en premier." }, { status: 400 });
+            // Strict check: if NOT Dual Sign, BOTH tutor and company must have signed (if they are separate).
+            // Actually, the simplest check is: are both tutor and company signatures present?
+            if (!sigs.tutor || !sigs.company_head) {
+                return NextResponse.json({ error: "L'entreprise et le tuteur doivent avoir signé avant la validation finale." }, { status: 400 });
+            }
+        }
+
+        // --- 4. Determine New Status & Metadata Updates ---
         const now = new Date().toISOString();
-        // Capture IP for audit
-        const ip = req.headers.get('x-forwarded-for') || 'unknown';
+        const getIp = (req: Request) => {
+            const clientIp = req.headers.get('x-real-ip') || req.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
+            return clientIp === '::1' ? '127.0.0.1 (Localhost)' : clientIp;
+        };
+        const ip = getIp(req);
 
-        // Helper to generate hash
         const generateSignatureHash = (role: string, timestamp: string, code: string) => {
             const hashInput = `${conventionId}:${role}:${timestamp}:${code}`;
             return crypto.createHash('sha256').update(hashInput).digest('hex');
         };
 
+        const STATUS_WEIGHT: Record<string, number> = {
+            'DRAFT': 0,
+            'SUBMITTED': 1,
+            'SIGNED_PARENT': 2,
+            'VALIDATED_TEACHER': 3,
+            'SIGNED_COMPANY': 4,
+            'SIGNED_TUTOR': 5,
+            'VALIDATED_HEAD': 6,
+            'COMPLETED': 7
+        };
+
         let newStatus = null;
         let metadataUpdates: any = {};
+        let auditLog: any = null;
         let emailWarning: { type: string, detail: string } | null = null;
 
         // Helper to map role to fields
@@ -73,6 +130,14 @@ export async function POST(
                             // integrity: 'SHA-256' // Now implicit in hash field or add if needed in schema
                         }
                     }
+                };
+
+                auditLog = {
+                    date: now,
+                    action: 'SIGNED',
+                    actorEmail: session.user.email || 'student',
+                    details: 'Signature Élève/Étudiant',
+                    ip: ip
                 };
 
                 // --- AUTO-ONBOARDING PARENT LOGIC ---
@@ -210,6 +275,14 @@ export async function POST(
                         }
                     }
                 };
+
+                auditLog = {
+                    date: now,
+                    action: 'SIGNED',
+                    actorEmail: session.user.email || 'parent',
+                    details: 'Signature Responsable Légal (Parent)',
+                    ip: ip
+                };
                 break;
             case 'teacher':
                 newStatus = 'VALIDATED_TEACHER';
@@ -223,67 +296,157 @@ export async function POST(
                             signatureId: code,
                             hash: teacherHash,
                             ip: ip,
+                            integrity: 'SHA-256' // Standardized
                         }
                     }
                 };
+
+                auditLog = {
+                    date: now,
+                    action: 'SIGNED',
+                    actorEmail: session.user.email || 'teacher',
+                    details: 'Validation et Signature Enseignant Référent',
+                    ip: ip
+                };
+
+                // --- EMAIL TRIGGER: Notify Company/Tutor ---
+                try {
+                    const convRes = await pool.query(`SELECT data FROM conventions WHERE id = $1`, [conventionId]);
+                    if (convRes.rows.length > 0) {
+                        const convData = convRes.rows[0].data;
+                        const tutorEmail = convData.tuteur_email;
+                        const entEmail = convData.ent_rep_email;
+                        // Use a Set to avoid duplicate emails if tutor == rep
+                        const recipients = new Set<string>();
+                        if (tutorEmail) recipients.add(tutorEmail.toLowerCase().trim());
+                        if (entEmail) recipients.add(entEmail.toLowerCase().trim());
+
+                        if (recipients.size > 0) {
+                            console.log(`[Sign] Teacher signed. Notifying Company/Tutor:`, Array.from(recipients));
+                            const { sendEmail } = await import('@/lib/email');
+
+                            const subject = `Action requise : Signature de la convention de ${convData.eleve_prenom} ${convData.eleve_nom}`;
+                            const message = `Bonjour,\n\n` +
+                                `L'enseignant référent a validé et signé la convention de stage de ${convData.eleve_prenom} ${convData.eleve_nom}.\n` +
+                                `Votre signature est maintenant requise pour finaliser le document.\n\n` +
+                                `Connectez-vous à votre espace Pledgeum pour signer : ${process.env.NEXT_PUBLIC_APP_URL || 'https://www.pledgeum.fr'}/login\n\n` +
+                                `Cordialement,\nL'équipe Pledgeum`;
+
+                            for (const recipient of recipients) {
+                                try {
+                                    const emailRes = await sendEmail({ to: recipient, subject, text: message });
+                                    if (!emailRes.success) {
+                                        console.error(`[Sign] Failed to email ${recipient}:`, emailRes.error);
+                                        emailWarning = { type: 'EMAIL_FAILED', detail: emailRes.error || 'Unknown Error' };
+                                    }
+                                } catch (e: any) {
+                                    console.error(`[Sign] Error sending to ${recipient}:`, e);
+                                }
+                            }
+                        }
+                    }
+                } catch (e: any) {
+                    console.error("[Sign] Failed to process Teacher email trigger:", e);
+                }
                 break;
             // For Company/Tutor/Head, we might update dedicated columns OR metadata depending on the exact requirement.
             // The user request specifically mentioned updating metadata for student/parent/teacher legacy fields.
             // But let's handle the others for completeness if they come through this route.
             case 'company_head':
-                newStatus = 'SIGNED_COMPANY';
+                newStatus = dualSign ? 'SIGNED_TUTOR' : 'SIGNED_COMPANY';
                 const companyHash = generateSignatureHash('company_head', now, code);
-                metadataUpdates = {
-                    signatures: {
-                        company_head: { // Role key consistency? Schema used generic keys. Let's use 'company_head' or 'company'?
-                            // The store mock used 'company_head'. The prompt example says 'establishment'.
-                            // Ideally we align with the `role` variable.
-                            // `role` is 'company_head' here.
-                            signedAt: now,
-                            img: signatureImage,
-                            code: code,
-                            signatureId: code,
-                            hash: companyHash,
-                            ip: ip,
-                        }
-                    }
+                const companySignatureData = {
+                    signedAt: now,
+                    img: signatureImage,
+                    code: code,
+                    signatureId: code,
+                    hash: companyHash,
+                    ip: ip,
+                };
+
+                let companyMetadataSigs: any = { company_head: companySignatureData };
+                if (dualSign) {
+                    companyMetadataSigs.tutor = companySignatureData;
+                }
+
+                metadataUpdates = { signatures: companyMetadataSigs };
+
+                auditLog = {
+                    date: now,
+                    action: 'SIGNED',
+                    actorEmail: session.user.email || 'company_head',
+                    details: dualSign ? 'Signature Chef d\'entreprise & Tuteur' : 'Signature Chef d\'entreprise',
+                    ip: ip
                 };
                 break;
+
             case 'tutor':
                 newStatus = 'SIGNED_TUTOR';
                 const tutorHash = generateSignatureHash('tutor', now, code);
-                metadataUpdates = {
-                    signatures: {
-                        tutor: {
-                            signedAt: now,
-                            img: signatureImage,
-                            code: code,
-                            signatureId: code,
-                            hash: tutorHash,
-                            ip: ip,
-                        }
-                    }
+                const tutorSignatureData = {
+                    signedAt: now,
+                    img: signatureImage,
+                    code: code,
+                    signatureId: code,
+                    hash: tutorHash,
+                    ip: ip,
+                };
+
+                let tutorMetadataSigs: any = { tutor: tutorSignatureData };
+                if (dualSign) {
+                    tutorMetadataSigs.company_head = tutorSignatureData;
+                }
+
+                metadataUpdates = { signatures: tutorMetadataSigs };
+
+                auditLog = {
+                    date: now,
+                    action: 'SIGNED',
+                    actorEmail: session.user.email || 'tutor',
+                    details: dualSign ? 'Signature Tuteur & Chef d\'entreprise' : 'Signature Tuteur',
+                    ip: ip
                 };
                 break;
             case 'school_head':
+            case 'ddfpt':
+            case 'at_ddfpt':
+            case 'business_manager':
+            case 'assistant_manager':
+            case 'stewardship_secretary':
+            case 'ESTABLISHMENT_ADMIN':
                 newStatus = 'VALIDATED_HEAD';
                 const headHash = generateSignatureHash('school_head', now, code);
+
+                // --- Document Seal (Certificate Hash) ---
+                // We compute the final hash that will be on the PDF
+                let finalCertHash = null;
+                try {
+                    const { generateVerificationUrl: genUrl } = await import('@/app/actions/sign');
+                    // Fetch FULL convention safely
+                    const convRes = await pool.query(`SELECT * FROM conventions WHERE id = $1`, [conventionId]);
+                    if (convRes.rows.length > 0) {
+                        const dbRow = convRes.rows[0];
+                        // Merge metadata into root as the Store does, ensuring names and dates are present
+                        const mockConvForHash = {
+                            ...dbRow,
+                            ...(dbRow.metadata || {}),
+                            id: conventionId,
+                            signatures: {
+                                ...(dbRow.metadata?.signatures || {}),
+                                head: { signedAt: now, hash: headHash, code: code }
+                            }
+                        };
+                        const { hashDisplay } = await genUrl(mockConvForHash as any, 'convention');
+                        finalCertHash = hashDisplay;
+                    }
+                } catch (e) {
+                    console.error("[Sign] Failed to compute final cert hash:", e);
+                }
+
                 metadataUpdates = {
+                    certificateHash: finalCertHash,
                     signatures: {
-                        head: { // Mapping 'school_head' role to 'head' key if that's the convention?
-                            // Store mock used 'head'.
-                            // Role in switch is 'school_head'.
-                            // Let's use 'head' to match the store mock keys if possible, BUT strict role keys are better.
-                            // The prompt asked for [role]: { ... }.
-                            // If I use 'school_head', the PDF must look for 'school_head'.
-                            // The PDF currently looks for data.signatures.head*
-                            // So I should probably use 'head' here to match existing PDF expectations,
-                            // OR update PDF to look for 'school_head'.
-                            // Given I am refactoring PDF anyway, I will stick to 'head' for brevity/legacy match
-                            // OR update everything to 'school_head'.
-                            // Decision: Stick to 'school_head' as the role, but map to 'head' key to match the "headAt" etc legacy names?
-                            // Actually, let's look at the Store Mock again. it used `head: { ... }`.
-                            // So I will use `head` as the key.
+                        head: {
                             signedAt: now,
                             img: signatureImage,
                             code: code,
@@ -293,6 +456,18 @@ export async function POST(
                         }
                     }
                 };
+
+                auditLog = {
+                    date: now,
+                    action: 'SIGNED',
+                    actorEmail: session.user.email || 'school_head',
+                    details: 'Signature Chef d\'Établissement (Validation Finale)',
+                    ip: ip
+                };
+                // Also pass pdfHash to the workflow helper to update the column
+                if (finalCertHash) {
+                    metadataUpdates.pdfHash = finalCertHash;
+                }
                 break;
         }
 
@@ -338,13 +513,57 @@ export async function POST(
                 }
             }
 
+            const currentWeight = convention.status ? (STATUS_WEIGHT[convention.status] || 0) : 0;
+            const newWeight = statusToApply ? (STATUS_WEIGHT[statusToApply] || 0) : 0;
+
+            // Règle d'or : On ne recule jamais.
+            statusToApply = (newWeight > currentWeight) ? statusToApply : convention.status;
+
             const updatedConvention = await updateConventionStatus(
                 conventionId,
                 statusToApply as any,
                 {
-                    signatures: metadataUpdates.signatures
+                    signatures: metadataUpdates.signatures,
+                    pdfHash: metadataUpdates.pdfHash, // Important: updates the dedicated column
+                    auditLog: auditLog, // Persist signature event
+                    signer: role === 'school_head' ? {
+                        email: session.user.email || 'unknown',
+                        name: (session.user as any).name || session.user.email || "Chef d'établissement",
+                        function: "Chef d'établissement"
+                    } : undefined
                 }
             );
+
+            // --- NOTIFICATIONS ENTREPRISE ---
+            const isTeacherValidated = (statusToApply === 'VALIDATED_TEACHER' || currentWeight >= 3);
+            const isCompanyTurn = isTeacherValidated && (!sigs.tutor || !sigs.company_head);
+            const isDirectTrigger = (role === 'teacher' || (role === 'school_head' && isCompanyTurn)); // Usually teacher is the gate, but just in case.
+
+            if (isCompanyTurn && isDirectTrigger) {
+                const tutorEmail = convention.data?.tuteur_email || metadata.tuteur_email || metadata.tutor?.email;
+                const headEmail = convention.data?.ent_rep_email || metadata.ent_rep_email || metadata.signatories?.head?.email;
+                const studentName = convention.data?.eleve_nom ? `${convention.data?.eleve_nom} ${convention.data?.eleve_prenom}` : (metadata.eleve_nom ? `${metadata.eleve_nom} ${metadata.eleve_prenom}` : "l'élève");
+
+                const { sendEmail } = await import('@/lib/email');
+                const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.pledgeum.fr';
+
+                if (tutorEmail && !sigs.tutor) {
+                    await sendEmail({
+                        to: tutorEmail,
+                        subject: `[Action Requise] Convention de stage à signer - ${studentName}`,
+                        text: `Bonjour,\n\nLa convention de stage de ${studentName} requiert votre signature en tant que Tuteur.\nVous pouvez la consulter et la signer sur votre espace :\n${appUrl}/login\n\nCordialement,\nL'équipe Pledgeum`
+                    });
+                }
+
+                if (headEmail && !sigs.company_head && tutorEmail !== headEmail) {
+                    await sendEmail({
+                        to: headEmail,
+                        subject: `[Action Requise] Convention de stage à signer - ${studentName}`,
+                        text: `Bonjour,\n\nLa convention de stage de ${studentName} requiert votre signature en tant que Chef d'Entreprise.\nVous pouvez la consulter et la signer sur votre espace :\n${appUrl}/login\n\nCordialement,\nL'équipe Pledgeum`
+                    });
+                }
+            }
+            // --- FIN NOTIFICATIONS ---
 
             return NextResponse.json({
                 success: true,

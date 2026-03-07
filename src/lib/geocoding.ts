@@ -5,19 +5,31 @@ interface Coordinates {
 }
 
 export async function getCoordinates(address: string): Promise<Coordinates | null> {
-    try {
-        const encoded = encodeURIComponent(address);
-        const res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encoded}&limit=1`);
-        if (!res.ok) return null;
-        const data = await res.json();
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 seconds timeout
 
+    try {
+        const encoded = encodeURIComponent(address.substring(0, 100)); // Limit length to avoid API 504
+        const res = await fetch(`https://api-adresse.data.gouv.fr/search/?q=${encoded}&limit=1`, {
+            signal: controller.signal,
+            headers: { 'Accept': 'application/json' }
+        });
+
+        clearTimeout(timeoutId);
+        if (!res.ok) return null;
+
+        const data = await res.json();
         if (data.features && data.features.length > 0) {
             const [lon, lat] = data.features[0].geometry.coordinates;
             return { lat, lon };
         }
         return null;
     } catch (error) {
-        console.error("Geocoding error:", error);
+        clearTimeout(timeoutId);
+        // Silently fail on timeout to not pollute logs with AbortError
+        if ((error as any).name !== 'AbortError') {
+            console.error("Geocoding error for address:", address.substring(0, 30), error);
+        }
         return null;
     }
 }

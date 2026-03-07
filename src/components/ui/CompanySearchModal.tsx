@@ -6,6 +6,7 @@ import { useState, useEffect, useMemo, useCallback } from 'react';
 import { X, Search, Building2, MapPin, Loader2, Navigation } from 'lucide-react';
 import { Convention } from '@/store/convention';
 import { useSchoolStore } from '@/store/school';
+import { useUserStore } from '@/store/user';
 import { getCoordinates, calculateDistance } from '@/lib/geocoding';
 import { GoogleMap, useJsApiLoader, MarkerF, InfoWindowF } from '@react-google-maps/api';
 
@@ -51,7 +52,27 @@ const defaultCenter = {
 };
 
 export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddress, conventions }: CompanySearchModalProps) {
-    const { partnerCompanies, hiddenActivities, hiddenJobs, hiddenClasses } = useSchoolStore();
+    const { hiddenActivities, hiddenJobs, hiddenClasses } = useSchoolStore();
+
+    const [fetchedActivities, setFetchedActivities] = useState<string[]>([]);
+    const [fetchedJobs, setFetchedJobs] = useState<string[]>([]);
+    const [fetchedClasses, setFetchedClasses] = useState<string[]>([]);
+    const { schoolId } = useUserStore();
+
+    useEffect(() => {
+        // Obtenir l'UAI pour l'appel de filtre
+        const uai = schoolId || useUserStore.getState().uai || useSchoolStore.getState().schoolName;
+        if (isOpen && uai) {
+            fetch(`/api/partners/filters?uai=${uai}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.activities) setFetchedActivities(data.activities);
+                    if (data.sectors) setFetchedJobs(data.sectors);
+                    if (data.classes) setFetchedClasses(data.classes);
+                })
+                .catch(err => console.error("Error fetching partner filters:", err));
+        }
+    }, [isOpen, schoolId]);
 
     // Siret -> Classes Map from Conventions (for visibility check)
     const classesBySiret = useMemo(() => {
@@ -66,16 +87,12 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
     }, [conventions]);
 
     const uniqueActivities = useMemo(() => {
-        const set = new Set(partnerCompanies.map(p => p.activity).filter(Boolean));
-        // Filter out hidden activities
-        return Array.from(set).filter(a => !hiddenActivities.includes(a)).sort();
-    }, [partnerCompanies, hiddenActivities]);
+        return fetchedActivities.filter(a => !(hiddenActivities || []).includes(a)).sort();
+    }, [fetchedActivities, hiddenActivities]);
 
     const uniqueJobs = useMemo(() => {
-        const set = new Set(partnerCompanies.flatMap(p => p.jobs || []).filter(Boolean));
-        // Filter out hidden jobs
-        return Array.from(set).filter(j => !hiddenJobs.includes(j)).sort();
-    }, [partnerCompanies, hiddenJobs]);
+        return fetchedJobs.filter(j => !(hiddenJobs || []).includes(j)).sort();
+    }, [fetchedJobs, hiddenJobs]);
     const [origins, setOrigins] = useState<{ school: boolean; home: boolean }>({ school: true, home: false });
     const [radius, setRadius] = useState<number | null>(10);
     const [sectionFilter, setSectionFilter] = useState<string>('');
@@ -106,9 +123,13 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
     }, []);
 
     const availableSections = useMemo(() => {
-        const sections = Array.from(new Set(conventions.map(c => c.eleve_classe).filter(Boolean)));
-        return sections.filter(s => !hiddenClasses.includes(s)).sort();
-    }, [conventions, hiddenClasses]);
+        // We merge local convention classes with the newly fetched classes from the whole school
+        const sections = Array.from(new Set([
+            ...conventions.map(c => c.eleve_classe).filter(Boolean),
+            ...fetchedClasses
+        ]));
+        return sections.filter((s: string) => !hiddenClasses.includes(s)).sort();
+    }, [conventions, fetchedClasses, hiddenClasses]);
 
     // Auto-fit bounds when results or origins change
     useEffect(() => {
@@ -173,7 +194,43 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
             // Set map center to first origin
             setMapCenter({ lat: originPoints[0].lat, lng: originPoints[0].lon });
 
-            // 2. Process Companies
+            // 2. Fetch from API for Partners
+            const currentSchoolId = schoolId || useUserStore.getState().uai || useSchoolStore.getState().schoolName;
+
+            let partnersOptions: any[] = [];
+            try {
+                const apiParams = new URLSearchParams();
+                if (currentSchoolId) apiParams.append('uai', currentSchoolId);
+
+                // Select Origin Point to determine radius center
+                const originPoint = originPoints[0];
+
+                if (originPoint) {
+                    apiParams.append('lat', originPoint.lat.toString());
+                    apiParams.append('lng', originPoint.lon.toString());
+                    apiParams.append('radius', radius === null ? 'all' : radius.toString());
+                }
+
+                if (activityFilter) {
+                    apiParams.append('activity', activityFilter);
+                }
+                if (jobFilter) {
+                    apiParams.append('sector', jobFilter);
+                }
+
+                // Send Fetch
+                const response = await fetch(`/api/partners/search?${apiParams.toString()}`);
+                if (response.ok) {
+                    const json = await response.json();
+                    partnersOptions = json.partners || [];
+                } else {
+                    console.error('API Error searching partners');
+                }
+            } catch (e) {
+                console.error("Fetch API partner error", e);
+            }
+
+            // 3. Process Companies (Merge Conventions + Partners API)
             const companiesMap = new Map<string, Omit<CompanyResult, 'distance'>>();
 
             // A. From Conventions (History)
@@ -185,36 +242,32 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
                         address: c.ent_adresse,
                         section: c.eleve_classe,
                         siret: c.ent_siret,
-                        contact: `${c.ent_rep_nom} (${c.ent_rep_fonction})`,
-                        email: c.ent_rep_email,
+                        contact: c.ent_rep_nom ? `${c.ent_rep_nom} (${c.ent_rep_fonction || 'Contact'})` : '',
+                        email: c.ent_rep_email || '',
                         lat: 0, lon: 0
                     });
                 }
             });
 
-            // B. From Partners (Store)
-            partnerCompanies.forEach(p => {
+            // B. From Partners API (PostGres)
+            partnersOptions.forEach(p => {
                 if (companiesMap.has(p.siret)) {
-                    // Update existing with partner info
                     const existing = companiesMap.get(p.siret)!;
                     companiesMap.set(p.siret, {
                         ...existing,
                         activity: p.activity,
                         jobs: p.jobs,
                         isPartner: true,
-                        // Use partner coordinates if available and convention ones are 0
-                        lat: (existing.lat === 0 && p.coordinates) ? p.coordinates.lat : existing.lat,
-                        lon: (existing.lon === 0 && p.coordinates) ? p.coordinates.lng : existing.lon,
-                        // If partner has address and convention doesn't (unlikely), use partner's.
+                        lat: p.coordinates?.lat || existing.lat,
+                        lon: p.coordinates?.lng || existing.lon,
                     });
                 } else {
-                    // Add new partner
-                    const fullAddress = p.address.includes(p.city) ? p.address : `${p.address} ${p.postalCode} ${p.city}`;
+                    const fullAddress = p.address?.includes(p.city) ? p.address : `${p.address || ''} ${p.postalCode || ''} ${p.city || ''}`.trim();
                     companiesMap.set(p.siret, {
                         id: p.siret,
                         name: p.name,
                         address: fullAddress,
-                        section: '', // No section history
+                        section: '',
                         siret: p.siret,
                         contact: '',
                         email: '',
@@ -232,39 +285,38 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
 
             for (const company of uniqueCompanies) {
                 // VISIBILITY CHECKS (Admin Configuration)
-                // 1. Activity Visibility
                 if (company.activity && hiddenActivities.includes(company.activity)) continue;
 
-                // 2. Class Visibility
-                // If company is associated with classes, check if it has at least one visible class.
-                // If it has NO class history (pure partner), it remains visible.
                 const companyClasses = classesBySiret.get(company.siret);
                 if (companyClasses && companyClasses.size > 0) {
                     const hasVisibleClass = Array.from(companyClasses).some(c => !hiddenClasses.includes(c));
                     if (!hasVisibleClass) continue;
                 }
 
-                // 3. Job Visibility (Filter displayed jobs)
-                // We create a copy of the company object to avoid mutating the Map/Store source
                 let displayCompany = { ...company };
                 if (displayCompany.jobs && displayCompany.jobs.length > 0) {
                     displayCompany.jobs = displayCompany.jobs.filter(j => !hiddenJobs.includes(j));
-                    // Optional: If we want to hide companies that have NO visible jobs left?
-                    // "Par défaut tout apparait" -> If filtered list is empty but activity is valid, keep it?
-                    // Let's keep it, as the company might still be relevant by name/activity.
                 }
 
-                // Filters (User Selection)
-                if (sectionFilter && displayCompany.section !== sectionFilter) continue;
-
-                if (activityFilter) {
-                    const act = (displayCompany.activity || '').toLowerCase();
-                    if (!act.includes(activityFilter.toLowerCase())) continue;
+                // If user selected a specific class filter
+                if (sectionFilter) {
+                    const companyClasses = classesBySiret.get(company.siret);
+                    if (!companyClasses || !companyClasses.has(sectionFilter)) {
+                        continue; // Hide company if it doesn't have the selected class
+                    }
                 }
 
-                if (jobFilter) {
-                    const jobsStr = (displayCompany.jobs || []).join(' ').toLowerCase();
-                    if (!jobsStr.includes(jobFilter.toLowerCase())) continue;
+                // If we are filtering, the Backend already did it for Partners. 
+                // However, we still need to filter the Conventions (history limits).
+                if (!company.isPartner) {
+                    if (activityFilter) {
+                        const act = (displayCompany.activity || '').toLowerCase();
+                        if (!act.includes(activityFilter.toLowerCase())) continue;
+                    }
+                    if (jobFilter) {
+                        const jobsStr = (displayCompany.jobs || []).join(' ').toLowerCase();
+                        if (!jobsStr.includes(jobFilter.toLowerCase())) continue;
+                    }
                 }
 
                 // Use the modified displayCompany for the result

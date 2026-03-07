@@ -12,7 +12,6 @@ import { SignatureModal } from '@/components/ui/SignatureModal';
 import { SignatureTimeline } from '@/components/ui/SignatureTimeline';
 import { CompanySearchModal } from '@/components/ui/CompanySearchModal';
 import { pdfService } from '@/services/pdfService';
-import { MissionOrderPdf } from '@/components/pdf/MissionOrderPdf';
 import { ProfileModal } from '@/components/ui/ProfileModal';
 import { ParentValidationModal } from '@/components/ui/ParentValidationModal';
 import { TutorValidationModal } from '@/components/conventions/modals/TutorValidationModal';
@@ -28,30 +27,14 @@ import {
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
-import { SchoolAdminModal } from '@/components/admin/SchoolAdminModal';
-import SchoolAdminDashboard from '@/components/admin/SchoolAdminDashboard';
-import { SuperAdminModal } from '@/components/admin/SuperAdminModal';
-import { FeedbackModal } from '@/components/ui/FeedbackModal';
-import { TosModal } from '@/components/ui/TosModal';
-import { DeleteAccountModal } from '@/components/ui/DeleteAccountModal';
-import { AbsenceReportModal } from '@/components/ui/AbsenceReportModal';
-import { AttestationModal } from '@/components/ui/AttestationModal';
 import { SignatureVerificationModal } from '@/components/ui/SignatureVerificationModal';
-import { MissionOrderModal } from '@/components/admin/MissionOrderModal';
 import { useMissionOrderStore, MissionOrder } from '@/store/missionOrder';
 
 
-import { EmailCorrectionModal } from '@/components/ui/EmailCorrectionModal';
-import TrackingAssignmentModal from '@/components/ui/TrackingAssignmentModal';
+import { useAdminStore } from '@/store/admin';
+import { useDocumentStore } from '@/store/documents';
 import { ConventionStatusBadge } from '@/components/conventions/ConventionStatusBadge';
 import { ConventionActions } from '@/components/conventions/ConventionActions';
-import { AlumniModal } from '@/components/ui/AlumniModal';
-import { useAdminStore } from '@/store/admin';
-import { TrackingMatrixModal } from '@/components/ui/TrackingMatrixModal';
-import { ClassDocumentModal } from '@/components/ui/ClassDocumentModal';
-import { useDocumentStore } from '@/store/documents';
-import { StudentDocumentModal } from '@/components/ui/StudentDocumentModal';
-import { db, query, collection, getDocs } from '@/lib/firebase';
 import QRCode from 'qrcode';
 import { generateVerificationUrl } from '@/app/actions/sign';
 
@@ -61,11 +44,31 @@ const PdfPreview = dynamic(() => import('@/components/pdf/PdfPreview'), {
   loading: () => <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20"><div className="bg-white p-4 rounded shadow">Chargement de l'aperçu...</div></div>
 });
 
-import { pdf } from '@react-pdf/renderer';
+const MissionOrderPdf = dynamic(() => import('@/components/pdf/MissionOrderPdf').then(m => m.MissionOrderPdf), {
+  ssr: false,
+  loading: () => <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20"><div className="bg-white p-4 rounded shadow">Chargement du PDF...</div></div>
+});
+
 const PDFViewer = dynamic(
   () => import('@react-pdf/renderer').then((mod) => mod.PDFViewer),
   { ssr: false, loading: () => <p>Chargement du lecteur PDF...</p> }
 );
+
+const SchoolAdminModal = dynamic(() => import('@/components/admin/SchoolAdminModal').then(m => m.SchoolAdminModal), { ssr: false });
+const SchoolAdminDashboard = dynamic(() => import('@/components/admin/SchoolAdminDashboard'), { ssr: false });
+const SuperAdminModal = dynamic(() => import('@/components/admin/SuperAdminModal').then(m => m.SuperAdminModal), { ssr: false });
+const FeedbackModal = dynamic(() => import('@/components/ui/FeedbackModal').then(m => m.FeedbackModal), { ssr: false });
+const TosModal = dynamic(() => import('@/components/ui/TosModal').then(m => m.TosModal), { ssr: false });
+const DeleteAccountModal = dynamic(() => import('@/components/ui/DeleteAccountModal').then(m => m.DeleteAccountModal), { ssr: false });
+const AbsenceReportModal = dynamic(() => import('@/components/ui/AbsenceReportModal').then(m => m.AbsenceReportModal), { ssr: false });
+const AttestationModal = dynamic(() => import('@/components/ui/AttestationModal').then(m => m.AttestationModal), { ssr: false });
+const MissionOrderModal = dynamic(() => import('@/components/admin/MissionOrderModal').then(m => m.MissionOrderModal), { ssr: false });
+const AlumniModal = dynamic(() => import('@/components/ui/AlumniModal').then(m => m.AlumniModal), { ssr: false });
+const TrackingMatrixModal = dynamic(() => import('@/components/ui/TrackingMatrixModal').then(m => m.TrackingMatrixModal), { ssr: false });
+const ClassDocumentModal = dynamic(() => import('@/components/ui/ClassDocumentModal').then(m => m.ClassDocumentModal), { ssr: false });
+const StudentDocumentModal = dynamic(() => import('@/components/ui/StudentDocumentModal').then(m => m.StudentDocumentModal), { ssr: false });
+const EmailCorrectionModal = dynamic(() => import('@/components/ui/EmailCorrectionModal').then(m => m.EmailCorrectionModal), { ssr: false });
+const TrackingAssignmentModal = dynamic(() => import('@/components/ui/TrackingAssignmentModal'), { ssr: false });
 
 // Helper for Admin Roles
 const isSchoolAdminRole = (r: UserRole) => {
@@ -79,7 +82,7 @@ const isHighLevelAdmin = (r: UserRole | string) => {
 
 // Helper for Filter Access (includes Admin Roles + Teachers + AT DDFPT)
 const hasFilterAccess = (r: UserRole) => {
-  return isSchoolAdminRole(r) || r === 'teacher' || r === 'teacher_tracker' || r === 'at_ddfpt' || r === 'company_head' || r === 'tutor' || r === 'company_head_tutor';
+  return isSchoolAdminRole(r) || r === 'teacher' || r === 'teacher_tracker' || r === 'company_head' || r === 'tutor' || r === 'company_head_tutor';
 };
 
 export default function Home() {
@@ -913,7 +916,7 @@ export default function Home() {
                   Créer une Évaluation
                 </button>
 
-                {role === 'teacher' && (
+                {['teacher', 'admin', 'school_admin', 'ddfpt', 'at_ddfpt', 'business_manager'].includes(effectiveRole) && (
                   <button
                     onClick={() => setIsTrackingMatrixOpen(true)}
                     className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
@@ -947,6 +950,8 @@ export default function Home() {
         <TrackingMatrixModal
           isOpen={isTrackingMatrixOpen}
           onClose={() => setIsTrackingMatrixOpen(false)}
+          currentUserRole={effectiveRole}
+          currentTeacherEmail={user.email || ''}
           classId={(() => {
             // Find class where current user is main teacher
             // For demo, if 'pledgeum@gmail.com' (admin/dev), fallback to first class or specific test class
@@ -1107,12 +1112,14 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
     // Only fetch for relevant roles to avoid unnecessary reads
     if (role === 'student' || role === 'parent' || role === 'company_head') return;
 
-    // Fetch ALL evaluations to find assigned ones (optimization: could filter later)
     const fetchTemplates = async () => {
       try {
-        const q = query(collection(db, "evaluation_templates"));
-        const snapshot = await getDocs(q);
-        setEvaluationTemplates(snapshot.docs.map(d => ({ id: d.id, ...d.data() })));
+        const res = await fetch('/api/templates');
+        if (!res.ok) throw new Error("Erreur HTTP api templates");
+        const data = await res.json();
+        if (data.success) {
+          setEvaluationTemplates(data.templates);
+        }
       } catch (e) {
         console.error("Error fetching evaluation templates", e);
       }
@@ -1171,7 +1178,8 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
       const { url } = await generateVerificationUrl(convention, 'mission_order');
       const qrCode = await QRCode.toDataURL(url);
 
-      const blob = await pdf(<MissionOrderPdf missionOrder={odm} convention={convention} qrCodeUrl={qrCode} />).toBlob();
+      const { generateMissionOrderBlob } = await import('@/components/pdf/CredentialPdfGenerator');
+      const blob = await generateMissionOrderBlob(odm, convention, qrCode);
       const pdfUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = pdfUrl;
@@ -1226,14 +1234,19 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
     if (role === 'parent' && status === 'SUBMITTED' && conv.est_mineur) return true;
 
     // Flexible Signing Logic for Partners
-    // They can sign if Teacher validated (VALIDATED_TEACHER), or if one of them already signed (SIGNED_COMPANY)
-    // We must check if THEY already signed to avoid showing the button again
-    if (role === 'company_head' || role === 'tutor') {
-      const isReady = ['VALIDATED_TEACHER', 'SIGNED_COMPANY'].includes(status);
+    if (role === 'company_head' || role === 'tutor' || role === 'company_head_tutor') {
+      const isReady = ['VALIDATED_TEACHER', 'SIGNED_COMPANY', 'SIGNED_TUTOR'].includes(status);
       if (!isReady) return false;
 
-      if (role === 'company_head') return !conv.signatures?.companyAt;
-      if (role === 'tutor') return !conv.signatures?.tutorAt;
+      // Use signatures nested structure
+      if (role === 'company_head') return !conv.signatures?.company_head?.signedAt;
+      if (role === 'tutor') return !conv.signatures?.tutor?.signedAt;
+      if (role === 'company_head_tutor') {
+        // Dual role: actionable if EITHER is missing (or maybe we force BOTH?)
+        // Usually, the Signer button opens the modal which has the dual sign checkbox.
+        // So it's actionable if both are missing OR if they want to sign the remaining one.
+        return !conv.signatures?.company_head?.signedAt || !conv.signatures?.tutor?.signedAt;
+      }
     }
 
     if (role === 'school_head' && status === 'SIGNED_TUTOR') return true;
@@ -1345,8 +1358,9 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
         setActiveModal('establishment');
         break;
       case 'company_head_tutor':
-        if (dualRoleView === 'company_head') setActiveModal('establishment');
-        else setActiveModal('tutor');
+        // Inside this handler, dialRoleView is not in scope. Defaulting to 'establishment' 
+        // as the CompanyValidationModal handles the dual signature process anyway.
+        setActiveModal('establishment');
         break;
       case 'school_head':
         // case 'ddfpt': // Maybe DDFPT also signs? Usually they validate, head signs.
@@ -1434,11 +1448,11 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
     if (role === 'parent' && status === 'SUBMITTED') return 'Vérifier et Signer';
 
     // Flexible Logic
-    if (role === 'company_head' || role === 'tutor') {
-      const isReady = ['VALIDATED_TEACHER', 'SIGNED_COMPANY'].includes(status);
+    if (role === 'company_head' || role === 'tutor' || role === 'company_head_tutor') {
+      const isReady = ['VALIDATED_TEACHER', 'SIGNED_COMPANY', 'SIGNED_TUTOR'].includes(status);
       if (isReady) {
-        if (role === 'company_head' && !conv.signatures?.companyAt) return 'Signer la convention';
-        if (role === 'tutor' && !conv.signatures?.tutorAt) return 'Signer la convention';
+        if ((role === 'company_head' || role === 'company_head_tutor') && !conv.signatures?.company_head?.signedAt) return 'Signer la convention';
+        if ((role === 'tutor' || role === 'company_head_tutor') && !conv.signatures?.tutor?.signedAt) return 'Signer la convention';
       }
     }
 
@@ -1458,13 +1472,14 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
     }
 
     let pendingRole = '';
+    const signatures = conv.signatures as any;
     switch (conv.status) {
       case 'SUBMITTED': pendingRole = conv.est_mineur ? 'Représentant Légal' : 'Enseignant Référent/Professeur Principal'; break;
       case 'SIGNED_PARENT': pendingRole = 'Enseignant Référent/Professeur Principal'; break;
       case 'VALIDATED_TEACHER':
         // Could be both or just one if flexible
-        if (conv.signatures?.tutorAt && !conv.signatures?.companyAt) pendingRole = 'Chef d\'Entreprise';
-        else if (!conv.signatures?.tutorAt && conv.signatures?.companyAt) pendingRole = 'Tuteur'; // Rare if status update worked, but handle it
+        if (signatures?.tutor?.signedAt && !signatures?.company_head?.signedAt) pendingRole = 'Chef d\'Entreprise';
+        else if (!signatures?.tutor?.signedAt && signatures?.company_head?.signedAt) pendingRole = 'Tuteur'; // Rare if status update worked, but handle it
         else pendingRole = 'Tuteur et Chef d\'Entreprise';
         break;
       case 'SIGNED_COMPANY': pendingRole = 'Tuteur'; break;
@@ -1658,17 +1673,21 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
                   </div>
 
                   {/* Display Tracking Teacher Name if assigned */}
-                  {conv.prof_suivi_email && (
+                  {conv.visit?.tracking_teacher_email && (
                     <div className="mt-2 text-sm text-gray-600 flex items-center">
                       <UserPlus className="w-4 h-4 mr-2 text-indigo-500" />
                       <span>
                         Suivi par : <span className="font-semibold text-indigo-700">
-                          {(() => {
-                            if (conv.prof_suivi_email === 'pledgeum@gmail.com') return 'TEST (Moi-même)';
-                            const cls = classes.find(c => c.name === conv.eleve_classe);
-                            const teacher = cls?.teachersList?.find(t => t.email === conv.prof_suivi_email);
-                            return teacher ? `${teacher.firstName} ${teacher.lastName}` : conv.prof_suivi_email;
-                          })()}
+                          {conv.visit.tracking_teacher_first_name && conv.visit.tracking_teacher_last_name
+                            ? `${conv.visit.tracking_teacher_first_name} ${conv.visit.tracking_teacher_last_name}`
+                            : conv.visit.tracking_teacher_email.includes('.temp')
+                              ? "Compte enseignant en cours de création"
+                              : conv.visit.tracking_teacher_email}
+                        </span>
+                        <span className="text-gray-500 font-normal ml-1">
+                          ({conv.visit.tracking_teacher_email.includes('.temp')
+                            ? "email non encore renseigné par l'enseignant concerné"
+                            : conv.visit.tracking_teacher_email})
                         </span>
                       </span>
                     </div>
@@ -1725,14 +1744,17 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
                 <SignatureTimeline convention={conv} />
               </div>
 
-              {/* Class Documents Button - Visible to ALL roles */}
+              {/* Class Documents Button - Visible to School Staff and Students */}
               {(() => {
                 const cls = classes.find(c => c.name === conv.eleve_classe);
                 if (!cls) return null;
 
+                const allowedRoles = ['admin', 'teacher', 'main_teacher', 'school_head', 'ddfpt', 'at_ddfpt', 'business_manager', 'student'];
+                if (!allowedRoles.includes(role)) return null;
+
                 return (
                   <div className="flex-1 sm:flex-none">
-                    <StudentDocumentButton classId={cls.id} />
+                    <StudentDocumentButton classId={conv.eleve_classe} />
                   </div>
                 );
               })()}
@@ -1969,6 +1991,7 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
       {
         isPdfModalOpen && selectedConventionId && (
           <PdfPreview
+            key={`pdf-${selectedConventionId}-${conventions.find(c => c.id === selectedConventionId)?.status}-${conventions.find(c => c.id === selectedConventionId)?.updatedAt || ''}`}
             data={conventions.find(c => c.id === selectedConventionId) as Convention}
             onClose={() => setIsPdfModalOpen(false)}
           />

@@ -10,9 +10,6 @@ import { useUserStore } from '@/store/user';
 import Papa from 'papaparse';
 import { useConventionStore } from '@/store/convention';
 import { db, collection, query, where, getDocs, deleteDoc, doc, writeBatch } from '@/lib/firebase';
-import { pdf } from '@react-pdf/renderer';
-import { StudentCredentialsPdf } from '@/components/pdf/StudentCredentialsPdf';
-import { TeacherCredentialsPdf } from '@/components/pdf/TeacherCredentialsPdf';
 import { toast } from 'sonner';
 
 // --- Checkable Dropdown Component ---
@@ -111,6 +108,31 @@ export default function SchoolAdminDashboard() {
     const { conventions } = useConventionStore();
     const { email, role, id, schoolId, profileData } = useUserStore();
 
+    // Fetch initial data
+    useEffect(() => {
+        if (schoolId) {
+            fetchSchoolData(schoolId);
+            fetchCollaborators(schoolId);
+        }
+    }, [schoolId, fetchSchoolData, fetchCollaborators]);
+
+    // NEW PARTNERS FETCH
+    const [fetchedPartners, setFetchedPartners] = useState<PartnerCompany[]>([]);
+    const [isFetchingPartners, setIsFetchingPartners] = useState(false);
+
+    useEffect(() => {
+        if (schoolId && activeTab === 'partners') {
+            setIsFetchingPartners(true);
+            fetch(`/api/partners/search?uai=${schoolId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.partners) setFetchedPartners(data.partners);
+                })
+                .catch(err => console.error("Error fetching partners:", err))
+                .finally(() => setIsFetchingPartners(false));
+        }
+    }, [schoolId, activeTab]);
+
     console.log('[DASHBOARD_DEBUG] State:', {
         email,
         role,
@@ -152,7 +174,7 @@ export default function SchoolAdminDashboard() {
     // Permissions
     const isSchoolHead = (email && schoolHeadEmail && email.toLowerCase() === schoolHeadEmail.toLowerCase()) || role === 'school_head';
     const isDDFPT = role === 'ddfpt';
-    const isDelegatedAdmin = email && collaborators.some(c => c.id === delegatedAdminId && c.email.toLowerCase() === email.toLowerCase());
+    const isDelegatedAdmin = email && collaborators.some(c => c.id === delegatedAdminId && (c.email || '').toLowerCase() === email.toLowerCase());
     const canEditIdentity = isSchoolHead || isDDFPT || isDelegatedAdmin || (schoolHeadEmail === "");
     const canDelegate = isSchoolHead || isDDFPT || (schoolHeadEmail === "");
 
@@ -162,8 +184,8 @@ export default function SchoolAdminDashboard() {
     const missingConfig = !allowedConventionTypes || allowedConventionTypes.length === 0;
 
     // Derived Partner Data
-    const uniqueActivities = useMemo(() => Array.from(new Set(partnerCompanies.map(p => p.activity).filter(Boolean))).sort(), [partnerCompanies]);
-    const uniqueJobs = useMemo(() => Array.from(new Set(partnerCompanies.flatMap(p => p.jobs || []).filter(Boolean))).sort(), [partnerCompanies]);
+    const uniqueActivities = useMemo(() => Array.from(new Set(fetchedPartners.map(p => p.activity).filter(Boolean))).sort(), [fetchedPartners]);
+    const uniqueJobs = useMemo(() => Array.from(new Set(fetchedPartners.flatMap(p => p.jobs || []).filter(Boolean))).sort(), [fetchedPartners]);
     const classesBySiret = useMemo(() => {
         const map = new Map<string, Set<string>>();
         conventions.forEach(c => {
@@ -181,21 +203,34 @@ export default function SchoolAdminDashboard() {
         return Array.from(set).sort();
     }, [classesBySiret]);
 
-    const visibleActivities = uniqueActivities.filter(a => !hiddenActivities.includes(a));
-    const visibleJobs = uniqueJobs.filter(j => !hiddenJobs.includes(j));
-    const visibleClasses = uniqueClassesForPartners.filter(c => !hiddenClasses.includes(c));
+    const visibleActivities = uniqueActivities.filter(a => !(hiddenActivities || []).includes(a));
+    const visibleJobs = uniqueJobs.filter(j => !(hiddenJobs || []).includes(j));
+    const visibleClasses = uniqueClassesForPartners.filter(c => !(hiddenClasses || []).includes(c));
 
     const filteredPartners = useMemo(() => {
-        return partnerCompanies.filter(p => {
-            if (p.activity && hiddenActivities.includes(p.activity)) return false;
-            if (p.jobs && p.jobs.length > 0 && !p.jobs.some(j => !hiddenJobs.includes(j))) return false;
+        const safeHiddenActivities = hiddenActivities || [];
+        const safeHiddenJobs = hiddenJobs || [];
+        const safeHiddenClasses = hiddenClasses || [];
+
+        return fetchedPartners.filter(p => {
+            if (p.activity && safeHiddenActivities.includes(p.activity)) return false;
+            if (p.jobs && p.jobs.length > 0 && !p.jobs.some(j => !safeHiddenJobs.includes(j))) return false;
             const partnerClasses = classesBySiret.get(p.siret);
-            if (partnerClasses && partnerClasses.size > 0 && !Array.from(partnerClasses).some(c => !hiddenClasses.includes(c))) return false;
+            if (partnerClasses && partnerClasses.size > 0 && !Array.from(partnerClasses).some(c => !safeHiddenClasses.includes(c))) return false;
             return true;
         });
-    }, [partnerCompanies, hiddenActivities, hiddenJobs, hiddenClasses, classesBySiret]);
+    }, [fetchedPartners, hiddenActivities, hiddenJobs, hiddenClasses, classesBySiret]);
 
     // Handlers
+    const handleActivityChange = (selected: string[]) => {
+        const hidden = uniqueActivities.filter(a => !selected.includes(a));
+        setHiddenActivities(hidden);
+    };
+
+    const handleJobChange = (selected: string[]) => {
+        const hidden = uniqueJobs.filter(j => !selected.includes(j));
+        setHiddenJobs(hidden);
+    };
     const handleAddCollaborator = async (e: React.FormEvent) => {
         e.preventDefault();
         if (newCollab.name && newCollab.email && schoolId) {
@@ -326,6 +361,10 @@ export default function SchoolAdminDashboard() {
         Papa.parse(file, {
             header: true, skipEmptyLines: true,
             complete: async (results) => {
+                const totalRows = results.data.length;
+                let processedRows = 0;
+                useSchoolStore.getState().setImportProgress({ current: 0, total: totalRows, status: "Analyse des entreprises..." });
+
                 const findKey = (row: any, search: string[]) => {
                     const keys = Object.keys(row);
                     for (const k of keys) {
@@ -336,6 +375,8 @@ export default function SchoolAdminDashboard() {
                 };
                 const partnersToAdd: PartnerCompany[] = [];
                 for (const row of results.data as any[]) {
+                    processedRows++;
+                    useSchoolStore.getState().setImportProgress({ current: processedRows, total: totalRows, status: "Recherche SIRENE..." });
                     const act = findKey(row, ['activite', 'activity']) || '';
                     const met = findKey(row, ['metier', 'job']) || '';
                     const sir = (findKey(row, ['siret', 'lieusiret']) || '').replace(/[^0-9]/g, '');
@@ -360,10 +401,29 @@ export default function SchoolAdminDashboard() {
                 }
                 if (partnersToAdd.length > 0) {
                     if (!schoolId) { alert("Erreur: Aucun établissement lié au compte."); return; }
-                    await importPartners(partnersToAdd, schoolId);
-                    alert(`${partnersToAdd.length} partenaires importés.`);
+
+                    try {
+                        useSchoolStore.getState().setImportProgress({ current: processedRows, total: totalRows, status: "Sauvegarde en BDD..." });
+                        const response = await fetch('/api/partners/import', {
+                            method: 'POST',
+                            headers: { 'Content-Type': 'application/json' },
+                            body: JSON.stringify({ partners: partnersToAdd, schoolId })
+                        });
+
+                        if (!response.ok) {
+                            const errorData = await response.json();
+                            throw new Error(errorData.error || "Erreur serveur lors de l'import");
+                        }
+
+                        const result = await response.json();
+                        alert(`Import Partenaires Réussi !\n\nCréés: ${result.stats.created}\nMis à jour: ${result.stats.updated}`);
+                        fetch(`/api/partners/search?uai=${schoolId}`).then(res => res.json()).then(data => { if (data.partners) setFetchedPartners(data.partners); });
+                    } catch (err: any) {
+                        alert(`Erreur d'import : ${err.message}`);
+                    }
                 }
                 setIsPartnerImporting(false);
+                useSchoolStore.getState().setImportProgress(null);
             }
         });
     };
@@ -436,7 +496,8 @@ export default function SchoolAdminDashboard() {
 
             // 3. Generate PDF
             toast.loading("Génération du PDF...", { id: toastId });
-            const blob = await pdf(<StudentCredentialsPdf students={studentsToPrint} classInfo={cls} schoolName={schoolName} />).toBlob();
+            const { generateStudentCredentialsBlob } = await import('@/components/pdf/CredentialPdfGenerator');
+            const blob = await generateStudentCredentialsBlob(studentsToPrint, cls, schoolName);
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -485,7 +546,8 @@ export default function SchoolAdminDashboard() {
 
             if (!response.ok) throw new Error("Échec de la sauvegarde");
 
-            const blob = await pdf(<TeacherCredentialsPdf teachers={teachersToPrint} schoolName={schoolName} classInfo={cls} />).toBlob();
+            const { generateTeacherCredentialsBlob } = await import('@/components/pdf/CredentialPdfGenerator');
+            const blob = await generateTeacherCredentialsBlob(teachersToPrint, cls, schoolName);
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
@@ -823,9 +885,11 @@ export default function SchoolAdminDashboard() {
                                     <h4 className="font-bold text-gray-900">Base de données Partenaires</h4>
                                     <p className="text-sm text-gray-500">Importez vos entreprises partenaires pour la recherche élève.</p>
                                 </div>
-                                <button onClick={() => partnerFileInputRef.current?.click()} disabled={isPartnerImporting} className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center shadow-lg transition-all transform active:scale-95">
+                                <button onClick={() => partnerFileInputRef.current?.click()} disabled={isPartnerImporting} className="px-6 py-2.5 bg-blue-600 text-white rounded-lg font-bold hover:bg-blue-700 disabled:opacity-50 flex items-center shadow-lg transition-all transform active:scale-95 min-w-[240px] justify-center">
                                     {isPartnerImporting ? <Loader2 className="animate-spin w-5 h-5 mr-2" /> : <FileSpreadsheet className="w-5 h-5 mr-2" />}
-                                    Importer Partenaires (CSV)
+                                    {isPartnerImporting && importProgress && importProgress.total > 0
+                                        ? `${importProgress.status} (${importProgress.current}/${importProgress.total})`
+                                        : "Importer Partenaires (CSV)"}
                                 </button>
                                 <input type="file" ref={partnerFileInputRef} onChange={handlePartnerImportCSV} accept=".csv" className="hidden" />
                             </div>
@@ -843,26 +907,39 @@ export default function SchoolAdminDashboard() {
                                             <tr>
                                                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">SIRET</th>
                                                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Nom</th>
+                                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Ville</th>
                                                 <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Filières</th>
+                                                <th className="px-6 py-3 text-left text-xs font-bold text-gray-500 uppercase">Classes</th>
                                                 <th className="px-6 py-3 text-right text-xs font-bold text-gray-500 uppercase">Actions</th>
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-200">
-                                            {filteredPartners.map(p => (
-                                                <tr key={p.siret} className="hover:bg-gray-50">
-                                                    <td className="px-6 py-4 text-sm font-mono text-gray-500">{p.siret}</td>
-                                                    <td className="px-6 py-4 text-sm font-bold text-gray-900">{p.name}</td>
-                                                    <td className="px-6 py-4">
-                                                        <div className="flex flex-wrap gap-1">
-                                                            {p.jobs?.map((j, i) => <span key={i} className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">{j}</span>)}
-                                                        </div>
-                                                    </td>
-                                                    <td className="px-6 py-4 text-right">
-                                                        <button onClick={() => removePartner(p.siret)} className="text-gray-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
-                                                    </td>
-                                                </tr>
-                                            ))}
-                                            {partnerCompanies.length === 0 && <tr><td colSpan={4} className="px-6 py-12 text-center text-gray-500 italic">Aucun partenaire enregistré.</td></tr>}
+                                            {isFetchingPartners ? (
+                                                <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-500 italic"><Loader2 className="animate-spin w-8 h-8 mx-auto mb-2 text-blue-600" />Chargement des partenaires...</td></tr>
+                                            ) : fetchedPartners.length === 0 ? (
+                                                <tr><td colSpan={6} className="px-6 py-12 text-center text-gray-500 italic">Aucun partenaire enregistré.</td></tr>
+                                            ) : (
+                                                filteredPartners.map(p => (
+                                                    <tr key={p.siret} className="hover:bg-gray-50">
+                                                        <td className="px-6 py-4 text-sm font-mono text-gray-500">{p.siret}</td>
+                                                        <td className="px-6 py-4 text-sm font-bold text-gray-900">{p.name}</td>
+                                                        <td className="px-6 py-4 text-sm text-gray-500">{p.city}</td>
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {p.jobs?.map((j, i) => <span key={i} className="px-2 py-0.5 bg-blue-100 text-blue-700 rounded-full text-[10px] font-bold">{j}</span>)}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4">
+                                                            <div className="flex flex-wrap gap-1">
+                                                                {(p as any).classes?.map((c: string, i: number) => <span key={i} className="px-2 py-0.5 bg-green-100 text-green-700 rounded-full text-[10px] font-bold">{c}</span>)}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-6 py-4 text-right">
+                                                            <button onClick={() => removePartner(p.siret)} className="text-gray-400 hover:text-red-600"><Trash2 className="w-4 h-4" /></button>
+                                                        </td>
+                                                    </tr>
+                                                ))
+                                            )}
                                         </tbody>
                                     </table>
                                 </div>

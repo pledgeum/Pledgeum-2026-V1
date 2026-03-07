@@ -35,7 +35,7 @@ export const ConventionStatusBadge = ({ status, signatures }: { status: string, 
 
     // Robustness: Override color/label if Student Signed but status lags
     // This ensures "Green" feedback immediately after signature
-    const isStudentSigned = signatures?.student?.signedAt || signatures?.studentAt;
+    const isStudentSigned = signatures?.student?.signedAt;
     const effectiveClass = (status === 'DRAFT' && isStudentSigned)
         ? "bg-green-100 text-green-800 border-green-200" // Explicitly Green as requested
         : config.className;

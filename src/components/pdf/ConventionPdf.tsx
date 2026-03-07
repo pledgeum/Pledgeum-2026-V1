@@ -141,8 +141,8 @@ const QrCodeFooter = ({ url, code }: { url: string, code?: string }) => (
         <Image src={url} style={{ width: 50, height: 50 }} />
         <Text style={{ fontSize: 6, color: '#666', marginTop: 2 }}>Authenticité vérifiable</Text>
         {code && (
-            <Text style={{ fontSize: 5, color: '#999', marginTop: 1, fontFamily: 'Courier' }}>
-                Code d'authentification de la signature numérique : {code}
+            <Text style={{ fontSize: 5, color: '#4b5563', marginTop: 1, fontFamily: 'Courier', fontWeight: 'bold' }}>
+                Certificat d'Authenticité Numérique : {code}
             </Text>
         )}
     </View>
@@ -165,7 +165,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                 {date && <Text style={{ fontSize: 5, color: '#059669', marginTop: 1 }}>Le {new Date(date).toLocaleString('fr-FR')}</Text>}
                 {(code || signatureId) && (
                     <View style={[localStyles.authCodeBox, { marginTop: 1, paddingVertical: 1 }]}>
-                        <Text style={localStyles.authCodeText}>Ref: {signatureId || code}</Text>
+                        <Text style={localStyles.authCodeText}>Certificat: {signatureId || code}</Text>
                     </View>
                 )}
                 {hash && <Text style={localStyles.hashText}>Hash: {hash.substring(0, 24)}...</Text>}
@@ -459,14 +459,14 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                                 signatureId={data.signatures?.head?.signatureId}
                             />
                         </View>
-                        <View style={[styles.signatureBox, data.signatures?.company_head?.hash ? localStyles.signatureBoxValid : {}]}>
+                        <View style={[styles.signatureBox, (data.signatures?.company_head?.hash || (data.signatures?.tutor?.hash && data.ent_rep_email === data.tuteur_email)) ? localStyles.signatureBoxValid : {}]}>
                             <Text style={styles.signatureLabel}>Le représentant de l’entreprise</Text>
                             <SignatureContent
-                                img={data.signatures?.company_head?.img}
-                                hash={data.signatures?.company_head?.hash}
-                                date={data.signatures?.company_head?.signedAt}
-                                code={data.signatures?.company_head?.code}
-                                signatureId={data.signatures?.company_head?.signatureId}
+                                img={data.signatures?.company_head?.img || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.img : undefined)}
+                                hash={data.signatures?.company_head?.hash || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.hash : undefined)}
+                                date={data.signatures?.company_head?.signedAt || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.signedAt : undefined)}
+                                code={data.signatures?.company_head?.code || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.code : undefined)}
+                                signatureId={data.signatures?.company_head?.signatureId || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.signatureId : undefined)}
                             />
                         </View>
                         <View style={[styles.signatureBox, data.signatures?.student?.hash ? localStyles.signatureBoxValid : {}]}>
@@ -503,14 +503,14 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                                 />
                             )}
                         </View>
-                        <View style={[styles.signatureBox, data.signatures?.tutor?.hash ? localStyles.signatureBoxValid : {}]}>
+                        <View style={[styles.signatureBox, (data.signatures?.tutor?.hash || (data.signatures?.company_head?.hash && data.ent_rep_email === data.tuteur_email)) ? localStyles.signatureBoxValid : {}]}>
                             <Text style={styles.signatureLabel}>Le tuteur</Text>
                             <SignatureContent
-                                img={data.signatures?.tutor?.img}
-                                hash={data.signatures?.tutor?.hash}
-                                date={data.signatures?.tutor?.signedAt}
-                                code={data.signatures?.tutor?.code}
-                                signatureId={data.signatures?.tutor?.signatureId}
+                                img={data.signatures?.tutor?.img || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.img : undefined)}
+                                hash={data.signatures?.tutor?.hash || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.hash : undefined)}
+                                date={data.signatures?.tutor?.signedAt || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.signedAt : undefined)}
+                                code={data.signatures?.tutor?.code || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.code : undefined)}
+                                signatureId={data.signatures?.tutor?.signatureId || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.signatureId : undefined)}
                             />
                         </View>
                         <View style={[styles.signatureBox, data.signatures?.teacher?.hash ? localStyles.signatureBoxValid : {}]}>

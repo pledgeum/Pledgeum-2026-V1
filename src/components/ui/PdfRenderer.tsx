@@ -2,10 +2,10 @@
 
 import { usePDF } from '@react-pdf/renderer';
 import React, { useEffect, useState, ReactElement } from 'react';
-import { Download, FileText, Eye, Loader2, AlertCircle } from 'lucide-react';
+import { FileText, Eye, Loader2, AlertCircle } from 'lucide-react';
 
 interface PdfRendererProps {
-    document: ReactElement;
+    document: ReactElement<any>;
     height?: string;
     className?: string; // Add className prop to match interface
 }
@@ -77,16 +77,6 @@ export const PdfRenderer = ({ document, height = '600px', className }: PdfRender
                 />
             </div>
 
-            {/* Universal Download Link (Backup) */}
-            <div className="hidden md:flex justify-end mt-2">
-                <a
-                    href={instance.url || '#'}
-                    download="convention-stage.pdf"
-                    className="text-sm text-gray-600 hover:text-blue-600 hover:underline flex items-center gap-1 transition-colors"
-                >
-                    <Download className="w-4 h-4" /> Télécharger le fichier
-                </a>
-            </div>
         </div>
     );
 };

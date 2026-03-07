@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, QrCode, Camera, AlertTriangle, KeyRound, Search, CheckCircle, FileText } from 'lucide-react';
+import { X, QrCode, Camera, AlertTriangle, KeyRound, Search, CheckCircle, FileText, Building2, Calendar, User } from 'lucide-react';
 import { Html5QrcodeScanner } from 'html5-qrcode';
 import { useRouter } from 'next/navigation';
 import { useConventionStore, Convention } from '@/store/convention';
@@ -65,12 +65,14 @@ export function SignatureVerificationModal({ isOpen, onClose, onViewDocument }: 
         setManualError('');
         setResult(null);
 
-        if (!code.trim()) {
+        const sanitizedCode = code.replace(/[^A-Za-z0-9]/g, '').toUpperCase().trim();
+
+        if (!sanitizedCode) {
             setManualError("Veuillez entrer un code de signature.");
             return;
         }
 
-        const convention = await verifySignature(code.trim());
+        const convention = await verifySignature(sanitizedCode);
 
         if (convention) {
             let role = '';
@@ -78,39 +80,45 @@ export function SignatureVerificationModal({ isOpen, onClose, onViewDocument }: 
             let signerName = '';
             let date = '';
 
-            if (convention.attestation_signature_code === code.trim()) {
+            const trimmedCode = code.trim().toUpperCase();
+
+            if (convention.attestation_signature_code?.toUpperCase().startsWith(trimmedCode)) {
                 role = "Entreprise (Attestation)";
                 type = 'attestation';
                 signerName = convention.tuteur_nom;
                 date = convention.attestationDate || '';
+            } else if (convention.certificateHash?.toUpperCase().startsWith(trimmedCode) || convention.attestationHash?.toUpperCase().startsWith(trimmedCode)) {
+                role = "Empreinte Numérique (Hash)";
+                signerName = "Document Certifié Publiquement";
+                date = convention.updatedAt || convention.createdAt || '';
             } else {
                 const s = convention.signatures as any;
-                if ((s.student?.code || s.studentCode) === code.trim()) {
+                if ((s.student?.code || s.studentCode)?.toUpperCase().startsWith(trimmedCode)) {
                     role = 'Élève';
                     signerName = `${convention.eleve_prenom} ${convention.eleve_nom}`;
                     date = s.student?.signedAt || s.studentAt || '';
                 }
-                else if ((s.parent?.code || s.parentCode) === code.trim()) {
+                else if ((s.parent?.code || s.parentCode)?.toUpperCase().startsWith(trimmedCode)) {
                     role = 'Représentant Légal';
                     signerName = convention.rep_legal_nom || '';
                     date = s.parent?.signedAt || s.parentAt || '';
                 }
-                else if ((s.teacher?.code || s.teacherCode) === code.trim()) {
+                else if ((s.teacher?.code || s.teacherCode)?.toUpperCase().startsWith(trimmedCode)) {
                     role = 'Enseignant Référent/Professeur Principal';
                     signerName = convention.prof_nom;
                     date = s.teacher?.signedAt || s.teacherAt || '';
                 }
-                else if ((s.company?.code || s.companyCode) === code.trim()) {
+                else if ((s.company?.code || s.companyCode)?.toUpperCase().startsWith(trimmedCode)) {
                     role = 'Représentant Entreprise';
                     signerName = convention.ent_rep_nom;
                     date = s.company?.signedAt || s.companyAt || '';
                 }
-                else if ((s.tutor?.code || s.tutorCode) === code.trim()) {
+                else if ((s.tutor?.code || s.tutorCode)?.toUpperCase().startsWith(trimmedCode)) {
                     role = 'Tuteur';
                     signerName = convention.tuteur_nom;
                     date = s.tutor?.signedAt || s.tutorAt || '';
                 }
-                else if ((s.head?.code || s.headCode) === code.trim()) {
+                else if ((s.head?.code || s.headCode)?.toUpperCase().startsWith(trimmedCode)) {
                     role = 'Chef d\'Établissement';
                     signerName = convention.ecole_chef_nom;
                     date = s.head?.signedAt || s.headAt || '';
@@ -195,24 +203,32 @@ export function SignatureVerificationModal({ isOpen, onClose, onViewDocument }: 
                                 ← Retour au choix
                             </button>
                             <div>
-                                <label className="block text-sm font-medium text-gray-700 mb-1">
-                                    Code de signature numérique (8 lettres + 5 chiffres)
+                                <label className="block text-sm font-bold text-gray-700 mb-2">
+                                    Certificat d'Authenticité de la convention ou de la signature
                                 </label>
                                 <div className="flex gap-2">
-                                    <input
-                                        type="text"
-                                        value={code}
-                                        onChange={(e) => setCode(e.target.value.toUpperCase())}
-                                        placeholder="XXXXXXXX-12345"
-                                        className="flex-1 rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 uppercase tracking-widest font-mono"
-                                    />
+                                    <div className="relative flex-1 group">
+                                        <KeyRound className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-gray-400 group-focus-within:text-blue-500 transition-colors" />
+                                        <input
+                                            type="text"
+                                            value={code}
+                                            onChange={(e) => setCode(e.target.value.toUpperCase().trim())}
+                                            placeholder="Saisissez le code (ex: VOTRE-CODE-ICI)"
+                                            className="w-full pl-10 pr-4 py-3 rounded-xl border-gray-200 shadow-sm focus:border-blue-500 focus:ring-4 focus:ring-blue-500/10 uppercase tracking-widest font-mono text-sm transition-all"
+                                            maxLength={32}
+                                        />
+                                    </div>
                                     <button
                                         onClick={handleManualVerify}
-                                        className="px-4 py-2 bg-blue-600 text-white rounded-md hover:bg-blue-700 font-medium"
+                                        className="bg-blue-600 hover:bg-blue-700 text-white px-6 py-3 rounded-xl font-bold transition-all shadow-md active:scale-95 flex items-center gap-2"
                                     >
+                                        <Search className="w-4 h-4" />
                                         Vérifier
                                     </button>
                                 </div>
+                                <p className="mt-2 text-[10px] text-gray-400 font-medium text-center">
+                                    Saisissez le numéro de certificat d'authenticité numérique du document situés sous le QR ou bien le numéro de certificat situé dans la case de la signature numérique à vérifier.
+                                </p>
                             </div>
 
                             {manualError && (
@@ -238,18 +254,74 @@ export function SignatureVerificationModal({ isOpen, onClose, onViewDocument }: 
                                             </span>
                                         </div>
                                         <div className="flex justify-between border-b border-green-200 pb-1">
-                                            <span className="text-green-700">Signataire :</span>
-                                            <span className="font-bold">{result.role}</span>
+                                            <span className="text-green-700 flex items-center gap-1">
+                                                <Calendar className="w-3 h-3" />
+                                                Période :
+                                            </span>
+                                            <span className="font-medium text-xs">
+                                                {result.convention.dateStart ? new Date(result.convention.dateStart).toLocaleDateString('fr-FR') : '?'}
+                                                {' → '}
+                                                {result.convention.dateEnd ? new Date(result.convention.dateEnd).toLocaleDateString('fr-FR') : '?'}
+                                            </span>
                                         </div>
                                         <div className="flex justify-between border-b border-green-200 pb-1">
-                                            <span className="text-green-700">Concernant :</span>
-                                            <span className="font-medium">{result.convention.eleve_prenom} {result.convention.eleve_nom}</span>
-                                        </div>
-                                        <div className="flex justify-between border-b border-green-200 pb-1">
-                                            <span className="text-green-700">Date :</span>
-                                            <span className="font-medium">{result.date ? new Date(result.date).toLocaleDateString('fr-FR') : 'N/A'}</span>
+                                            <span className="text-green-700">Date de signature (Chef d'établissement) :</span>
+                                            <span className="font-medium">
+                                                {(result.convention.signatures as any)?.head?.signedAt
+                                                    ? new Date((result.convention.signatures as any).head.signedAt).toLocaleDateString('fr-FR')
+                                                    : 'N/A'}
+                                            </span>
                                         </div>
                                     </div>
+
+                                    {/* Signatories List */}
+                                    {result.convention.signatures && Object.keys(result.convention.signatures).length > 0 && (
+                                        <div className="mt-4 pt-3 border-t border-green-200">
+                                            <p className="text-[10px] font-black text-green-700 uppercase tracking-widest mb-2">Autres Signatures Certifiées</p>
+                                            <div className="space-y-2">
+                                                {Object.entries(result.convention.signatures as Record<string, any>)
+                                                    .filter(([_, data]) => data?.signedAt)
+                                                    .map(([role, data], i) => {
+                                                        const roleLabels: Record<string, string> = {
+                                                            student: 'Élève',
+                                                            parent: 'Représentant Légal',
+                                                            teacher: 'Enseignant Référent',
+                                                            company_head: 'Chef d\'Entreprise',
+                                                            company: 'Chef d\'Entreprise',
+                                                            tutor: 'Tuteur en Entreprise',
+                                                            head: 'Chef d\'Établissement'
+                                                        };
+                                                        const label = roleLabels[role] || role;
+
+                                                        const m = (result.convention as any).metadata || {};
+                                                        const c = result.convention as any;
+                                                        let signerName = data.name;
+
+                                                        if (!signerName || signerName === role) {
+                                                            if (role === 'student') signerName = c.eleve_nom ? `${c.eleve_prenom || ''} ${c.eleve_nom}`.trim() : (c.lastName ? `${c.firstName || ''} ${c.lastName}`.trim() : (m.eleve_nom ? `${m.eleve_prenom || ''} ${m.eleve_nom}`.trim() : null));
+                                                            else if (role === 'parent') signerName = c.rep_legal_nom || m.rep_legal_nom;
+                                                            else if (role === 'teacher') signerName = c.prof_nom || m.prof_nom;
+                                                            else if (role === 'company_head' || role === 'company') signerName = c.ent_rep_nom || m.ent_rep_nom;
+                                                            else if (role === 'tutor') signerName = c.tuteur_nom || m.tuteur_nom;
+                                                            else if (role === 'head') signerName = c.ecole_chef_nom || m.ecole_chef_nom;
+                                                        }
+
+                                                        return (
+                                                            <div key={i} className="flex justify-between items-center text-[10px] bg-white/50 p-1.5 rounded border border-green-100">
+                                                                <div>
+                                                                    <span className="font-bold block text-gray-700">{label} : {signerName || role}</span>
+                                                                </div>
+                                                                <div className="text-right">
+                                                                    <span className="text-green-600 font-bold block">Vérifié</span>
+                                                                    <span className="text-gray-300">{new Date(data.signedAt).toLocaleDateString('fr-FR')}</span>
+                                                                </div>
+                                                            </div>
+                                                        );
+                                                    })
+                                                }
+                                            </div>
+                                        </div>
+                                    )}
 
                                     {onViewDocument && (
                                         <button

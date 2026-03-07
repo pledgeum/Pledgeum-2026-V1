@@ -3,26 +3,12 @@ import { X, Calendar, Clock, Download, CheckCircle, Trash2, Plus, ArrowLeft, Cal
 import { Convention, Absence } from '@/store/convention';
 import { useConventionStore } from '@/store/convention';
 import { useUserStore, UserRole } from '@/store/user';
+import { isPublicHoliday } from '@/lib/holidays';
 import { SignatureModal } from './SignatureModal';
 import dynamic from 'next/dynamic';
-import { AttestationPdf } from '../pdf/AttestationPdf';
 import { calculateEffectiveInternshipDays } from '@/lib/calculations';
-import { isPublicHoliday } from '@/lib/holidays';
-import QRCode from 'qrcode';
 import { generateVerificationUrl } from '@/app/actions/sign';
-
-// Dynamic import for PDFDownloadLink to avoid SSR issues
-const PDFDownloadBtn = dynamic(
-    () => import('@react-pdf/renderer').then((mod) => mod.PDFDownloadLink),
-    {
-        ssr: false,
-        loading: () => (
-            <button className="w-full py-4 bg-gray-200 text-gray-500 rounded font-bold">
-                Chargement du module PDF...
-            </button>
-        ),
-    }
-);
+import QRCode from 'qrcode';
 
 interface AttestationModalProps {
     isOpen: boolean;
@@ -221,6 +207,29 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
     const effectiveHours = Math.max(0, plannedHours - totalAbsenceHours);
     const pdfConvention = { ...convention, ...docData };
 
+    const [isGenerating, setIsGenerating] = useState(false);
+
+    const handleDownload = async () => {
+        setIsGenerating(true);
+        try {
+            const { generateAttestationBlob } = await import('../pdf/CredentialPdfGenerator');
+            const blob = await generateAttestationBlob(pdfConvention as any, totalAbsenceHours, qrCodeUrl, hashDisplay);
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `Attestation_Stage_${convention.eleve_nom.replace(/\s+/g, '_')}.pdf`;
+            document.body.appendChild(a);
+            a.click();
+            document.body.removeChild(a);
+            URL.revokeObjectURL(url);
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            alert('Erreur lors de la génération du PDF');
+        } finally {
+            setIsGenerating(false);
+        }
+    };
+
     return (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
             <div className="bg-white rounded-xl shadow-xl w-full max-w-4xl max-h-[95vh] overflow-y-auto flex flex-col">
@@ -392,21 +401,15 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
                                                         <CheckCircle className="inline w-4 h-4 mr-1" />
                                                         Signé le {new Date(convention.attestationDate || '').toLocaleDateString()}
                                                     </div>
-                                                    <PDFDownloadBtn
-                                                        document={<AttestationPdf convention={pdfConvention as any} totalAbsenceHours={totalAbsenceHours} qrCodeUrl={qrCodeUrl} hashCode={hashDisplay} />}
-                                                        fileName={`Attestation_Stage_${convention.eleve_nom.replace(/\s+/g, '_')}.pdf`}
+                                                    <button
+                                                        onClick={handleDownload}
+                                                        disabled={isGenerating}
+                                                        className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded shadow-lg flex flex-col items-center justify-center gap-1 transition-colors disabled:opacity-50"
                                                     >
-                                                        {({ loading }) => (
-                                                            <button
-                                                                disabled={loading}
-                                                                className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded shadow-lg flex flex-col items-center justify-center gap-1 transition-colors disabled:opacity-50"
-                                                            >
-                                                                <FileDown className="w-6 h-6" />
-                                                                <span>{loading ? 'Génération...' : 'Télécharger le PDF'}</span>
-                                                                <span className="text-xs font-normal opacity-80">(Officiel)</span>
-                                                            </button>
-                                                        )}
-                                                    </PDFDownloadBtn>
+                                                        <FileDown className="w-6 h-6" />
+                                                        <span>{isGenerating ? 'Génération...' : 'Télécharger le PDF'}</span>
+                                                        <span className="text-xs font-normal opacity-80">(Officiel)</span>
+                                                    </button>
                                                 </div>
                                             ) : (
                                                 <button
@@ -498,6 +501,6 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
                     conventionId={convention.id}
                 />
             </div>
-        </div > // Final closing tag fixed (was missing closing div in previous snippet? No, it was there.)
-    ); // Return close
-} // Component close
+        </div>
+    );
+}
