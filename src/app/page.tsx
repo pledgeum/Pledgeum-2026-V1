@@ -28,7 +28,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { SignatureVerificationModal } from '@/components/ui/SignatureVerificationModal';
-import { useMissionOrderStore, MissionOrder } from '@/store/missionOrder';
+import { useMissionOrderStore, isOdmPendingForHead } from '@/store/missionOrder';
 
 
 import { useAdminStore } from '@/store/admin';
@@ -44,15 +44,9 @@ const PdfPreview = dynamic(() => import('@/components/pdf/PdfPreview'), {
   loading: () => <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20"><div className="bg-white p-4 rounded shadow">Chargement de l'aperçu...</div></div>
 });
 
-const MissionOrderPdf = dynamic(() => import('@/components/pdf/MissionOrderPdf').then(m => m.MissionOrderPdf), {
-  ssr: false,
-  loading: () => <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/20"><div className="bg-white p-4 rounded shadow">Chargement du PDF...</div></div>
-});
+import { MissionOrderPdf } from '@/components/pdf/MissionOrderPdf';
 
-const PDFViewer = dynamic(
-  () => import('@react-pdf/renderer').then((mod) => mod.PDFViewer),
-  { ssr: false, loading: () => <p>Chargement du lecteur PDF...</p> }
-);
+const PdfRenderer = dynamic(() => import('@/components/ui/PdfRenderer').then(m => m.PdfRenderer), { ssr: false });
 
 const SchoolAdminModal = dynamic(() => import('@/components/admin/SchoolAdminModal').then(m => m.SchoolAdminModal), { ssr: false });
 const SchoolAdminDashboard = dynamic(() => import('@/components/admin/SchoolAdminDashboard'), { ssr: false });
@@ -69,6 +63,9 @@ const ClassDocumentModal = dynamic(() => import('@/components/ui/ClassDocumentMo
 const StudentDocumentModal = dynamic(() => import('@/components/ui/StudentDocumentModal').then(m => m.StudentDocumentModal), { ssr: false });
 const EmailCorrectionModal = dynamic(() => import('@/components/ui/EmailCorrectionModal').then(m => m.EmailCorrectionModal), { ssr: false });
 const TrackingAssignmentModal = dynamic(() => import('@/components/ui/TrackingAssignmentModal'), { ssr: false });
+
+// 🛡️ HARD GUARD: Verrou persistant pour l'hydratation des classes (survit aux remounts)
+const GLOBAL_HIDRATED_CLASSES = new Set<string>();
 
 // Helper for Admin Roles
 const isSchoolAdminRole = (r: UserRole) => {
@@ -300,6 +297,21 @@ export default function Home() {
 
   // Ref to track if we've already initialized data for the current user
   const initializedUserRef = useRef<string | null>(null);
+
+  // Hydrate School Data (Classes, Teachers) for the Matrix and Admin tools
+  const { fetchSchoolData, classes: schoolClasses } = useSchoolStore();
+  const uai = useUserStore(state => state.uai || state.schoolId);
+
+  useEffect(() => {
+    if (user && uai && (isSchoolAdminRole(role) || role === 'teacher' || role === 'teacher_tracker')) {
+      // Avoid redundant fetches if classes are already loaded for this school (simple check)
+      // Note: In a real app we might check if they belong to current UAI
+      if (schoolClasses.length === 0) {
+        console.log("[Home] Hydrating School Data for UAI:", uai);
+        fetchSchoolData(uai);
+      }
+    }
+  }, [user, uai, role, schoolClasses.length, fetchSchoolData]);
 
   useEffect(() => {
     async function checkProfile() {
@@ -538,9 +550,9 @@ export default function Home() {
                   <FileText className="w-4 h-4" />
                 </div>
                 <span className="hidden xl:inline">Ordres de Mission</span>
-                {useMissionOrderStore.getState().missionOrders.filter(o => o.status === 'PENDING').length > 0 && (
+                {useMissionOrderStore.getState().missionOrders.filter(isOdmPendingForHead).length > 0 && (
                   <span className="ml-2 bg-green-600 text-white text-[9px] px-1.5 py-0.5 rounded-full">
-                    {useMissionOrderStore.getState().missionOrders.filter(o => o.status === 'PENDING').length}
+                    {useMissionOrderStore.getState().missionOrders.filter(isOdmPendingForHead).length}
                   </span>
                 )}
               </button>
@@ -1087,7 +1099,7 @@ export default function Home() {
 function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdModalOpen, onModalChange }: { role: UserRole, userEmail: string, userId?: string, isRgpdModalOpen: boolean, setIsRgpdModalOpen: (v: boolean) => void, onModalChange?: (isOpen: boolean) => void }) {
   const router = useRouter();
   const { getConventionsByRole, signConvention, sendReminder, bulkSignConventions, updateEmail, assignTrackingTeacher, fetchConventions } = useConventionStore();
-  const { classes } = useSchoolStore();
+  const { classes, fetchClassTeachers } = useSchoolStore();
   const { addNotification, name, schoolId } = useUserStore();
   const conventions = getConventionsByRole(role, userEmail, userId);
   const [selectedConventionId, setSelectedConventionId] = useState<string | null>(null);
@@ -1127,6 +1139,26 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
     fetchTemplates();
   }, [role]);
 
+  // 🆕 Phase 1 : Hydratation du vivier d'enseignants pour les classes affichées
+  useEffect(() => {
+    // Seuls les rôles "école" ou admin ont besoin d'assigner des enseignants
+    const staffRoles: UserRole[] = ['teacher', 'teacher_tracker', 'ddfpt', 'school_head', 'at_ddfpt', 'business_manager', 'ESTABLISHMENT_ADMIN'];
+    if (!staffRoles.includes(role)) return;
+
+    if (classes.length > 0) {
+      classes.forEach(cls => {
+        // Verrou Global (Hard Guard) + Vérification locale
+        if (!GLOBAL_HIDRATED_CLASSES.has(cls.id) && (!cls.teachersList || cls.teachersList.length === 0)) {
+          console.log(`[Dashboard] Déclenchement UNIQUE (Global Guard) fetchClassTeachers pour : ${cls.name}`);
+          GLOBAL_HIDRATED_CLASSES.add(cls.id);
+          fetchClassTeachers(cls.id);
+        }
+      });
+    }
+  }, [classes.length, role, fetchClassTeachers]);
+
+
+
   // Filters State
   const [filterClass, setFilterClass] = useState('');
   const [filterYear, setFilterYear] = useState('');
@@ -1149,37 +1181,39 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
   const uniqueClasses = Array.from(new Set(conventions.map(c => c.eleve_classe).filter(Boolean))).sort();
   const uniqueYears = Array.from(new Set(conventions.map(c => getSchoolYear(c.stage_date_debut)).filter(Boolean))).sort().reverse();
 
-  const [odmPreviewData, setOdmPreviewData] = useState<{ odm: MissionOrder, convention: Convention } | null>(null);
+  const [odmPreviewData, setOdmPreviewData] = useState<{ odm: MissionOrder, convention: Convention, hashCode?: string } | null>(null);
   const [isSigningOdm, setIsSigningOdm] = useState(false);
 
-  const { missionOrders, fetchMissionOrders, signMissionOrders } = useMissionOrderStore();
+  const { missionOrders, fetchMissionOrders, signMissionOrders, signMissionOrderTeacher } = useMissionOrderStore();
 
   useEffect(() => {
     fetchMissionOrders();
   }, [fetchMissionOrders]);
 
   const [odmQrCodeUrl, setOdmQrCodeUrl] = useState<string>('');
+  const [odmSignatureRole, setOdmSignatureRole] = useState<'teacher' | 'head'>('teacher');
 
   const handleDownloadOdm = async (odm: MissionOrder, convention: Convention) => {
     // Generate QR Code for Mission Order
     try {
-      const { url } = await generateVerificationUrl(convention, 'mission_order');
+      const { url, hashDisplay } = await generateVerificationUrl(convention, 'mission_order');
       const qrCode = await QRCode.toDataURL(url);
       setOdmQrCodeUrl(qrCode);
+      setOdmPreviewData({ odm, convention, hashCode: hashDisplay });
     } catch (e) {
       console.error("Failed to generate ODM QR Code", e);
+      setOdmPreviewData({ odm, convention });
     }
-    setOdmPreviewData({ odm, convention });
   };
 
   const executeDownloadOdm = async (odm: MissionOrder, convention: Convention) => {
     try {
       // Regenerate QR for download to ensure fresh URL
-      const { url } = await generateVerificationUrl(convention, 'mission_order');
+      const { url, hashDisplay } = await generateVerificationUrl(convention, 'mission_order');
       const qrCode = await QRCode.toDataURL(url);
 
       const { generateMissionOrderBlob } = await import('@/components/pdf/CredentialPdfGenerator');
-      const blob = await generateMissionOrderBlob(odm, convention, qrCode);
+      const blob = await generateMissionOrderBlob(odm, convention, qrCode, hashDisplay);
       const pdfUrl = URL.createObjectURL(blob);
       const link = document.createElement('a');
       link.href = pdfUrl;
@@ -1193,23 +1227,23 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
     }
   };
 
-  const handleSignOdm = async (signatureImg: string) => {
+  const handleSignOdm = async (method: 'canvas' | 'otp', signatureImg?: string) => {
     if (!odmPreviewData) return;
 
-    // Update Store
-    await signMissionOrders([odmPreviewData.odm.id], signatureImg, name);
+    if (method === 'canvas' && signatureImg) {
+      if (odmSignatureRole === 'teacher') {
+        await signMissionOrderTeacher(odmPreviewData.odm.id, signatureImg, name || "Enseignant");
+      } else {
+        await signMissionOrders([odmPreviewData.odm.id], signatureImg, name || "Chef d'Établissement");
+      }
+    }
 
-    // Update Local State (to reflect signature immediately in preview)
-    const updatedOdm = {
-      ...odmPreviewData.odm,
-      status: 'SIGNED' as const,
-      signatureImg,
-      signatureDate: new Date().toISOString()
-    };
+    // Refresh store to get latest data with the new JSONB structures (CRITICAL for OTP)
+    await fetchMissionOrders();
 
-    setOdmPreviewData({ ...odmPreviewData, odm: updatedOdm });
+    setOdmPreviewData(null);
     setIsSigningOdm(false);
-    addNotification({ title: "Ordre de Mission signé", message: "Le document est maintenant prêt à être téléchargé." });
+    addNotification({ title: "Ordre de Mission signé", message: "Le document a été mis à jour avec succès." });
   };
 
   // Email Correction State
@@ -1709,14 +1743,46 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
                         {userEmail === 'pledgeum@gmail.com' && <option value="pledgeum@gmail.com">-- TEST (Moi-même) --</option>}
                         {(() => {
                           const cls = classes.find(c => c.name === conv.eleve_classe);
-                          if (!cls || !cls.teachersList || cls.teachersList.length === 0) {
+                          const assignedEmail = conv.prof_suivi_email;
+                          const hasTeachers = cls?.teachersList && cls.teachersList.length > 0;
+                          const isAssignedInList = hasTeachers && cls.teachersList.some(t => t.email === assignedEmail);
+
+                          // Si pas de profs chargés mais un prof est déjà assigné
+                          if (!hasTeachers && assignedEmail) {
+                            return (
+                              <>
+                                <option value={assignedEmail}>
+                                  {conv.visit?.tracking_teacher_last_name
+                                    ? `${conv.visit.tracking_teacher_last_name} ${conv.visit.tracking_teacher_first_name} (Chargement...)`
+                                    : `${assignedEmail} (Chargement...)`}
+                                </option>
+                                <option value="" disabled>Chargement du vivier...</option>
+                              </>
+                            );
+                          }
+
+                          if (!hasTeachers) {
                             return <option value="" disabled>Aucun enseignant dans le vivier</option>;
                           }
-                          return cls.teachersList.map(t => (
+
+                          const teacherOptions = cls.teachersList.map(t => (
                             <option key={t.id} value={t.email}>
                               {t.lastName} {t.firstName}
                             </option>
                           ));
+
+                          // Cas de secours : si l'assigné n'est pas dans la liste officielle (ex: prof d'une autre classe ou cache)
+                          if (assignedEmail && !isAssignedInList) {
+                            teacherOptions.unshift(
+                              <option key="assigned-fallback" value={assignedEmail}>
+                                {conv.visit?.tracking_teacher_last_name
+                                  ? `${conv.visit.tracking_teacher_last_name} ${conv.visit.tracking_teacher_first_name}`
+                                  : assignedEmail} (Assigné)
+                              </option>
+                            );
+                          }
+
+                          return teacherOptions;
                         })()}
                       </select>
                       <p className="text-[10px] text-indigo-400 mt-1 italic">Assignation automatique</p>
@@ -1729,7 +1795,7 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
 
               {/* Status Label - Right Side */}
               <div className="flex flex-col items-end space-y-1">
-                <ConventionStatusBadge status={conv.status} signatures={conv.signatures} />
+                <ConventionStatusBadge status={conv.status} signatures={conv.signatures} isOutOfPeriod={conv.is_out_of_period} />
                 <span className="text-xs text-gray-500">
                   {conv.updatedAt && !isNaN(new Date(conv.updatedAt).getTime())
                     ? `Mis à jour le ${new Date(conv.updatedAt).toLocaleDateString()}`
@@ -1829,23 +1895,46 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
                 {/* Mission Order Button - Visible to all Staff */}
                 {!['student', 'parent', 'tutor', 'company_head', 'company_head_tutor'].includes(role) && (() => {
                   const odm = missionOrders.find(m => m.conventionId === conv.id);
-                  const isSigned = odm?.status === 'SIGNED';
-                  const hasTracker = !!conv.prof_suivi_email;
+                  const isHeadSigned = !!odm?.signature_data?.head?.hash;
+                  const isTeacherSigned = !!odm?.signature_data?.teacher?.hash;
+                  const isTrackingTeacher = userEmail === conv.prof_suivi_email || userEmail === conv.visit?.tracking_teacher_email;
 
-                  if (!hasTracker || !odm) return null;
+                  if (!odm) return null;
+
+                  const isUserHead = ['school_head', 'admin', 'school_admin', 'ddfpt', 'at_ddfpt'].includes(role);
+                  const isUserTeacher = isTrackingTeacher;
+
+                  // Decide what action to show
+                  const needsSignature = (isUserHead && !isHeadSigned) || (isUserTeacher && !isTeacherSigned);
+
+                  if (needsSignature) {
+                    return (
+                      <button
+                        onClick={() => {
+                          setOdmPreviewData({ odm, convention: conv });
+                          setOdmSignatureRole(isUserHead ? 'head' : 'teacher');
+                          setIsSigningOdm(true);
+                        }}
+                        className="flex-1 sm:flex-none px-3 py-2 border border-blue-200 shadow-sm text-sm font-medium rounded-md text-blue-700 bg-blue-50 hover:bg-blue-100 whitespace-nowrap animate-pulse"
+                        title="Signer l'ordre de mission"
+                      >
+                        <PenTool className="w-4 h-4 mr-2 inline" />
+                        Signer l'ODM
+                      </button>
+                    );
+                  }
 
                   return (
                     <button
-                      disabled={!isSigned}
-                      onClick={() => isSigned && odm && handleDownloadOdm(odm, conv)}
+                      onClick={() => odm && handleDownloadOdm(odm, conv)}
                       className={`flex-1 sm:flex-none px-3 py-2 border shadow-sm text-sm font-medium rounded-md
-                          ${isSigned
+                          ${isHeadSigned
                           ? 'border-green-200 text-green-700 bg-green-50 hover:bg-green-100'
-                          : 'border-gray-200 text-gray-500 bg-gray-50 cursor-not-allowed text-opacity-70'}`}
-                      title={isSigned ? "Télécharger l'Ordre de Mission signé" : "En attente de signature par le chef d'établissement"}
+                          : 'border-amber-200 text-amber-700 bg-amber-50 hover:bg-amber-100'}`}
+                      title={isHeadSigned ? "Télécharger l'Ordre de Mission signé" : "Voir l'ODM (En attente de signature chef)"}
                     >
-                      {isSigned ? <CheckCircle className="w-4 h-4 mr-2 inline" /> : <Clock className="w-4 h-4 mr-2 inline" />}
-                      Ordre de Mission
+                      {isHeadSigned ? <CheckCircle className="w-4 h-4 mr-2 inline" /> : <FileText className="w-4 h-4 mr-2 inline" />}
+                      {isHeadSigned ? "Télécharger l'ODM" : "Voir l'ODM"}
                     </button>
                   );
                 })()}
@@ -2067,24 +2156,40 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
                   Aperçu Ordre de Mission - {odmPreviewData.convention.eleve_nom} {odmPreviewData.convention.eleve_prenom}
                 </h3>
                 <div className="flex items-center gap-2">
-                  {/* Check if signed. If not, force sign. */}
-                  {odmPreviewData.odm.signatureImg ? (
-                    <button
-                      onClick={() => executeDownloadOdm(odmPreviewData.odm, odmPreviewData.convention)}
-                      className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2"
-                    >
-                      <FileText className="w-4 h-4" />
-                      Télécharger PDF
-                    </button>
-                  ) : (
-                    <button
-                      onClick={() => setIsSigningOdm(true)}
-                      className="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 flex items-center gap-2 animate-pulse"
-                    >
-                      <PenTool className="w-4 h-4" />
-                      Signer l'ordre de mission
-                    </button>
-                  )}
+                  {/* Check if signed based on the current signature role constraint */}
+                  {(() => {
+                    const role = odmSignatureRole;
+                    const conventionSignatures = odmPreviewData.convention.signatures;
+                    const legacySignatureData = odmPreviewData.odm.signature_data as any;
+
+                    const hasTeacherImg = !!odmPreviewData.odm.signature_data?.teacher?.img;
+                    const hasHeadImg = !!odmPreviewData.odm.signature_data?.head?.img || !!legacySignatureData?.img || !!conventionSignatures?.head?.img || !!(conventionSignatures?.headImg as any)?.img || !!conventionSignatures?.headImg;
+
+                    const needsTeacherSignature = role === 'teacher' && !hasTeacherImg;
+                    const needsHeadSignature = role === 'head' && !hasHeadImg;
+
+                    if (needsTeacherSignature || needsHeadSignature) {
+                      return (
+                        <button
+                          onClick={() => setIsSigningOdm(true)}
+                          className="px-4 py-2 bg-amber-600 text-white rounded hover:bg-amber-700 flex items-center gap-2 animate-pulse"
+                        >
+                          <PenTool className="w-4 h-4" />
+                          Signer l'ordre de mission
+                        </button>
+                      );
+                    }
+
+                    return (
+                      <button
+                        onClick={() => executeDownloadOdm(odmPreviewData.odm, odmPreviewData.convention)}
+                        className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 flex items-center gap-2"
+                      >
+                        <FileText className="w-4 h-4" />
+                        Télécharger PDF
+                      </button>
+                    );
+                  })()}
 
                   <button onClick={() => setOdmPreviewData(null)} className="text-gray-500 hover:text-gray-700 ml-2">
                     <X className="w-6 h-6" />
@@ -2092,9 +2197,11 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
                 </div>
               </div>
               <div className="flex-1 bg-gray-100 overflow-hidden relative">
-                <PDFViewer width="100%" height="100%" className="w-full h-full">
-                  <MissionOrderPdf missionOrder={odmPreviewData.odm} convention={odmPreviewData.convention} qrCodeUrl={odmQrCodeUrl} />
-                </PDFViewer>
+                <PdfRenderer
+                  className="w-full h-full"
+                  height="100%"
+                  document={<MissionOrderPdf missionOrder={odmPreviewData.odm} convention={odmPreviewData.convention} qrCodeUrl={odmQrCodeUrl} hashCode={odmPreviewData.hashCode} />}
+                />
               </div>
             </div>
           </div>
@@ -2107,12 +2214,13 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
           <SignatureModal
             isOpen={isSigningOdm}
             onClose={() => setIsSigningOdm(false)}
-            onSign={(method, signatureImg) => handleSignOdm(signatureImg || '')}
+            onSign={handleSignOdm}
             title="Signature Ordre de Mission"
             signeeName={name}
             signeeEmail={userEmail}
-            conventionId={odmPreviewData.convention.id}
-            hideOtp={true} // Internal signature for teacher/admin usually doesn't need OTP here
+            conventionId={odmPreviewData.odm.id}
+            documentType="mission_order"
+            hideOtp={odmSignatureRole !== 'teacher'} // OTP specifically for teacher signature as per request
           />
         )
       }

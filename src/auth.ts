@@ -63,11 +63,29 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                         const passwordsMatch = await bcrypt.compare(password, user.password_hash);
 
                         if (passwordsMatch) {
+                            let establishmentUai = user.establishment_uai;
+
+                            // --- SELF-HEALING: Repair missing UAI for students via class_id ---
+                            if (user.role === 'student' && !establishmentUai && user.class_id) {
+                                console.log(`[AUTH-SELF-HEALING] Missing UAI for student ${user.email}. Attempting repair via class ${user.class_id}...`);
+                                try {
+                                    const classRes = await pool.query('SELECT establishment_uai FROM classes WHERE id = $1', [user.class_id]);
+                                    if (classRes.rows.length > 0 && classRes.rows[0].establishment_uai) {
+                                        establishmentUai = classRes.rows[0].establishment_uai;
+                                        // Persist repair in DB
+                                        await pool.query('UPDATE users SET establishment_uai = $1 WHERE uid = $2', [establishmentUai, user.uid]);
+                                        console.log(`[AUTH-SELF-HEALING] Successfully repaired UAI for ${user.email} -> ${establishmentUai}`);
+                                    }
+                                } catch (repairError) {
+                                    console.error(`[AUTH-SELF-HEALING] Error during UAI repair for ${user.email}:`, repairError);
+                                }
+                            }
+
                             return {
                                 id: user.uid || user.id,
                                 email: user.email,
                                 role: user.role, // Role comes directly from DB
-                                establishment_uai: user.establishment_uai,
+                                establishment_uai: establishmentUai,
                                 name: (user.first_name && user.last_name) ? `${user.first_name} ${user.last_name}` : user.email,
                                 must_change_password: user.must_change_password // Expose flag
                             };

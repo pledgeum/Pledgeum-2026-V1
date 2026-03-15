@@ -18,7 +18,15 @@ export function SignatureVerificationModal({ isOpen, onClose, onViewDocument }: 
     // Manual Verification State
     const [code, setCode] = useState('');
     const [manualError, setManualError] = useState('');
-    const [result, setResult] = useState<{ convention: Convention; role: string; type: 'convention' | 'attestation'; signerName: string; date: string } | null>(null);
+    const [result, setResult] = useState<{
+        convention: Convention;
+        role: string;
+        type: 'convention' | 'attestation' | 'mission_order';
+        signerName: string;
+        date: string;
+        isValid?: boolean;
+        document?: any;
+    } | null>(null);
     const { verifySignature } = useConventionStore();
 
     useEffect(() => {
@@ -65,68 +73,107 @@ export function SignatureVerificationModal({ isOpen, onClose, onViewDocument }: 
         setManualError('');
         setResult(null);
 
-        const sanitizedCode = code.replace(/[^A-Za-z0-9]/g, '').toUpperCase().trim();
+        const sanitizedCode = code.trim();
 
         if (!sanitizedCode) {
             setManualError("Veuillez entrer un code de signature.");
             return;
         }
 
-        const convention = await verifySignature(sanitizedCode);
-
-        if (convention) {
-            let role = '';
-            let type: 'convention' | 'attestation' = 'convention';
-            let signerName = '';
-            let date = '';
-
-            const trimmedCode = code.trim().toUpperCase();
-
-            if (convention.attestation_signature_code?.toUpperCase().startsWith(trimmedCode)) {
-                role = "Entreprise (Attestation)";
-                type = 'attestation';
-                signerName = convention.tuteur_nom;
-                date = convention.attestationDate || '';
-            } else if (convention.certificateHash?.toUpperCase().startsWith(trimmedCode) || convention.attestationHash?.toUpperCase().startsWith(trimmedCode)) {
-                role = "Empreinte Numérique (Hash)";
-                signerName = "Document Certifié Publiquement";
-                date = convention.updatedAt || convention.createdAt || '';
-            } else {
-                const s = convention.signatures as any;
-                if ((s.student?.code || s.studentCode)?.toUpperCase().startsWith(trimmedCode)) {
-                    role = 'Élève';
-                    signerName = `${convention.eleve_prenom} ${convention.eleve_nom}`;
-                    date = s.student?.signedAt || s.studentAt || '';
+        try {
+            const response = await fetch(`/api/verify?code=${encodeURIComponent(sanitizedCode)}`);
+            if (!response.ok) {
+                if (response.status === 404) {
+                    setManualError("Aucune signature trouvée pour ce code.");
+                } else {
+                    setManualError("Une erreur est survenue lors de la vérification.");
                 }
-                else if ((s.parent?.code || s.parentCode)?.toUpperCase().startsWith(trimmedCode)) {
-                    role = 'Représentant Légal';
-                    signerName = convention.rep_legal_nom || '';
-                    date = s.parent?.signedAt || s.parentAt || '';
-                }
-                else if ((s.teacher?.code || s.teacherCode)?.toUpperCase().startsWith(trimmedCode)) {
-                    role = 'Enseignant Référent/Professeur Principal';
-                    signerName = convention.prof_nom;
-                    date = s.teacher?.signedAt || s.teacherAt || '';
-                }
-                else if ((s.company?.code || s.companyCode)?.toUpperCase().startsWith(trimmedCode)) {
-                    role = 'Représentant Entreprise';
-                    signerName = convention.ent_rep_nom;
-                    date = s.company?.signedAt || s.companyAt || '';
-                }
-                else if ((s.tutor?.code || s.tutorCode)?.toUpperCase().startsWith(trimmedCode)) {
-                    role = 'Tuteur';
-                    signerName = convention.tuteur_nom;
-                    date = s.tutor?.signedAt || s.tutorAt || '';
-                }
-                else if ((s.head?.code || s.headCode)?.toUpperCase().startsWith(trimmedCode)) {
-                    role = 'Chef d\'Établissement';
-                    signerName = convention.ecole_chef_nom;
-                    date = s.head?.signedAt || s.headAt || '';
-                }
+                return;
             }
-            setResult({ convention, role, type, signerName, date });
-        } else {
-            setManualError("Aucune signature trouvée pour ce code.");
+
+            const data = await response.json();
+            if (data.success && data.convention) {
+                const convention = data.convention;
+                const trimmedCode = sanitizedCode;
+
+                let role = '';
+                let type: 'convention' | 'attestation' | 'mission_order' = 'convention';
+                let signerName = '';
+                let date = '';
+
+                if ((convention as any).type === 'mission_order') {
+                    const s = convention.signatures as any || {};
+                    type = 'mission_order' as any;
+                    if (s.teacher?.code?.toUpperCase().startsWith(trimmedCode)) {
+                        role = 'Enseignant Suiveur';
+                        signerName = convention.prof_nom || 'Enseignant';
+                        date = s.teacher?.signedAt || '';
+                    } else if (s.head?.code?.toUpperCase().startsWith(trimmedCode)) {
+                        role = 'Chef d\'Établissement';
+                        signerName = convention.ecole_chef_nom || 'Chef d\'Établissement';
+                        date = s.head?.signedAt || '';
+                    } else {
+                        role = 'Signataire Ordre de Mission';
+                        signerName = 'Inconnu';
+                        date = convention.createdAt || '';
+                    }
+                } else if (convention.attestation_signature_code?.toUpperCase().startsWith(trimmedCode)) {
+                    role = "Entreprise (Attestation)";
+                    type = 'attestation';
+                    signerName = convention.tuteur_nom;
+                    date = convention.attestationDate || '';
+                } else if (convention.certificateHash?.toUpperCase().startsWith(trimmedCode) || convention.attestationHash?.toUpperCase().startsWith(trimmedCode)) {
+                    role = "Empreinte Numérique (Hash)";
+                    signerName = "Document Certifié Publiquement";
+                    date = convention.updatedAt || convention.createdAt || '';
+                } else {
+                    const s = convention.signatures as any;
+                    if ((s.student?.code || s.studentCode)?.toUpperCase().startsWith(trimmedCode)) {
+                        role = 'Élève';
+                        signerName = `${convention.eleve_prenom} ${convention.eleve_nom}`;
+                        date = s.student?.signedAt || s.studentAt || '';
+                    }
+                    else if ((s.parent?.code || s.parentCode)?.toUpperCase().startsWith(trimmedCode)) {
+                        role = 'Représentant Légal';
+                        signerName = convention.rep_legal_nom || '';
+                        date = s.parent?.signedAt || s.parentAt || '';
+                    }
+                    else if ((s.teacher?.code || s.teacherCode)?.toUpperCase().startsWith(trimmedCode)) {
+                        role = 'Enseignant Référent/Professeur Principal';
+                        signerName = convention.prof_nom;
+                        date = s.teacher?.signedAt || s.teacherAt || '';
+                    }
+                    else if ((s.company?.code || s.companyCode)?.toUpperCase().startsWith(trimmedCode)) {
+                        role = 'Représentant Entreprise';
+                        signerName = convention.ent_rep_nom;
+                        date = s.company?.signedAt || s.companyAt || '';
+                    }
+                    else if ((s.tutor?.code || s.tutorCode)?.toUpperCase().startsWith(trimmedCode)) {
+                        role = 'Tuteur';
+                        signerName = convention.tuteur_nom;
+                        date = s.tutor?.signedAt || s.tutorAt || '';
+                    }
+                    else if ((s.head?.code || s.headCode)?.toUpperCase().startsWith(trimmedCode)) {
+                        role = 'Chef d\'Établissement';
+                        signerName = convention.ecole_chef_nom;
+                        date = s.head?.signedAt || s.headAt || '';
+                    }
+                }
+                setResult({
+                    convention,
+                    role,
+                    type: type as any,
+                    signerName,
+                    date,
+                    isValid: data.isValid,
+                    document: data.document
+                });
+            } else {
+                setManualError("Aucune signature trouvée pour ce code.");
+            }
+        } catch (e) {
+            console.error(e);
+            setManualError("Erreur de connexion au service de vérification.");
         }
     };
 
@@ -239,98 +286,160 @@ export function SignatureVerificationModal({ isOpen, onClose, onViewDocument }: 
                             )}
 
                             {result && (
-                                <div className="p-4 bg-green-50 text-green-800 rounded-md border border-green-200 space-y-3">
-                                    <div className="flex items-center gap-2 mb-2">
-                                        <CheckCircle className="w-6 h-6 text-green-600" />
-                                        <span className="font-bold text-lg">Signature Valide</span>
-                                    </div>
-
-                                    <div className="space-y-2 text-sm">
-                                        <div className="flex justify-between border-b border-green-200 pb-1">
-                                            <span className="text-green-700">Type de document :</span>
-                                            <span className="font-medium flex items-center gap-1">
-                                                <FileText className="w-4 h-4" />
-                                                {result.type === 'attestation' ? 'Attestation PFMP' : 'Convention PFMP'}
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between border-b border-green-200 pb-1">
-                                            <span className="text-green-700 flex items-center gap-1">
-                                                <Calendar className="w-3 h-3" />
-                                                Période :
-                                            </span>
-                                            <span className="font-medium text-xs">
-                                                {result.convention.dateStart ? new Date(result.convention.dateStart).toLocaleDateString('fr-FR') : '?'}
-                                                {' → '}
-                                                {result.convention.dateEnd ? new Date(result.convention.dateEnd).toLocaleDateString('fr-FR') : '?'}
-                                            </span>
-                                        </div>
-                                        <div className="flex justify-between border-b border-green-200 pb-1">
-                                            <span className="text-green-700">Date de signature (Chef d'établissement) :</span>
-                                            <span className="font-medium">
-                                                {(result.convention.signatures as any)?.head?.signedAt
-                                                    ? new Date((result.convention.signatures as any).head.signedAt).toLocaleDateString('fr-FR')
-                                                    : 'N/A'}
-                                            </span>
-                                        </div>
-                                    </div>
-
-                                    {/* Signatories List */}
-                                    {result.convention.signatures && Object.keys(result.convention.signatures).length > 0 && (
-                                        <div className="mt-4 pt-3 border-t border-green-200">
-                                            <p className="text-[10px] font-black text-green-700 uppercase tracking-widest mb-2">Autres Signatures Certifiées</p>
-                                            <div className="space-y-2">
-                                                {Object.entries(result.convention.signatures as Record<string, any>)
-                                                    .filter(([_, data]) => data?.signedAt)
-                                                    .map(([role, data], i) => {
-                                                        const roleLabels: Record<string, string> = {
-                                                            student: 'Élève',
-                                                            parent: 'Représentant Légal',
-                                                            teacher: 'Enseignant Référent',
-                                                            company_head: 'Chef d\'Entreprise',
-                                                            company: 'Chef d\'Entreprise',
-                                                            tutor: 'Tuteur en Entreprise',
-                                                            head: 'Chef d\'Établissement'
-                                                        };
-                                                        const label = roleLabels[role] || role;
-
-                                                        const m = (result.convention as any).metadata || {};
-                                                        const c = result.convention as any;
-                                                        let signerName = data.name;
-
-                                                        if (!signerName || signerName === role) {
-                                                            if (role === 'student') signerName = c.eleve_nom ? `${c.eleve_prenom || ''} ${c.eleve_nom}`.trim() : (c.lastName ? `${c.firstName || ''} ${c.lastName}`.trim() : (m.eleve_nom ? `${m.eleve_prenom || ''} ${m.eleve_nom}`.trim() : null));
-                                                            else if (role === 'parent') signerName = c.rep_legal_nom || m.rep_legal_nom;
-                                                            else if (role === 'teacher') signerName = c.prof_nom || m.prof_nom;
-                                                            else if (role === 'company_head' || role === 'company') signerName = c.ent_rep_nom || m.ent_rep_nom;
-                                                            else if (role === 'tutor') signerName = c.tuteur_nom || m.tuteur_nom;
-                                                            else if (role === 'head') signerName = c.ecole_chef_nom || m.ecole_chef_nom;
-                                                        }
-
-                                                        return (
-                                                            <div key={i} className="flex justify-between items-center text-[10px] bg-white/50 p-1.5 rounded border border-green-100">
-                                                                <div>
-                                                                    <span className="font-bold block text-gray-700">{label} : {signerName || role}</span>
-                                                                </div>
-                                                                <div className="text-right">
-                                                                    <span className="text-green-600 font-bold block">Vérifié</span>
-                                                                    <span className="text-gray-300">{new Date(data.signedAt).toLocaleDateString('fr-FR')}</span>
-                                                                </div>
-                                                            </div>
-                                                        );
-                                                    })
-                                                }
+                                <div className="space-y-4">
+                                    {result.type === 'attestation' ? (
+                                        <div className="p-4 bg-green-50 rounded-lg border border-green-200 animate-in fade-in slide-in-from-bottom-2">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <CheckCircle className="w-6 h-6 text-green-600" />
+                                                <h3 className="text-green-800 font-bold text-lg">✅ Attestation de PFMP Authentifiée</h3>
+                                            </div>
+                                            <div className="space-y-1.5 text-sm">
+                                                <p className="text-gray-700"><strong>Document :</strong> Attestation de fin de PFMP</p>
+                                                <p className="text-gray-700"><strong>Élève :</strong> {result.document?.student_first_name} {result.document?.student_last_name}</p>
+                                                <p className="text-gray-700"><strong>Entreprise :</strong> {result.document?.company_name}</p>
+                                                <p className="text-gray-700"><strong>Ville :</strong> {result.document?.company_city}</p>
+                                                <p className="text-gray-700"><strong>Période :</strong> Du {result.document?.dateStart ? new Date(result.document.dateStart).toLocaleDateString('fr-FR') : '?'} au {result.document?.dateEnd ? new Date(result.document.dateEnd).toLocaleDateString('fr-FR') : '?'}</p>
+                                                <p className="text-gray-700"><strong>Date de signature :</strong> {result.document?.updatedAt ? new Date(result.document.updatedAt).toLocaleDateString('fr-FR') : 'N/A'}</p>
+                                                <p className="text-gray-500 mt-4 text-[10px] font-mono break-all">
+                                                    Certificat cryptographique : {code}
+                                                </p>
+                                            </div>
+                                            <div className="mt-4 pt-4 border-t border-green-200">
+                                                <a
+                                                    href={`/api/conventions/${result.document?.conventionId}/attestation/pdf`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center text-sm font-medium text-green-700 hover:text-green-800"
+                                                >
+                                                    <FileText className="w-4 h-4 mr-2" />
+                                                    Voir le document authentifié
+                                                </a>
                                             </div>
                                         </div>
-                                    )}
+                                    ) : result.type === ('mission_order' as any) ? (
+                                        <div className="p-4 bg-green-50 rounded-lg border border-green-200 animate-in fade-in slide-in-from-bottom-2">
+                                            <div className="flex items-center gap-2 mb-3">
+                                                <CheckCircle className="w-6 h-6 text-green-600" />
+                                                <h3 className="text-green-800 font-bold text-lg">✅ Ordre de Mission Authentifié</h3>
+                                            </div>
+                                            <div className="space-y-1.5 text-sm">
+                                                <p className="text-gray-700"><strong>Document :</strong> Ordre de Mission pour suivi PFMP</p>
+                                                <p className="text-gray-700"><strong>Enseignant :</strong> {result.document?.teacher_first_name} {result.document?.teacher_last_name}</p>
+                                                <p className="text-gray-700"><strong>Élève suivi :</strong> {result.document?.student_first_name} {result.document?.student_last_name}</p>
+                                                <p className="text-gray-700"><strong>Entreprise :</strong> {result.document?.company_name}</p>
+                                                <p className="text-gray-700"><strong>Ville :</strong> {result.document?.company_city}</p>
+                                                <p className="text-gray-700"><strong>Date :</strong> {result.document?.createdAt ? new Date(result.document.createdAt).toLocaleDateString('fr-FR') : 'N/A'}</p>
+                                                <p className="text-gray-500 mt-4 text-[10px] font-mono break-all">
+                                                    Certificat cryptographique : {code}
+                                                </p>
+                                            </div>
+                                            <div className="mt-4 pt-4 border-t border-green-200">
+                                                <a
+                                                    href={`/api/mission-orders/${result.document?.id}/pdf`}
+                                                    target="_blank"
+                                                    rel="noopener noreferrer"
+                                                    className="inline-flex items-center text-sm font-medium text-green-700 hover:text-green-800"
+                                                >
+                                                    <FileText className="w-4 h-4 mr-2" />
+                                                    Voir le document authentifié
+                                                </a>
+                                            </div>
+                                        </div>
+                                    ) : (
+                                        <div className="p-4 bg-green-50 text-green-800 rounded-md border border-green-200 space-y-3">
+                                            <div className="flex items-center gap-2 mb-2">
+                                                <CheckCircle className="w-6 h-6 text-green-600" />
+                                                <span className="font-bold text-lg">Signature Valide</span>
+                                            </div>
 
-                                    {onViewDocument && (
-                                        <button
-                                            onClick={() => onViewDocument(result!.convention, result!.type)}
-                                            className="w-full mt-2 flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
-                                        >
-                                            <FileText className="w-4 h-4 mr-2" />
-                                            Voir le document signé
-                                        </button>
+                                            <div className="space-y-2 text-sm">
+                                                <div className="flex justify-between border-b border-green-200 pb-1">
+                                                    <span className="text-green-700">Type de document :</span>
+                                                    <span className="font-medium flex items-center gap-1">
+                                                        <FileText className="w-4 h-4" />
+                                                        Convention PFMP
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between border-b border-green-200 pb-1">
+                                                    <span className="text-green-700 flex items-center gap-1">
+                                                        <Calendar className="w-3 h-3" />
+                                                        Période :
+                                                    </span>
+                                                    <span className="font-medium text-xs">
+                                                        {result.convention.dateStart ? new Date(result.convention.dateStart).toLocaleDateString('fr-FR') : '?'}
+                                                        {' → '}
+                                                        {result.convention.dateEnd ? new Date(result.convention.dateEnd).toLocaleDateString('fr-FR') : '?'}
+                                                    </span>
+                                                </div>
+                                                <div className="flex justify-between border-b border-green-200 pb-1">
+                                                    <span className="text-green-700">Date de signature (Chef d'établissement) :</span>
+                                                    <span className="font-medium">
+                                                        {(result.convention.signatures as any)?.head?.signedAt
+                                                            ? new Date((result.convention.signatures as any).head.signedAt).toLocaleDateString('fr-FR')
+                                                            : 'N/A'}
+                                                    </span>
+                                                </div>
+                                            </div>
+
+                                            {/* Signatories List */}
+                                            {result.convention.signatures && Object.keys(result.convention.signatures).length > 0 && (
+                                                <div className="mt-4 pt-3 border-t border-green-200">
+                                                    <p className="text-[10px] font-black text-green-700 uppercase tracking-widest mb-2">Autres Signatures Certifiées</p>
+                                                    <div className="space-y-2">
+                                                        {Object.entries(result.convention.signatures as Record<string, any>)
+                                                            .filter(([_, data]) => data?.signedAt)
+                                                            .map(([role, data], i) => {
+                                                                const roleLabels: Record<string, string> = {
+                                                                    student: 'Élève',
+                                                                    parent: 'Représentant Légal',
+                                                                    teacher: 'Enseignant Référent',
+                                                                    company_head: 'Chef d\'Entreprise',
+                                                                    company: 'Chef d\'Entreprise',
+                                                                    tutor: 'Tuteur en Entreprise',
+                                                                    head: 'Chef d\'Établissement'
+                                                                };
+                                                                const label = roleLabels[role] || role;
+
+                                                                const m = (result.convention as any).metadata || {};
+                                                                const c = result.convention as any;
+                                                                let signerName = data.name;
+
+                                                                if (!signerName || signerName === role) {
+                                                                    if (role === 'student') signerName = c.eleve_nom ? `${c.eleve_prenom || ''} ${c.eleve_nom}`.trim() : (c.lastName ? `${c.firstName || ''} ${c.lastName}`.trim() : (m.eleve_nom ? `${m.eleve_prenom || ''} ${m.eleve_nom}`.trim() : null));
+                                                                    else if (role === 'parent') signerName = c.rep_legal_nom || m.rep_legal_nom;
+                                                                    else if (role === 'teacher') signerName = c.prof_nom || m.prof_nom;
+                                                                    else if (role === 'company_head' || role === 'company') signerName = c.ent_rep_nom || m.ent_rep_nom;
+                                                                    else if (role === 'tutor') signerName = c.tuteur_nom || m.tuteur_nom;
+                                                                    else if (role === 'head') signerName = c.ecole_chef_nom || m.ecole_chef_nom;
+                                                                }
+
+                                                                return (
+                                                                    <div key={i} className="flex justify-between items-center text-[10px] bg-white/50 p-1.5 rounded border border-green-100">
+                                                                        <div>
+                                                                            <span className="font-bold block text-gray-700">{label} : {signerName || role}</span>
+                                                                        </div>
+                                                                        <div className="text-right">
+                                                                            <span className="text-green-600 font-bold block">Vérifié</span>
+                                                                            <span className="text-gray-300">{new Date(data.signedAt).toLocaleDateString('fr-FR')}</span>
+                                                                        </div>
+                                                                    </div>
+                                                                );
+                                                            })
+                                                        }
+                                                    </div>
+                                                </div>
+                                            )}
+
+                                            {onViewDocument && (
+                                                <button
+                                                    onClick={() => onViewDocument(result!.convention, result!.type as any)}
+                                                    className="w-full mt-2 flex items-center justify-center px-4 py-2 border border-transparent shadow-sm text-sm font-medium rounded-md text-white bg-green-600 hover:bg-green-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-green-500"
+                                                >
+                                                    <FileText className="w-4 h-4 mr-2" />
+                                                    Voir le document signé
+                                                </button>
+                                            )}
+                                        </div>
                                     )}
                                 </div>
                             )}

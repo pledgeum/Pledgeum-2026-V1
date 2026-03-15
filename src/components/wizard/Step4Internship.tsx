@@ -7,7 +7,7 @@ import { StepWrapper } from './StepWrapper';
 import { conventionSchema } from '@/types/schema';
 import { useWizardStore } from '@/store/wizard';
 import { useSchoolStore, PfmpPeriod } from '@/store/school';
-import { FileText, MapPin, Search, Calendar, AlertTriangle } from 'lucide-react';
+import { FileText, MapPin, Search, Calendar, AlertTriangle, Check } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { differenceInDays, isWithinInterval, parseISO, format } from 'date-fns';
 
@@ -19,6 +19,10 @@ const stepSchema = conventionSchema.pick({
     stage_lieu: true,
     stage_adresse_differente: true,
     stage_horaires: true,
+    is_out_of_period: true,
+    selected_periods: true,
+    selected_periods_labels: true,
+    adjusted_periods: true,
 });
 
 type Step4Data = z.infer<typeof stepSchema>;
@@ -35,10 +39,45 @@ export function Step4Internship() {
     );
 
     const upcomingPeriod = studentClass?.pfmpPeriods?.find(p => {
-        // Simple logic: Find first period ending in the future
-        // Ideally should be sorted by date
         return new Date(p.endDate) >= new Date();
     });
+
+    const [selectedPeriodIds, setSelectedPeriodIds] = useState<string[]>([]);
+
+    const togglePeriod = (period: PfmpPeriod, form: any) => {
+        const isSelected = selectedPeriodIds.includes(period.id);
+        const newSelected = isSelected
+            ? selectedPeriodIds.filter(id => id !== period.id)
+            : [...selectedPeriodIds, period.id];
+
+        setSelectedPeriodIds(newSelected);
+
+        // Update adjusted_periods and global dates
+        const currentAdjusted = form.getValues('adjusted_periods') || {};
+        const newAdjusted = { ...currentAdjusted };
+
+        if (!isSelected) {
+            // Adding
+            newAdjusted[period.id] = { start: period.startDate, end: period.endDate };
+        } else {
+            // Removing
+            delete newAdjusted[period.id];
+        }
+
+        form.setValue('adjusted_periods', newAdjusted);
+
+        if (newSelected.length > 0) {
+            const adjustedValues = Object.values(newAdjusted) as { start: string, end: string }[];
+            const starts = adjustedValues.map(v => new Date(v.start).getTime());
+            const ends = adjustedValues.map(v => new Date(v.end).getTime());
+            
+            const minStart = new Date(Math.min(...starts));
+            const maxEnd = new Date(Math.max(...ends));
+
+            form.setValue('stage_date_debut', format(minStart, 'yyyy-MM-dd'));
+            form.setValue('stage_date_fin', format(maxEnd, 'yyyy-MM-dd'));
+        }
+    };
 
     const handleNext = (data: Step4Data) => {
         setData(data);
@@ -78,7 +117,13 @@ export function Step4Internship() {
                     const currentEnd = form.getValues('stage_date_fin');
 
                     if ((!currentStart || !currentEnd) && upcomingPeriod) {
-                        if (!currentStart) form.setValue('stage_date_debut', upcomingPeriod.startDate);
+                        if (!currentStart) {
+                            const pStart = new Date(upcomingPeriod.startDate);
+                            const now = new Date();
+                            now.setHours(0, 0, 0, 0);
+                            const defaultStart = pStart < now ? format(now, 'yyyy-MM-dd') : upcomingPeriod.startDate;
+                            form.setValue('stage_date_debut', defaultStart);
+                        }
                         if (!currentEnd) form.setValue('stage_date_fin', upcomingPeriod.endDate);
                     }
 
@@ -176,68 +221,187 @@ export function Step4Internship() {
                 const dateDebut = form.watch('stage_date_debut');
                 const dateFin = form.watch('stage_date_fin');
 
-                // Check if dates match the official period (if one exists)
-                const isOfficialPeriod = upcomingPeriod && dateDebut === upcomingPeriod.startDate && dateFin === upcomingPeriod.endDate;
-                const isDerogation = upcomingPeriod && (!isOfficialPeriod);
+                // Robust official period check: dates must be covered by at least one official period completely
+                const isDateWithinOfficial = (dateStr: string) => {
+                    if (!dateStr || !studentClass?.pfmpPeriods) return false;
+                    const date = new Date(dateStr);
+                    return studentClass.pfmpPeriods.some(p => {
+                        const start = new Date(p.startDate);
+                        const end = new Date(p.endDate);
+                        return date >= start && date <= end;
+                    });
+                };
+
+                const isOutOfPeriod = selectedPeriodIds.length === 0 && (!isDateWithinOfficial(dateDebut) || !isDateWithinOfficial(dateFin));
+
+                // SYNC EFFECT
+                const adjustedPeriods = form.watch('adjusted_periods');
+
+                useEffect(() => {
+                    if (adjustedPeriods && Object.keys(adjustedPeriods).length > 0) {
+                        const values = Object.values(adjustedPeriods) as { start: string, end: string }[];
+                        const validStarts = values.map(v => v.start).filter(Boolean).map(s => new Date(s).getTime());
+                        const validEnds = values.map(v => v.end).filter(Boolean).map(e => new Date(e).getTime());
+
+                        if (validStarts.length > 0 && validEnds.length > 0) {
+                            const minStart = new Date(Math.min(...validStarts));
+                            const maxEnd = new Date(Math.max(...validEnds));
+
+                            const newStart = format(minStart, 'yyyy-MM-dd');
+                            const newEnd = format(maxEnd, 'yyyy-MM-dd');
+
+                            if (form.getValues('stage_date_debut') !== newStart) {
+                                form.setValue('stage_date_debut', newStart);
+                            }
+                            if (form.getValues('stage_date_fin') !== newEnd) {
+                                form.setValue('stage_date_fin', newEnd);
+                            }
+                        }
+                    }
+                }, [adjustedPeriods, form]);
+
+                useEffect(() => {
+                    if (form.getValues('is_out_of_period') !== isOutOfPeriod) {
+                        form.setValue('is_out_of_period', isOutOfPeriod);
+                    }
+                    if (JSON.stringify(form.getValues('selected_periods')) !== JSON.stringify(selectedPeriodIds)) {
+                        form.setValue('selected_periods', selectedPeriodIds);
+
+                        // Also save labels for PDF
+                        const selectedPeriods = studentClass?.pfmpPeriods?.filter(p => selectedPeriodIds.includes(p.id)) || [];
+                        const labels = selectedPeriods.map(p => {
+                            const adjusted = adjustedPeriods?.[p.id];
+                            const start = adjusted?.start ? format(parseISO(adjusted.start), 'dd/MM/yyyy') : format(parseISO(p.startDate), 'dd/MM/yyyy');
+                            const end = adjusted?.end ? format(parseISO(adjusted.end), 'dd/MM/yyyy') : format(parseISO(p.endDate), 'dd/MM/yyyy');
+                            return `${p.label || 'Période'}: Du ${start} au ${end}`;
+                        });
+                        form.setValue('selected_periods_labels', labels);
+                    }
+                }, [isOutOfPeriod, selectedPeriodIds, form, studentClass, adjustedPeriods]);
 
                 return (
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
-                        {/* PFMP Period Info Banner */}
-                        {upcomingPeriod && (
-                            <div className={`md:col-span-2 p-3 rounded-md border flex items-start space-x-3 text-sm ${isOfficialPeriod
-                                ? 'bg-blue-50 border-blue-200 text-blue-800'
-                                : 'bg-orange-50 border-orange-200 text-orange-800'
-                                }`}>
-                                {isOfficialPeriod ? (
-                                    <Calendar className="w-5 h-5 mt-0.5 text-blue-600" />
-                                ) : (
-                                    <AlertTriangle className="w-5 h-5 mt-0.5 text-orange-600" />
-                                )}
-                                <div>
-                                    <p className="font-bold">
-                                        {isOfficialPeriod ? "Période de stage officielle" : "Attention : Dates hors calendrier officiel"}
-                                    </p>
-                                    <p>
-                                        La période définie pour la classe <strong>{studentClass?.name}</strong> est du{' '}
-                                        <strong>{format(parseISO(upcomingPeriod.startDate), 'dd/MM/yyyy')}</strong> au{' '}
-                                        <strong>{format(parseISO(upcomingPeriod.endDate), 'dd/MM/yyyy')}</strong>.
-                                    </p>
-                                    {!isOfficialPeriod && (
-                                        <p className="mt-1 text-xs italic">
-                                            Vous pouvez modifier ces dates si une dérogation a été accordée. Une justification sera demandée lors de la signature.
-                                        </p>
-                                    )}
+                        {/* PFMP Period Choice */}
+                        {studentClass?.pfmpPeriods && studentClass.pfmpPeriods.length > 0 && (
+                            <div className="md:col-span-2 space-y-4 mb-2">
+                                <label className="block text-sm font-semibold text-indigo-900 flex items-center">
+                                    <Calendar className="w-4 h-4 mr-2" />
+                                    Périodes Officielles (Classe {studentClass.name})
+                                </label>
+                                <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                                    {studentClass.pfmpPeriods.map((period) => {
+                                        const isSelected = selectedPeriodIds.includes(period.id);
+                                        return (
+                                            <div
+                                                key={period.id}
+                                                onClick={() => togglePeriod(period, form)}
+                                                className={cn(
+                                                    "cursor-pointer p-3 rounded-lg border transition-all flex items-center space-x-3",
+                                                    isSelected
+                                                        ? "bg-indigo-50 border-indigo-500 ring-1 ring-indigo-500"
+                                                        : "bg-white border-gray-200 hover:border-indigo-300"
+                                                )}
+                                            >
+                                                <div className={cn(
+                                                    "w-5 h-5 rounded border flex items-center justify-center",
+                                                    isSelected ? "bg-indigo-600 border-indigo-600 text-white" : "border-gray-300"
+                                                )}>
+                                                    {isSelected && <Check className="w-3 h-3" />}
+                                                </div>
+                                                <div className="flex-1">
+                                                    <p className="text-xs font-bold text-indigo-900">{period.label || `Période ${period.id.slice(-4).toUpperCase()}`}</p>
+                                                    <p className="text-xs text-indigo-700">
+                                                        {format(parseISO(period.startDate), 'dd MMM')} → {format(parseISO(period.endDate), 'dd MMM yyyy')}
+                                                    </p>
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
                                 </div>
                             </div>
                         )}
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Date de Début</label>
-                            <input
-                                {...form.register('stage_date_debut')}
-                                type="date"
-                                min={today}
-                                className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-400 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500 disabled:opacity-100 disabled:text-gray-900",
-                                    form.formState.errors.stage_date_debut && "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                )}
-                            />
-                            {form.formState.errors.stage_date_debut && <p className="text-red-500 text-xs mt-1">{form.formState.errors.stage_date_debut.message}</p>}
-                        </div>
 
-                        <div>
-                            <label className="block text-sm font-medium text-gray-700">Date de Fin</label>
-                            <input
-                                {...form.register('stage_date_fin')}
-                                type="date"
-                                min={form.watch('stage_date_debut') || today}
-                                className={cn(
-                                    "mt-1 block w-full rounded-md border-gray-400 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500 disabled:opacity-100 disabled:text-gray-900",
-                                    form.formState.errors.stage_date_fin && "border-red-500 focus:border-red-500 focus:ring-red-500"
-                                )}
-                            />
-                            {form.formState.errors.stage_date_fin && <p className="text-red-500 text-xs mt-1">{form.formState.errors.stage_date_fin.message}</p>}
-                        </div>
+                        {/* Multi-Period Date Adjustment */}
+                        {selectedPeriodIds.length > 0 ? (
+                            <div className="md:col-span-2 space-y-4 bg-gray-50 p-4 rounded-lg border border-gray-200">
+                                <h3 className="text-sm font-bold text-indigo-900 flex items-center">
+                                    <Calendar className="w-4 h-4 mr-2" />
+                                    Ajustement des dates par période
+                                </h3>
+                                <div className="space-y-3">
+                                    {selectedPeriodIds.map((id) => {
+                                        const period = studentClass?.pfmpPeriods?.find(p => p.id === id);
+                                        if (!period) return null;
+                                        return (
+                                            <div key={id} className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-3 bg-white rounded-md border border-gray-100 shadow-sm relative">
+                                                <div className="sm:col-span-2">
+                                                    <p className="text-[10px] font-bold text-indigo-500 uppercase tracking-wider">
+                                                        {period.label || `Période ${period.id.slice(-4).toUpperCase()}`}
+                                                    </p>
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] font-medium text-gray-500 uppercase">Date de Début</label>
+                                                    <input
+                                                        type="date"
+                                                        {...form.register(`adjusted_periods.${id}.start`)}
+                                                        onChange={(e) => {
+                                                            form.setValue(`adjusted_periods.${id}.start`, e.target.value);
+                                                            // Trigger global sync (Effect will handle this if we watch adjusted_periods)
+                                                        }}
+                                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-xs p-1.5 border"
+                                                    />
+                                                </div>
+                                                <div>
+                                                    <label className="block text-[10px] font-medium text-gray-500 uppercase">Date de Fin</label>
+                                                    <input
+                                                        type="date"
+                                                        {...form.register(`adjusted_periods.${id}.end`)}
+                                                        onChange={(e) => {
+                                                            form.setValue(`adjusted_periods.${id}.end`, e.target.value);
+                                                        }}
+                                                        className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-indigo-500 focus:ring-indigo-500 sm:text-xs p-1.5 border"
+                                                    />
+                                                </div>
+                                            </div>
+                                        );
+                                    })}
+                                </div>
+                                <p className="text-[10px] text-gray-500 italic">
+                                    Les dates globales de la convention seront automatiquement ajustées selon vos saisies ci-dessus.
+                                </p>
+                            </div>
+                        ) : (
+                            <>
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Date de Début (Dérogatoire)</label>
+                                    <input
+                                        {...form.register('stage_date_debut')}
+                                        type="date"
+                                        min={today}
+                                        className={cn(
+                                            "mt-1 block w-full rounded-md border-gray-400 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500 disabled:opacity-100 disabled:text-gray-900",
+                                            form.formState.errors.stage_date_debut && "border-red-500 focus:border-red-500 focus:ring-red-500"
+                                        )}
+                                    />
+                                    {form.formState.errors.stage_date_debut && <p className="text-red-500 text-xs mt-1">{form.formState.errors.stage_date_debut.message}</p>}
+                                </div>
+
+                                <div>
+                                    <label className="block text-sm font-medium text-gray-700">Date de Fin (Dérogatoire)</label>
+                                    <input
+                                        {...form.register('stage_date_fin')}
+                                        type="date"
+                                        min={form.watch('stage_date_debut') || today}
+                                        className={cn(
+                                            "mt-1 block w-full rounded-md border-gray-400 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 border text-gray-900 placeholder:text-gray-500 disabled:opacity-100 disabled:text-gray-900",
+                                            form.formState.errors.stage_date_fin && "border-red-500 focus:border-red-500 focus:ring-red-500"
+                                        )}
+                                    />
+                                    {form.formState.errors.stage_date_fin && <p className="text-red-500 text-xs mt-1">{form.formState.errors.stage_date_fin.message}</p>}
+                                </div>
+                            </>
+                        )}
 
                         {/* Schedule Table */}
                         <div className="md:col-span-2 overflow-x-auto">

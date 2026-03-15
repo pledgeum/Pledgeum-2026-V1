@@ -58,6 +58,7 @@ export async function GET(request: Request) {
                 c.duration_hours as "durationHours",
                 TO_CHAR(c.date_start, 'YYYY-MM-DD') as "dateStart",
                 TO_CHAR(c.date_end, 'YYYY-MM-DD') as "dateEnd",
+                c.is_out_of_period as "is_out_of_period",
                 c.validated_at as "validatedAt",
                 c.signature_company_at as "signatureCompanyAt",
                 c.signature_school_at as "signatureSchoolAt",
@@ -97,13 +98,32 @@ export async function GET(request: Request) {
                 v.distance_km AS visit_distance_km,
                 v.status AS visit_status,
                 v.scheduled_date AS visit_scheduled_date,
+                v.draft_tracking_teacher_email,
+                v.draft_distance_km,
                 tu.first_name AS tracking_teacher_first_name,
-                tu.last_name AS tracking_teacher_last_name
+                tu.last_name AS tracking_teacher_last_name,
+                est.address AS school_address,
+                est.postal_code AS school_zip_code,
+                est.city AS school_city,
+                -- ATTESTATION DATA
+                att.total_days_present AS attestation_total_jours,
+                att.absences_hours AS attestation_absences_hours,
+                att.activities AS activites,
+                att.skills_evaluation AS attestation_competences,
+                att.gratification_amount AS attestation_gratification,
+                att.signer_name AS attestation_signer_name,
+                att.signer_function AS attestation_signer_function,
+                TO_CHAR(att.signature_date, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "attestationDate",
+                att.signature_img AS attestation_signature_img,
+                att.signature_code AS attestation_signature_code,
+                att.pdf_hash AS "attestationHash"
             FROM conventions c
             LEFT JOIN classes cls ON c.class_id = cls.id
+            LEFT JOIN establishments est ON c.establishment_uai = est.uai
             LEFT JOIN users u ON cls.main_teacher_id = u.uid
             LEFT JOIN visits v ON c.id = v.convention_id
             LEFT JOIN users tu ON v.tracking_teacher_email = tu.email
+            LEFT JOIN attestations att ON c.id = att.convention_id
             WHERE 1=1
         `;
 
@@ -127,6 +147,16 @@ export async function GET(request: Request) {
             // Apply Status Filter: Only show once Student + Parent + Teacher have acted
             // Workflow: Student signs -> SUBMITTED | Parent signs -> SIGNED_PARENT | Teacher validates -> VALIDATED_TEACHER
             query += ` AND c.status IN ('VALIDATED_TEACHER', 'SIGNED_COMPANY', 'SIGNED_TUTOR', 'VALIDATED_HEAD')`;
+        } else if (userRole === 'student') {
+            // Student: Strict UAI filter AND self-identity filter (UID primary, Email fallback)
+            query += ` AND c.establishment_uai = $${paramIndex}`;
+            params.push(userEstablishmentUai);
+            paramIndex++;
+
+            query += ` AND (c.student_uid = $${paramIndex} OR c.student_uid = $${paramIndex + 1})`;
+            params.push((session.user as any).id);
+            params.push(session.user.email);
+            paramIndex += 2;
         } else if (userRole !== 'SUPER_ADMIN') {
             // Default (School Admin, Teacher, Student?): Fetch by Establishment UAI
             query += ` AND c.establishment_uai = $${paramIndex}`;
@@ -152,16 +182,25 @@ export async function GET(request: Request) {
 
         const conventions = res.rows.map(c => ({
             ...c,
+            attestationSigned: !!c.attestationDate,
             signatures: c.metadata?.signatures || {}, // Flatten signatures for frontend compatibility
-            visit: c.tracking_teacher_email ? {
-                tracking_teacher_email: c.tracking_teacher_email,
-                tracking_teacher_first_name: c.tracking_teacher_first_name,
-                tracking_teacher_last_name: c.tracking_teacher_last_name,
-                distance_km: c.visit_distance_km,
-                status: c.visit_status,
-                scheduled_date: c.visit_scheduled_date
-            } : null,
+                visit: c.tracking_teacher_email || c.draft_tracking_teacher_email ? {
+                    tracking_teacher_email: c.tracking_teacher_email,
+                    tracking_teacher_first_name: c.tracking_teacher_first_name,
+                    tracking_teacher_last_name: c.tracking_teacher_last_name,
+                    distance_km: c.visit_distance_km,
+                    status: c.visit_status,
+                    scheduled_date: c.visit_scheduled_date,
+                    // Draft Data
+                    draft_tracking_teacher_email: c.draft_tracking_teacher_email,
+                    draft_distance_km: c.draft_distance_km
+                } : null,
             prof_suivi_email: c.tracking_teacher_email || c.metadata?.prof_suivi_email || null,
+            school: {
+                address: c.school_address || c.ecole_adresse,
+                zipCode: c.school_zip_code || '',
+                city: c.school_city || ''
+            }
         }));
 
         return NextResponse.json({
@@ -177,10 +216,14 @@ export async function GET(request: Request) {
         });
 
     } catch (error: any) {
-        console.error('[API_CONVENTIONS] Error:', error);
-        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+        console.error('[API_CONVENTIONS] Fatal Error:', error);
+        return NextResponse.json({ 
+            success: false, 
+            error: error.message || 'Internal Server Error',
+            stack: process.env.NODE_ENV === 'development' ? error.stack : undefined
+        }, { status: 500 });
     } finally {
-        client.release();
+        if (client) client.release();
     }
 }
 
@@ -213,131 +256,141 @@ export async function POST(req: Request) {
         const body = await req.json();
         const { studentId, ...data } = body;
 
-        // 1. Récupération robuste de l'UAI (Frontend en priorité, Session en fallback)
-        const uai = data.schoolId || data.establishment_uai || (session.user as any)?.establishment_uai;
+        // 1. Récupération ROBUSTE de l'UAI (Session uniquement pour Student, sinon fallback DB)
+        let uai = (session.user as any)?.establishment_uai;
+        const classId = data.class_id || data.eleve_classe_id || data.metadata?.class_id;
 
-        // 2. Garde-fou strict : Rejeter la requête si l'UAI est introuvable
-        if (!uai) {
-            return NextResponse.json(
-                { error: "L'identifiant de l'établissement (UAI) est manquant. Impossible de lier la convention." },
-                { status: 400 }
-            );
-        }
-
-        // Basic validation
-        if (!data.ent_nom || !data.dateStart) { // Adjust validation as needed
-            // Just a soft check, Schema validation happens on DB constraints or Zod if imported
-        }
-
-        // Check for signature in payload to determine initial status
-        let initialStatus = 'DRAFT';
-        if (data.signatures && data.signatures.studentImg) {
-            initialStatus = 'SUBMITTED';
-            const now = new Date().toISOString();
-
-            const getIp = (req: Request) => {
-                const ip = req.headers.get('x-real-ip') || req.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
-                return ip === '::1' ? '127.0.0.1 (Localhost)' : ip;
-            };
-
-            // Construct nested student signature object
-            // We move 'studentImg' into 'student.img' and add metadata
-            const studentSig = {
-                signedAt: now,
-                img: data.signatures.studentImg,
-                code: 'CANVAS', // Default for initial creation via canvas
-                hash: crypto.createHash('sha256').update(`student:${now}:CANVAS`).digest('hex'),
-                ip: getIp(req),
-            };
-
-            // Replace flat logic with nested logic
-            data.signatures.student = studentSig;
-
-            // [NEW] Initialize auditLogs with the student's initial signature
-            const actorEmail = data.eleve_email || session?.user?.email || 'student';
-            data.auditLogs = [
-                {
-                    date: now,
-                    action: 'SIGNED',
-                    actorEmail: actorEmail,
-                    details: 'Signature Élève/Étudiant',
-                    ip: studentSig.ip
-                }
-            ];
-
-            // Remove legacy flat keys if they exist in payload to keep DB clean
-            delete data.signatures.studentImg;
-            delete data.signatures.studentAt;
-        }
-
-        // --- USER PROVISIONING (Parent, Tutor, Company Head) ---
-        // We do this BEFORE the transaction to ensure we have UIDs to store.
-        // Failures here are logged but shouldn't necessarily block convention creation 
-        // (unless critical, but for now we proceed with empty UIDs if fail).
-
-        const provisioningResults: Record<string, string> = {};
-
-        // 1. Parent (Legal Representative)
-        if (data.est_mineur && data.rep_legal_email) {
-            const parentRes = await findOrCreateUser({
-                pool,
-                email: data.rep_legal_email,
-                role: 'parent',
-                firstName: data.rep_legal_prenom || '',
-                lastName: data.rep_legal_nom || '',
-                phone: data.rep_legal_tel,
-                studentName: `${data.eleve_prenom} ${data.eleve_nom}`
-            });
-            if (parentRes.uid) provisioningResults.parentUid = parentRes.uid;
-        }
-
-        // 2. Tutor
-        if (data.tuteur_email) {
-            const tutorRes = await findOrCreateUser({
-                pool,
-                email: data.tuteur_email,
-                role: 'tutor',
-                firstName: (data.tuteur_prenom || data.tuteur_nom || '').split(' ')[0], // Best effort split
-                lastName: data.tuteur_nom || '',
-                phone: data.tuteur_tel, // Assuming field exists or undefined
-                studentName: `${data.eleve_prenom} ${data.eleve_nom}`
-            });
-            if (tutorRes.uid) provisioningResults.tutorUid = tutorRes.uid;
-        }
-
-        // 3. Company Head (if different from Tutor, or just always process)
-        if (data.ent_rep_email) {
-            const headRes = await findOrCreateUser({
-                pool,
-                email: data.ent_rep_email,
-                role: 'company_head',
-                firstName: (data.ent_rep_prenom || data.ent_rep_nom || '').split(' ')[0],
-                lastName: data.ent_rep_nom || '',
-                phone: data.ent_rep_tel,
-                studentName: `${data.eleve_prenom} ${data.eleve_nom}`
-            });
-            if (headRes.uid) provisioningResults.companyHeadUid = headRes.uid;
-        }
-
-        // Store UIDs in metadata
-        // We can also store them in specific columns if they existed, but for now metadata is safe.
-        // We update the 'data' object which goes into 'metadata' column.
-        data.linked_uids = provisioningResults; // Explicit field for linked accounts
-        // Also map to specific keys if needed by other parts of the app
-        if (provisioningResults.parentUid) data.rep_legal_uid = provisioningResults.parentUid;
-        if (provisioningResults.tutorUid) data.tutor_uid = provisioningResults.tutorUid;
-        if (provisioningResults.companyHeadUid) data.signataire_uid = provisioningResults.companyHeadUid;
-
-
-        // Map frontend camelCase to SnakeCase for DB
         const client = await pool.connect();
         try {
+            if (!uai && classId) {
+                console.log(`[API_CONVENTIONS] UAI missing from session, attempting derivation from class_id: ${classId}`);
+                const classRes = await client.query('SELECT establishment_uai FROM classes WHERE id = $1', [classId]);
+                if (classRes.rowCount && classRes.rowCount > 0) {
+                    uai = classRes.rows[0].establishment_uai;
+                }
+            }
+
+            // 2. Garde-fou strict : Rejeter la requête si l'UAI est introuvable
+            if (!uai) {
+                console.error('[API_CONVENTIONS] POST Refused: No UAI found for user', session.user.email);
+                return NextResponse.json(
+                    { error: "L'identifiant de l'établissement (UAI) est manquant. Impossible de créer la convention." },
+                    { status: 400 }
+                );
+            }
+
+            // --- SIGNATURE & STATUS LOGIC ---
+            let initialStatus = 'DRAFT';
+            if (data.signatures && data.signatures.studentImg) {
+                initialStatus = 'SUBMITTED';
+                const now = new Date().toISOString();
+
+                const getIp = (req: Request) => {
+                    const ip = req.headers.get('x-real-ip') || req.headers.get('x-forwarded-for')?.split(',')[0] || 'unknown';
+                    return ip === '::1' ? '127.0.0.1 (Localhost)' : ip;
+                };
+
+                const studentSig = {
+                    signedAt: now,
+                    img: data.signatures.studentImg,
+                    code: 'CANVAS',
+                    hash: crypto.createHash('sha256').update(`student:${now}:CANVAS`).digest('hex'),
+                    ip: getIp(req),
+                };
+
+                data.signatures.student = studentSig;
+                const actorEmail = data.eleve_email || session?.user?.email || 'student';
+                data.auditLogs = [
+                    {
+                        date: now,
+                        action: 'SIGNED',
+                        actorEmail: actorEmail,
+                        details: 'Signature Élève/Étudiant',
+                        ip: studentSig.ip
+                    }
+                ];
+
+                delete data.signatures.studentImg;
+                delete data.signatures.studentAt;
+            }
+
+            // --- USER PROVISIONING ---
+            const provisioningResults: Record<string, string> = {};
+
+            if (data.est_mineur && data.rep_legal_email) {
+                const parentRes = await findOrCreateUser({
+                    pool,
+                    email: data.rep_legal_email,
+                    role: 'parent',
+                    firstName: data.rep_legal_prenom || '',
+                    lastName: data.rep_legal_nom || '',
+                    phone: data.rep_legal_tel,
+                    studentName: `${data.eleve_prenom} ${data.eleve_nom}`
+                });
+                if (parentRes.uid) provisioningResults.parentUid = parentRes.uid;
+            }
+
+            if (data.tuteur_email) {
+                const tutorRes = await findOrCreateUser({
+                    pool,
+                    email: data.tuteur_email,
+                    role: 'tutor',
+                    firstName: (data.tuteur_prenom || data.tuteur_nom || '').split(' ')[0],
+                    lastName: data.tuteur_nom || '',
+                    phone: data.tuteur_tel,
+                    studentName: `${data.eleve_prenom} ${data.eleve_nom}`
+                });
+                if (tutorRes.uid) provisioningResults.tutorUid = tutorRes.uid;
+            }
+
+            if (data.ent_rep_email) {
+                const headRes = await findOrCreateUser({
+                    pool,
+                    email: data.ent_rep_email,
+                    role: 'company_head',
+                    firstName: (data.ent_rep_prenom || data.ent_rep_nom || '').split(' ')[0],
+                    lastName: data.ent_rep_nom || '',
+                    phone: data.ent_rep_tel,
+                    studentName: `${data.eleve_prenom} ${data.eleve_nom}`
+                });
+                if (headRes.uid) provisioningResults.companyHeadUid = headRes.uid;
+            }
+
+            data.linked_uids = provisioningResults;
+            if (provisioningResults.parentUid) data.rep_legal_uid = provisioningResults.parentUid;
+            if (provisioningResults.tutorUid) data.tutor_uid = provisioningResults.tutorUid;
+            if (provisioningResults.companyHeadUid) data.signataire_uid = provisioningResults.companyHeadUid;
+
+            // --- DB INSERTION ---
             await client.query('BEGIN');
 
-            // Generate IDs
+            // --- 0. Company UPSERT (Foreign Key Guard) ---
+            const rawSiret = data.ent_siret || data.metadata?.ent_siret || '';
+            const cleanSiret = rawSiret.toString().replace(/\D/g, '').substring(0, 14);
+
+            if (cleanSiret && cleanSiret.length === 14) {
+                await client.query(`
+                    INSERT INTO companies (siret, name, address, postal_code, city, phone)
+                    VALUES ($1, $2, $3, $4, $5, $6)
+                    ON CONFLICT (siret) DO UPDATE 
+                    SET 
+                        name = EXCLUDED.name, 
+                        address = EXCLUDED.address, 
+                        postal_code = EXCLUDED.postal_code, 
+                        city = EXCLUDED.city,
+                        phone = COALESCE(EXCLUDED.phone, companies.phone)
+                 `, [
+                    cleanSiret,
+                    data.ent_nom || 'Entreprise Inconnue',
+                    data.ent_adresse || '',
+                    data.ent_code_postal || null,
+                    data.ent_ville || null,
+                    data.tuteur_tel || data.ent_rep_tel || null
+                ]);
+            }
+
             const conventionsId = 'conv_' + Math.random().toString(36).substr(2, 9);
 
-            // Insert
             const query = `
                 INSERT INTO conventions (
                     id, 
@@ -348,8 +401,12 @@ export async function POST(req: Request) {
                     metadata,
                     date_start,
                     date_end,
-                    establishment_uai
-                ) VALUES ($1, $2, $3, NOW(), NOW(), $4, $5, $6, $7)
+                    establishment_uai,
+                    is_out_of_period,
+                    class_id,
+                    duration_hours,
+                    company_siret
+                ) VALUES ($1, $2, $3, NOW(), NOW(), $4, $5, $6, $7, $8, $9, $10, $11)
                 RETURNING *
             `;
 
@@ -360,12 +417,15 @@ export async function POST(req: Request) {
                 JSON.stringify(data),
                 data.dateStart || data.stage_date_debut,
                 data.dateEnd || data.stage_date_fin,
-                uai
+                uai,
+                data.is_out_of_period || false,
+                classId || (typeof data.eleve_classe === 'string' && data.eleve_classe.startsWith('cls_') ? data.eleve_classe : null),
+                data.stage_duree_heures || 0,
+                cleanSiret || null
             ]);
 
             // --- AUTO-ALIMENTATION DES PARTENAIRES ---
-            // Si l'entreprise a un SIRET et le uai est connu, on l'ajoute ou on la met à jour dans la table partners.
-            if (data.ent_siret && uai) {
+            if (cleanSiret && uai) {
                 try {
                     let lat = null;
                     let lng = null;
@@ -374,9 +434,7 @@ export async function POST(req: Request) {
                     let finalAddress = data.ent_adresse || '';
                     let finalName = data.ent_nom || 'Entreprise inconnue';
 
-                    // API Gouv Siret Lookup
-                    const gouvInfo = await getCompanyInfoBySiret(data.ent_siret);
-
+                    const gouvInfo = await getCompanyInfoBySiret(cleanSiret);
                     if (gouvInfo) {
                         lat = gouvInfo.lat;
                         lng = gouvInfo.lng;
@@ -385,7 +443,6 @@ export async function POST(req: Request) {
                         if (gouvInfo.address) finalAddress = gouvInfo.address;
                         if (gouvInfo.name) finalName = gouvInfo.name;
                     } else if (data.ent_adresse) {
-                        // Fallback to basic geocoding if Gouv API fails but we have address
                         const coords = await getCoordinates(data.ent_adresse);
                         if (coords) {
                             lat = coords.lat;
@@ -418,12 +475,10 @@ export async function POST(req: Request) {
                             )
                     `;
 
-                    // We ensure the student's class is wrapped in an array for JSONB
                     const classArray = data.eleve_classe ? JSON.stringify([data.eleve_classe]) : '[]';
-
                     await client.query(partnerQuery, [
                         uai,
-                        data.ent_siret,
+                        cleanSiret,
                         finalName,
                         finalAddress,
                         city,
@@ -432,24 +487,15 @@ export async function POST(req: Request) {
                         lng,
                         classArray
                     ]);
-
-
                 } catch (partnerError) {
-                    // We catch and log this error so it doesn't rollback the whole convention creation if it's just a partner UPSERT issue.
                     console.error("[AUTO-PARTNER] Error updating partner table:", partnerError);
                 }
             }
-            // --- FIN AUTO-ALIMENTATION ---
 
             await client.query('COMMIT');
 
-            // --- EMAIL & NOTIFICATION LOGIC (MOVED FROM LEGACY ROUTE) ---
+            // --- EMAIL & NOTIFICATION LOGIC ---
             if (initialStatus === 'SUBMITTED' && data.signatures && (data.signatures.student || data.signatures.studentImg)) {
-                // Run in background / parallel to avoid blocking the fast response, 
-                // OR await if we want to return warnings.
-                // Given the user wants to avoid "Ghost" issues, let's await but catch errors so main flow succeeds.
-
-                // 1. Notify Student
                 if (data.eleve_email) {
                     await safeSendEmail({
                         to: data.eleve_email,
@@ -461,14 +507,7 @@ export async function POST(req: Request) {
                     });
                 }
 
-                // 2. Notify Parent (Link/Review) - Account creation is already done via findOrCreateUser
-                // We just need to notify them about the *Action* (Signature Request)
                 if (data.est_mineur && data.rep_legal_email) {
-                    // Send "Action Required" email regardless of whether they were just created or existed
-                    // (The Welcome email handles credentials, this handles the specific task)
-                    // Optimization: If they were just created, maybe the welcome email is enough?
-                    // But the welcome email is generic. The action email is specific.
-                    // Let's send the specific action email too.
                     const parentEmail = data.rep_legal_email.toLowerCase().trim();
                     const nRes = await safeSendEmail({
                         to: parentEmail,
@@ -483,9 +522,7 @@ export async function POST(req: Request) {
                 }
             }
 
-
             const createdConvention = result.rows[0];
-
             return NextResponse.json({
                 success: true,
                 data: createdConvention,
@@ -494,10 +531,10 @@ export async function POST(req: Request) {
             });
 
         } catch (dbError: any) {
-            await client.query('ROLLBACK');
+            if (client) await client.query('ROLLBACK');
             throw dbError;
         } finally {
-            client.release();
+            if (client) client.release();
         }
 
     } catch (error: any) {

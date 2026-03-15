@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { X, Calendar, Clock, Download, CheckCircle, Trash2, Plus, ArrowLeft, Calculator, FileDown } from 'lucide-react';
+import { X, Calendar, Clock, Download, CheckCircle, Trash2, Plus, ArrowLeft, Calculator, FileDown, Lock as LockIcon } from 'lucide-react';
 import { Convention, Absence } from '@/store/convention';
 import { useConventionStore } from '@/store/convention';
 import { useUserStore, UserRole } from '@/store/user';
@@ -8,7 +8,7 @@ import { SignatureModal } from './SignatureModal';
 import dynamic from 'next/dynamic';
 import { calculateEffectiveInternshipDays } from '@/lib/calculations';
 import { generateVerificationUrl } from '@/app/actions/sign';
-import QRCode from 'qrcode';
+import { calculatePfmpStats } from '@/lib/pfmp-calculations';
 
 interface AttestationModalProps {
     isOpen: boolean;
@@ -30,13 +30,14 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
 
     // Document Fields
     const [docData, setDocData] = useState({
-        totalJours: convention.attestation_total_jours || 0,
+        totalJoursPayes: convention.attestation_total_jours || 0,
+        totalSemaines: convention.attestation_total_semaines || 0,
         activites: convention.activites || convention.stage_activites || '',
         competences: convention.attestation_competences || '',
         gratification: convention.attestation_gratification || '0',
         faitA: convention.attestation_fait_a || convention.ent_adresse?.split(',').pop()?.trim() || 'Paris',
-        holidaysEncountered: [] as string[], // New field for display
-        absencesCount: 0 // New field for display
+        holidaysEncountered: [] as string[],
+        absencesCount: 0
     });
 
     // Local state for new absence
@@ -48,80 +49,18 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
 
     // Auto-calculate days when absences or schedule change
     useEffect(() => {
-        if (!isReadOnly && !convention.attestation_total_jours) {
-            // Precise Calculation based on:
-            // 1. Weekly Schedule (Grille Horaire)
-            // 2. Public Holidays (Excluded)
-            // 3. Absences (Excluded)
-
-            const start = new Date(convention.stage_date_debut);
-            const end = new Date(convention.stage_date_fin);
-            let totalDays = 0;
-            let holidaysFound: string[] = [];
-
-            // Clone to avoid infinite loop
-            const current = new Date(start);
-
-            // Map absences to simple date strings YYYY-MM-DD for fast lookup
-            // Note: Absences in store have ISO string in .date
-            const absenceDates = new Set(absences.map(a => new Date(a.date).toISOString().split('T')[0]));
-            let absenceDaysCount = 0;
-
-            while (current <= end) {
-                const dayOfWeek = current.getDay(); // 0 = Sun, 1 = Mon ...
-                // Check Schedule
-                // Map JS getDay() to our Schedule keys: 1->lundi, 2->mardi...
-                // Only count if convention says it's a workday
-                let isWorkDay = false;
-
-                // Helper to check schedule hours
-                const checkDay = (dayName: string) => {
-                    const hours = convention.stage_horaires?.[dayName as keyof typeof convention.stage_horaires];
-                    // If hours are defined and not "Repos" and duration > 0
-                    if (hours && hours.matin_debut && hours.matin_fin) return true; // simplified check
-                    // Or check total hours per day if available?
-                    // Let's assume valid presence if any time slot is filled
-                    if (hours && (hours.matin_debut !== '' || hours.apres_midi_debut !== '')) return true;
-                    return false;
-                };
-
-                switch (dayOfWeek) {
-                    case 1: if (checkDay('lundi')) isWorkDay = true; break;
-                    case 2: if (checkDay('mardi')) isWorkDay = true; break;
-                    case 3: if (checkDay('mercredi')) isWorkDay = true; break;
-                    case 4: if (checkDay('jeudi')) isWorkDay = true; break;
-                    case 5: if (checkDay('vendredi')) isWorkDay = true; break;
-                    case 6: if (checkDay('samedi')) isWorkDay = true; break;
-                    case 0: if (checkDay('dimanche')) isWorkDay = true; break;
-                }
-
-                if (isWorkDay) {
-                    // Check exclusion: Public Holiday
-                    if (isPublicHoliday(current)) {
-                        holidaysFound.push(current.toLocaleDateString());
-                    } else {
-                        // Check exclusion: Absence
-                        const dateStr = current.toISOString().split('T')[0];
-                        if (absenceDates.has(dateStr)) {
-                            absenceDaysCount++;
-                        } else {
-                            totalDays++;
-                        }
-                    }
-                }
-
-                // Next day
-                current.setDate(current.getDate() + 1);
-            }
+        if (!isReadOnly && (!convention.attestation_total_jours || !convention.attestation_total_semaines)) {
+            const stats = calculatePfmpStats(convention as any, absences);
 
             setDocData(prev => ({
                 ...prev,
-                totalJours: totalDays,
-                holidaysEncountered: holidaysFound,
-                absencesCount: absenceDaysCount
+                totalJoursPayes: stats.daysToPay,
+                totalSemaines: stats.weeksForDiploma,
+                holidaysEncountered: stats.holidaysFound,
+                absencesCount: stats.absencesDaysCount
             }));
         }
-    }, [absences, convention.stage_date_debut, convention.stage_date_fin, convention.stage_horaires, isReadOnly, convention.attestation_total_jours]);
+    }, [absences, convention.stage_date_debut, convention.stage_date_fin, convention.stage_horaires, isReadOnly, convention.attestation_total_jours, convention.attestation_total_semaines]);
 
     // QR Code Generation
     const [qrCodeUrl, setQrCodeUrl] = useState<string>('');
@@ -130,12 +69,11 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
     useEffect(() => {
         const init = async () => {
             if (convention.id) {
-                // Use Server Action to get signed URL
-                // We pass the convention object. Note: If the user edits fields (absences, etc), 
-                // the QR code might need regeneration if those fields are part of the payload.
-                // The server action uses: id, student name, company, dates, status, total days.
-                // 'totalJours' is edited in local state 'docData'. We should probably merge it.
-                const currentData = { ...convention, attestation_total_jours: docData.totalJours };
+                const currentData = {
+                    ...convention,
+                    attestation_total_jours: docData.totalJoursPayes,
+                    attestation_total_semaines: docData.totalSemaines
+                };
 
                 const { url, hashDisplay } = await generateVerificationUrl(currentData as Convention, 'attestation');
                 QRCode.toDataURL(url).then(setQrCodeUrl).catch(console.error);
@@ -143,7 +81,7 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
             }
         };
         init();
-    }, [convention.id, docData.totalJours, convention]);
+    }, [convention.id, docData.totalJoursPayes, docData.totalSemaines, convention]);
 
     if (!isOpen) return null;
     if (!convention) return null;
@@ -172,22 +110,79 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
 
     const handleStartSign = async () => {
         if (isReadOnly) return;
-        // Save data first
-        await updateConvention(convention.id, {
-            absences,
-            attestation_competences: docData.competences,
-            attestation_gratification: docData.gratification,
-            attestation_fait_a: docData.faitA,
-            attestation_total_jours: docData.totalJours,
-            activites: docData.activites
-        });
-        setIsSigning(true);
+
+        // Prepare the payload for saving draft attestation data
+        const payload = {
+            total_days_paid: docData.totalJoursPayes,
+            total_weeks_diploma: docData.totalSemaines,
+            absences_hours: totalAbsenceHours,
+            activities: docData.activites,
+            skills_evaluation: docData.competences,
+            gratification_amount: docData.gratification,
+            signer_name: getSigneeName(),
+            signer_function: getSigneeFunction()
+        };
+
+        try {
+            // Save to the new attestation API
+            await fetch(`/api/conventions/${convention.id}/attestation`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            });
+
+            // Fallback: also update convention if needed for other metadata (e.g. absences list which might be in metadata)
+            await updateConvention(convention.id, {
+                absences,
+                attestation_fait_a: docData.faitA
+            });
+
+            setIsSigning(true);
+        } catch (error) {
+            console.error("Error saving draft attestation:", error);
+            alert("Erreur lors de la sauvegarde du brouillon");
+        }
     };
 
-    const handleSignComplete = async (method: 'canvas' | 'otp', signatureData?: string) => {
-        await validateAttestation(convention.id, totalAbsenceHours, signatureData, getSigneeName(), getSigneeFunction());
-        setIsSigning(false);
-        onClose();
+    const handleSignComplete = async (method: 'canvas' | 'otp', signatureData?: string, auditLog?: any) => {
+        try {
+            const res = await fetch(`/api/conventions/${convention.id}/attestation/sign`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    signatureImage: signatureData,
+                    code: method === 'otp' ? 'OTP' : 'CANVAS',
+                    auditLog: auditLog
+                })
+            });
+
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.error || "Erreur lors de la signature");
+            }
+
+            // Update local state by re-fetching convention or updating store
+            // For now, we can manually update the store or rely on the parent to re-fetch
+            const { attestation } = await res.json();
+
+            // We use the validateAttestation store action to sync local state correctly 
+            // even if we used a direct API call for the heavy lifting.
+            await validateAttestation(
+                convention.id,
+                totalAbsenceHours,
+                signatureData,
+                getSigneeName(),
+                getSigneeFunction(),
+                docData.totalJoursPayes,
+                docData.totalSemaines
+            );
+
+            setIsSigning(false);
+            onClose();
+        } catch (error: any) {
+            console.error("Sign error:", error);
+            alert(error.message);
+        }
     };
 
     const getSigneeName = () => {
@@ -311,26 +306,49 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
                                             <span className="font-bold w-[16.5%]">Dates :</span>
                                             <span>Du <strong>{new Date(convention.stage_date_debut).toLocaleDateString()}</strong> au <strong>{new Date(convention.stage_date_fin || '').toLocaleDateString()}</strong></span>
                                         </div>
-                                        <div className="flex items-center">
-                                            <div className="flex flex-col items-start">
-                                                <div className="flex items-center">
-                                                    <span className="font-bold w-[150px]">Durée effective :</span>
+                                        <div className="flex flex-col gap-3 mt-4">
+                                            {/* Gratification Count */}
+                                            <div className="flex items-center p-3 bg-blue-50 border border-blue-100 rounded-lg">
+                                                <div className="flex-1">
+                                                    <span className="font-bold text-blue-900">1. Présence pour gratification :</span>
+                                                    <p className="text-xs text-blue-700 opacity-80">(Plafonné à 5 jours max par semaine calendaire)</p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
                                                     <input
                                                         type="number"
                                                         disabled={isReadOnly}
-                                                        className="w-16 p-0.5 border rounded font-bold text-center disabled:bg-gray-100 mx-2"
-                                                        value={docData.totalJours}
-                                                        onChange={e => setDocData({ ...docData, totalJours: Number(e.target.value) })}
+                                                        className="w-16 p-1 border rounded font-bold text-center disabled:bg-white"
+                                                        value={docData.totalJoursPayes}
+                                                        onChange={e => setDocData({ ...docData, totalJoursPayes: Number(e.target.value) })}
                                                     />
-                                                    <span>jours de présence</span>
+                                                    <span className="font-medium">jours</span>
                                                 </div>
-                                                {(docData.absencesCount > 0 || docData.holidaysEncountered.length > 0) && (
-                                                    <div className="ml-[158px] text-xs text-gray-500 mt-1">
-                                                        {docData.absencesCount > 0 && <div>• Dont {docData.absencesCount} jour(s) d'absence</div>}
-                                                        {docData.holidaysEncountered.length > 0 && <div>• Jours fériés : {docData.holidaysEncountered.join(', ')}</div>}
-                                                    </div>
-                                                )}
                                             </div>
+
+                                            {/* Diploma Count */}
+                                            <div className="flex items-center p-3 bg-green-50 border border-green-100 rounded-lg">
+                                                <div className="flex-1">
+                                                    <span className="font-bold text-green-900">2. Présence pour le diplôme :</span>
+                                                    <p className="text-xs text-green-700 opacity-80">(Nombre de semaines validées pour l'examen)</p>
+                                                </div>
+                                                <div className="flex items-center gap-2">
+                                                    <input
+                                                        type="number"
+                                                        disabled={isReadOnly}
+                                                        className="w-16 p-1 border rounded font-bold text-center disabled:bg-white"
+                                                        value={docData.totalSemaines}
+                                                        onChange={e => setDocData({ ...docData, totalSemaines: Number(e.target.value) })}
+                                                    />
+                                                    <span className="font-medium">semaines</span>
+                                                </div>
+                                            </div>
+
+                                            {(docData.absencesCount > 0 || docData.holidaysEncountered.length > 0) && (
+                                                <div className="px-3 text-xs text-gray-500 space-y-1">
+                                                    {docData.absencesCount > 0 && <div>• Dont {docData.absencesCount} jour(s) d'absence</div>}
+                                                    {docData.holidaysEncountered.length > 0 && <div>• Jours fériés rencontrés : {docData.holidaysEncountered.join(', ')}</div>}
+                                                </div>
+                                            )}
                                         </div>
                                     </div>
                                 </div>
@@ -395,7 +413,7 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
                                         <div className="flex-1 w-full text-center">
                                             <div className="mb-4 font-bold">Signature et cachet de l’entreprise</div>
 
-                                            {isReadOnly ? (
+                                            {convention.attestationSigned ? (
                                                 <div className="w-full">
                                                     <div className="mb-4 p-2 bg-green-50 text-green-700 border border-green-200 rounded text-sm text-center">
                                                         <CheckCircle className="inline w-4 h-4 mr-1" />
@@ -412,13 +430,33 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
                                                     </button>
                                                 </div>
                                             ) : (
-                                                <button
-                                                    onClick={handleStartSign}
-                                                    className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded shadow-lg transform hover:-translate-y-0.5 transition-all flex flex-col items-center justify-center gap-1"
-                                                >
-                                                    <span>✍️ Signer l'attestation</span>
-                                                    <span className="text-xs font-normal opacity-80">(Annexe 3)</span>
-                                                </button>
+                                                <div className="space-y-3 w-full">
+                                                    {canSign ? (
+                                                        <button
+                                                            onClick={handleStartSign}
+                                                            className="w-full py-4 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded shadow-lg transform hover:-translate-y-0.5 transition-all flex flex-col items-center justify-center gap-1"
+                                                        >
+                                                            <span>✍️ Signer l'attestation</span>
+                                                            <span className="text-xs font-normal opacity-80">(Annexe 3)</span>
+                                                        </button>
+                                                    ) : (
+                                                        <div className="p-4 bg-orange-50 border border-orange-200 rounded-lg text-orange-800 text-sm italic text-center">
+                                                            L'attestation doit être signée par l'entreprise avant d'être téléchargée.
+                                                        </div>
+                                                    )}
+
+                                                    <button
+                                                        disabled
+                                                        className="w-full py-4 bg-gray-100 text-gray-400 font-bold rounded cursor-not-allowed flex flex-col items-center justify-center gap-1 border border-dashed border-gray-300"
+                                                        title="Ce document doit être signé avant téléchargement"
+                                                    >
+                                                        <div className="flex items-center gap-2">
+                                                            <LockIcon className="w-4 h-4" />
+                                                            <span>Télécharger le PDF</span>
+                                                        </div>
+                                                        <span className="text-xs font-normal opacity-60">Signature requise</span>
+                                                    </button>
+                                                </div>
                                             )}
                                         </div>
                                     </div>
@@ -499,6 +537,7 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
                     signeeName={getSigneeName()}
                     signeeEmail={currentUserEmail}
                     conventionId={convention.id}
+                    documentType="attestation"
                 />
             </div>
         </div>

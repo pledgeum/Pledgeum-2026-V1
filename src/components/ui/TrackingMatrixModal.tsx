@@ -3,6 +3,7 @@ import { X, Calendar, MapPin, Calculator, Loader2 } from 'lucide-react';
 import { useConventionStore, Convention } from '@/store/convention';
 import { useSchoolStore, ClassDefinition, Teacher } from '@/store/school';
 import { getCoordinates, calculateDistance } from '@/lib/geocoding';
+import { toast } from 'sonner';
 
 interface Props {
     isOpen: boolean;
@@ -13,14 +14,15 @@ interface Props {
 }
 
 export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentTeacherEmail, currentUserRole, classId }) => {
-    const { conventions, assignTrackingTeacher } = useConventionStore();
+    const { conventions, assignTrackingTeacher, saveDraftAssignments } = useConventionStore();
     const { classes, schoolAddress, schoolCity, fetchClassTeachers } = useSchoolStore();
 
-    // Permissions: Admins see all classes, Teachers only see the ones where they are the 'maniTeacher'
-    const isPrivileged = ['admin', 'school_admin', 'business_manager', 'ddfpt', 'at_ddfpt'].includes(currentUserRole || '');
-    const authorizedClasses = isPrivileged
+    // Permissions: Admins/Staff see all classes, Teachers only see their own
+    const isPrivileged = !['teacher', 'teacher_tracker', 'student', 'parent', 'tutor', 'company_head', 'company_head_tutor'].includes(currentUserRole || '');
+    const authorizedClasses = React.useMemo(() => isPrivileged
         ? classes
-        : classes.filter(c => c.mainTeacher?.email === currentTeacherEmail);
+        : classes.filter(c => c.mainTeacher?.email === currentTeacherEmail), [isPrivileged, classes, currentTeacherEmail]);
+
 
     const renderCount = React.useRef(0);
     const effectCount = React.useRef(0);
@@ -30,13 +32,27 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
     const [distances, setDistances] = useState<Record<string, number>>({}); // Key: "studentId-teacherId" -> distance
     const [isLoadingDistances, setIsLoadingDistances] = useState(false);
     const [assigningState, setAssigningState] = useState<string | null>(null); // "studentId-teacherId" being assigned
+    const [draftAssignments, setDraftAssignments] = useState<Record<string, { email: string, distance: number }>>({}); // convId -> {email, dist}
+    const [isSavingDraft, setIsSavingDraft] = useState(false);
+
+    // Filter Data - Moved to TOP to avoid ReferenceErrors in hooks
+    const selectedClass = authorizedClasses.find(c => c.id === selectedClassId);
+    const uniqueConventions = React.useMemo(() => conventions.filter(
+        c => c.eleve_classe === selectedClass?.name && ['VALIDATED_HEAD', 'SIGNED_TUTOR', 'SIGNED_COMPANY', 'VALIDATED_TEACHER', 'SIGNED_PARENT', 'SUBMITTED'].includes(c.status)
+    ), [conventions, selectedClass?.name]);
+
 
     useEffect(() => {
         if (!isOpen) return;
         if (classId && authorizedClasses.some(c => c.id === classId)) {
-            setSelectedClassId(classId);
+            if (selectedClassId !== classId) {
+                setSelectedClassId(classId);
+            }
         } else if (authorizedClasses.length > 0 && !authorizedClasses.some(c => c.id === selectedClassId)) {
-            setSelectedClassId(authorizedClasses[0].id);
+            const firstId = authorizedClasses[0].id;
+            if (selectedClassId !== firstId) {
+                setSelectedClassId(firstId);
+            }
         }
     }, [authorizedClasses, selectedClassId, classId, isOpen]);
 
@@ -47,33 +63,44 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
         }
     }, [isOpen, selectedClassId, fetchClassTeachers]);
 
-    // Debug View State
-    const [debugContext, setDebugContext] = useState<any>({});
+    // Hydrate draft assignments from conventions (from DB)
+    useEffect(() => {
+        if (!isOpen || !selectedClassId || uniqueConventions.length === 0) return;
 
-    // Filter Data
-    const selectedClass = authorizedClasses.find(c => c.id === selectedClassId);
-    const classStudentsConventions = conventions.filter(
-        c => c.eleve_classe === selectedClass?.name && ['VALIDATED_HEAD', 'SIGNED_TUTOR', 'SIGNED_COMPANY', 'VALIDATED_TEACHER', 'SIGNED_PARENT', 'SUBMITTED'].includes(c.status)
-    );
+        const newDrafts: Record<string, { email: string, distance: number }> = {};
+        uniqueConventions.forEach(conv => {
+            const visit = (conv as any).visit;
+            if (visit?.draft_tracking_teacher_email) {
+                newDrafts[conv.id] = {
+                    email: visit.draft_tracking_teacher_email,
+                    distance: visit.draft_distance_km || 0
+                };
+            }
+        });
 
-    // We map students by convention ID because we are assigning to a convention
-    const uniqueConventions = classStudentsConventions; // Assumption: 1 active convention per student usually, or we list all.
+        if (Object.keys(newDrafts).length > 0) {
+            setDraftAssignments(prev => {
+                // Merge, but keep existing local changes if they occurred before DB hydration
+                return { ...newDrafts, ...prev };
+            });
+        }
+    }, [isOpen, selectedClassId, uniqueConventions]);
 
     // Teachers from the class definition
     const teachers = selectedClass?.teachersList || [];
 
     // Calculate Distances
     const calculateAllDistances = async () => {
-        effectCount.current += 1;
-        if (!selectedClass || uniqueConventions.length === 0) return;
+        if (!selectedClass || uniqueConventions.length === 0 || teachers.length === 0) return;
+        
         setIsLoadingDistances(true);
+        console.log(`[Matrice] Calcul des distances pour ${uniqueConventions.length} élèves et ${teachers.length} professeurs.`);
 
         const newDistances: Record<string, number> = {};
-
-        // Cache to avoid re-fetching same city coords
         const cityCache: Record<string, { lat: number, lon: number } | null> = {};
 
         const getCoordsCached = async (address: string) => {
+            if (!address || address.trim() === '') return null;
             if (cityCache[address] !== undefined) return cityCache[address];
             const coords = await getCoordinates(address);
             cityCache[address] = coords;
@@ -81,129 +108,114 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
         };
 
         try {
-            // Helper function to figure out the best baseline address for the school.
-            // If the city is known perfectly, use it. Otherwise attempt to extract from address.
             const extractCityFromAddress = (address: string): string => {
                 if (!address) return '';
                 const match = address.match(/\b(\d{5})\s+(.*?)(?:cedex|cs|bp|\n|$)/i);
-                if (match) return `${match[1]} ${match[2].trim()}`;
+                if (match) return match[0].trim();
                 const parts = address.split(/[\n,]/);
                 return parts[parts.length - 1].trim();
             };
 
             const cleanSchoolAddress = schoolCity || extractCityFromAddress(schoolAddress);
-            console.log("[Matrice] Original School:", schoolAddress, "City:", schoolCity, "-> Cleaned School:", cleanSchoolAddress);
-
-            // 1. Get Teacher Coords (Parallel)
-            const teacherCoordsMap: Record<string, { lat: number, lon: number } | null> = {};
             const schoolCoords = await getCoordsCached(cleanSchoolAddress);
-            console.log("[Matrice] School Coords resolved:", schoolCoords);
 
+            // 1. Resolve Teacher Coords (Parallel)
+            const teacherCoordsMap: Record<string, { lat: number, lon: number } | null> = {};
             await Promise.all(teachers.map(async (teacher) => {
-                if (teacher.preferredCommune) {
-                    teacherCoordsMap[teacher.id] = await getCoordsCached(teacher.preferredCommune);
-                } else {
-                    teacherCoordsMap[teacher.id] = schoolCoords;
-                }
-            }));
-            console.log("[Matrice] Teachers Coords map:", teacherCoordsMap);
-
-            // 2. Fetch Bulk Coordinates from local DB using SIRETs
-            // Remove ANY whitespaces from SIRET strings explicitly
-            const sirets = Array.from(new Set(uniqueConventions.map(c => c.ent_siret ? c.ent_siret.replace(/\s+/g, '') : null).filter(Boolean))) as string[];
-            let dbCoordsMap: Record<string, { lat: number, lon: number }> = {};
-            if (sirets.length > 0) {
-                try {
-                    const res = await fetch(`/api/partners/coords-by-siret?sirets=${sirets.join(',')}`);
-                    if (res.ok) {
-                        dbCoordsMap = await res.json();
-                        console.log("[Matrice] DB Coords Map fetched:", dbCoordsMap);
-                    }
-                } catch (err) {
-                    console.error("Erreur lors de la récupération en masse des coordonnées DB:", err);
-                }
-            }
-
-            // 3. Loop Conventions (Students) - Parallel batches for speed
-            await Promise.all(uniqueConventions.map(async (conv) => {
-                let companyCoords: { lat: number, lon: number } | null = null;
-                const cleanSiret = conv.ent_siret ? conv.ent_siret.replace(/\s+/g, '') : null;
-
-                // Prioritize checking our local Partner DB via SIRET
-                if (cleanSiret && dbCoordsMap[cleanSiret]) {
-                    companyCoords = dbCoordsMap[cleanSiret];
-                } else {
-                    // Fallback to Government open API if missing from DB or no SIRET
-                    let companyAddress = conv.ent_adresse;
-                    if (companyAddress && !companyAddress.includes(conv.ent_code_postal)) {
-                        companyAddress = `${companyAddress}, ${conv.ent_code_postal} ${conv.ent_ville}`;
-                    }
-                    companyCoords = companyAddress ? await getCoordsCached(companyAddress) : null;
-                    console.log(`[Matrice] Fallback api gouv for ${conv.ent_nom} (${companyAddress}):`, companyCoords);
-                }
-
-                if (!companyCoords) {
-                    console.warn(`[Matrice] Company coords NULL for ${conv.ent_nom} (SIRET: ${cleanSiret})`);
-                    for (const teacher of teachers) {
-                        newDistances[`${conv.id}-${teacher.email}`] = -1;
-                    }
-                }
-
-                if (companyCoords) {
-                    for (const teacher of teachers) {
-                        const tCoords = teacherCoordsMap[teacher.id] || schoolCoords;
-                        if (tCoords) {
-                            const dist = calculateDistance(companyCoords.lat, companyCoords.lon, tCoords.lat, tCoords.lon);
-                            newDistances[`${conv.id}-${teacher.email}`] = Math.round(dist * 10) / 10;
-                        }
-                    }
-                }
+                teacherCoordsMap[teacher.id] = teacher.preferredCommune 
+                    ? await getCoordsCached(teacher.preferredCommune)
+                    : schoolCoords;
             }));
 
-            setDebugContext({
-                _distancesComputed: Object.keys(newDistances).length,
-                _dbCoordsMapFound: Object.keys(dbCoordsMap).length,
-                _teachersCount: teachers.length,
-                _teachersCoordsResolved: Object.keys(teacherCoordsMap).filter(k => teacherCoordsMap[k] !== null).length,
-                schoolCityToGeocode: cleanSchoolAddress,
-                schoolCoords,
-                siretsToFetch: sirets,
-                _sampleKeysDistances: Object.keys(newDistances).slice(0, 3),
-                _sampleTeachersGiven: teachers.map(t => t.id).slice(0, 3)
+            // 2. Resolve Company Coords (Parallel with Cache)
+            // Group conventions by address to avoid redundant geocoding
+            const addressToConvIds = new Map<string, string[]>();
+            uniqueConventions.forEach(conv => {
+                const addr = conv.ent_adresse ? `${conv.ent_adresse}, ${conv.ent_code_postal} ${conv.ent_ville}` : '';
+                if (addr) {
+                    if (!addressToConvIds.has(addr)) addressToConvIds.set(addr, []);
+                    addressToConvIds.get(addr)?.push(conv.id);
+                }
             });
 
+            await Promise.all(Array.from(addressToConvIds.entries()).map(async ([address, convIds]) => {
+                const companyCoords = await getCoordsCached(address);
+                
+                convIds.forEach(convId => {
+                    teachers.forEach(teacher => {
+                        const tCoords = teacherCoordsMap[teacher.id] || schoolCoords;
+                        const key = `${convId}-${teacher.id}`; // Use teacher.id
+                        
+                        if (companyCoords && tCoords) {
+                            const dist = calculateDistance(companyCoords.lat, companyCoords.lon, tCoords.lat, tCoords.lon);
+                            newDistances[key] = Math.round(dist * 10) / 10;
+                        } else {
+                            newDistances[key] = -1;
+                        }
+                    });
+                });
+            }));
+
             setDistances(newDistances);
+            console.log("[Matrice] Calcul terminé avec succès.");
         } catch (e) {
-            console.error("Erreur lors du calcul des distances pour la matrice :", e);
+            console.error("Erreur calcul distances:", e);
         } finally {
             setIsLoadingDistances(false);
         }
     };
 
-    // Mémorise la dernière classe étudiée pour éviter toute boucle infinie asynchrone
-    const calculatedClassRef = React.useRef<string | null>(null);
+    // Mémorise l'état pour éviter de recalculer inutilement, mais permet le refresh si les données changent
+    const lastCalculationParams = React.useRef<string>("");
 
-    // Let's do it on mount/class change for UX magic effect
     useEffect(() => {
         if (isOpen && selectedClassId && teachers.length > 0 && uniqueConventions.length > 0) {
-            // Verrou strict : on ne relance le calcul que si on change de classe
-            if (calculatedClassRef.current !== selectedClassId) {
-                console.log("🚀 Lancement du calcul des distances...", { conventionsCount: uniqueConventions.length });
-                calculatedClassRef.current = selectedClassId;
+            const currentParams = `${selectedClassId}-${teachers.length}-${uniqueConventions.length}`;
+            if (lastCalculationParams.current !== currentParams) {
+                lastCalculationParams.current = currentParams;
                 calculateAllDistances();
             }
         }
-    }, [isOpen, selectedClassId, uniqueConventions.length, teachers.length]); // Dependencies
+    }, [isOpen, selectedClassId, uniqueConventions.length, teachers.length]);
 
-    const handleAssign = async (convId: string, teacherId: string, teacherEmail: string, distanceKm?: number) => {
+    const handleAssign = (convId: string, teacherEmail: string, distanceKm?: number) => {
+        // Toggle/Set draft assignment
+        setDraftAssignments(prev => {
+            const newDraft = { ...prev };
+            const current = conventions.find(c => c.id === convId);
+            const isCurrentlyAssigned = (current as any).visit?.tracking_teacher_email === teacherEmail || current?.prof_suivi_email === teacherEmail;
+
+            // If we click on what's already assigned (and not in draft), no-op or mark for change if we implement "unassign"
+            // For now, any click sets the draft for that convention.
+            newDraft[convId] = { email: teacherEmail, distance: distanceKm || 0 };
+            return newDraft;
+        });
+    };
+
+    const handleBatchValidate = async () => {
+        const count = Object.keys(draftAssignments).length;
+        if (count === 0) return;
+
+        setIsSavingDraft(true);
         try {
-            setAssigningState(`${convId}-${teacherEmail}`);
-            await assignTrackingTeacher(convId, teacherEmail, distanceKm);
-        } catch (e) {
-            alert("Erreur lors de l'attribution");
+            for (const [convId, data] of Object.entries(draftAssignments)) {
+                await assignTrackingTeacher(convId, data.email, data.distance);
+            }
+            setDraftAssignments({});
+            toast?.success?.(`${count} assignation(s) validée(s) et ODM généré(s).`);
+        } catch (e: any) {
+            console.error("Batch assignment error:", e);
+            alert(`Une erreur est survenue : ${e.message || "Erreur inconnue"}`);
         } finally {
-            setAssigningState(null);
+            setIsSavingDraft(false);
         }
+    };
+
+    const handleClose = async () => {
+        if (Object.keys(draftAssignments).length > 0) {
+            await saveDraftAssignments(draftAssignments);
+        }
+        onClose();
     };
 
     if (!isOpen) return null;
@@ -221,7 +233,7 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
                         </h2>
                         <p className="text-sm text-gray-500">Attribuez les enseignants en fonction de la distance.</p>
                     </div>
-                    <button onClick={onClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
+                    <button onClick={handleClose} className="p-2 hover:bg-gray-200 rounded-full transition-colors">
                         <X className="w-5 h-5 text-gray-500" />
                     </button>
                 </div>
@@ -247,6 +259,19 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
                             Calcul des distances...
                         </div>
                     )}
+
+                    <div className="ml-auto flex items-center gap-3">
+                        {Object.keys(draftAssignments).length > 0 && (
+                            <button
+                                onClick={handleBatchValidate}
+                                disabled={isSavingDraft}
+                                className="px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm font-bold shadow-lg shadow-indigo-200 hover:bg-indigo-700 transition-all flex items-center gap-2 animate-bounce"
+                            >
+                                {isSavingDraft ? <Loader2 className="w-4 h-4 animate-spin" /> : <Calculator className="w-4 h-4" />}
+                                Valider ces {Object.keys(draftAssignments).length} suivis et éditer les ODM
+                            </button>
+                        )}
+                    </div>
                 </div>
 
                 {/* Matrix Table */}
@@ -286,23 +311,31 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
                                             </div>
                                         </td>
                                         {teachers.map(t => {
-                                            const key = `${conv.id}-${t.email}`;
+                                            const key = `${conv.id}-${t.id}`;
                                             const dist = distances[key];
                                             const isAssigned = (conv as any).visit?.tracking_teacher_email === t.email || conv.prof_suivi_email === t.email;
+                                            const isDraft = draftAssignments[conv.id]?.email === t.email;
                                             const isAssigning = assigningState === key;
 
                                             return (
                                                 <td
                                                     key={t.id}
-                                                    onClick={() => handleAssign(conv.id, t.id, t.email || '', dist)}
+                                                    onClick={() => !isSavingDraft && handleAssign(conv.id, t.email || '', dist)}
                                                     className={`
                                                 relative p-0 border border-gray-200 cursor-pointer transition-all
-                                                ${isAssigned ? 'bg-green-100 hover:bg-green-200 ring-2 ring-inset ring-green-500' : 'hover:bg-blue-50'}
+                                                ${isAssigned ? 'bg-green-100 hover:bg-green-200 ring-2 ring-inset ring-green-500' : ''}
+                                                ${isDraft ? 'bg-indigo-50 hover:bg-indigo-100 ring-4 ring-inset ring-indigo-400 border-indigo-500 z-10' : 'hover:bg-blue-50'}
+                                                ${isSavingDraft ? 'opacity-50 cursor-not-allowed' : ''}
                                             `}
                                                 >
                                                     <div className="h-full w-full p-3 flex flex-col items-center justify-center min-h-[60px]">
-                                                        {isAssigning ? (
+                                                        {isAssigning || (isSavingDraft && isDraft) ? (
                                                             <Loader2 className="w-4 h-4 animate-spin text-blue-600" />
+                                                        ) : isDraft ? (
+                                                            <>
+                                                                <span className="text-indigo-800 font-bold">{dist !== undefined ? (dist === -1 ? <span title="Adresse introuvable">⚠️ N/A</span> : `${dist} km`) : '?'}</span>
+                                                                <span className="text-[10px] text-indigo-700 font-bold">En attente...</span>
+                                                            </>
                                                         ) : isAssigned ? (
                                                             <>
                                                                 <span className="text-green-800 font-bold">{dist !== undefined ? (dist === -1 ? <span title="Adresse introuvable">⚠️ N/A</span> : `${dist} km`) : '?'}</span>

@@ -178,10 +178,13 @@ export function AttestationPdf({ convention, totalAbsenceHours, qrCodeUrl, hashC
                         <Text style={styles.value}>Du {new Date(convention.stage_date_debut).toLocaleDateString()} au {new Date(convention.stage_date_fin || '').toLocaleDateString()}</Text>
                     </View>
                     <View style={styles.row}>
-                        <Text style={styles.label}>Durée effective :</Text>
-                        <Text style={styles.value}>{calculatedDays} jours de présence</Text>
+                        <Text style={styles.label}>Nombre de jours de présence effective (pour gratification) :</Text>
+                        <Text style={styles.value}>{convention.attestation_total_jours || 0} jours</Text>
                     </View>
-                    {/* Add absence mention if significant? User said "contente toi du nombre de jours de présence et d'absences" */}
+                    <View style={styles.row}>
+                        <Text style={styles.label}>Nombre de semaines validées pour l'examen :</Text>
+                        <Text style={styles.value}>{convention.attestation_total_semaines || 0} semaines</Text>
+                    </View>
                     {totalAbsenceHours > 0 && (
                         <View style={styles.row}>
                             <Text style={styles.label}>Absences :</Text>
@@ -219,22 +222,26 @@ export function AttestationPdf({ convention, totalAbsenceHours, qrCodeUrl, hashC
                     <Text style={{ marginTop: 15, fontWeight: 'bold', fontSize: 10 }}>Signature et cachet de l'entreprise</Text>
                     <View style={[styles.signatureBox, { width: '60%', alignSelf: 'flex-start', marginTop: 5 }]}>
                         {convention.attestationSigned ? (
-                            convention.attestation_signature_img ? (
+                            convention.attestation_signature_img && !convention.attestation_signature_code?.includes('OTP') ? (
                                 <>
                                     <Image src={convention.attestation_signature_img} style={{ width: 150, height: 60, objectFit: 'contain' }} />
-                                    {convention.attestation_signature_code && (
-                                        <View style={{ marginTop: 2, alignItems: 'center' }}>
-                                            <Text style={{ fontSize: 6, color: 'gray' }}>Code: {convention.attestation_signature_code}</Text>
-                                            {convention.attestation_signer_name && (
-                                                <Text style={{ fontSize: 8 }}>
-                                                    {convention.attestation_signer_name}
-                                                </Text>
-                                            )}
-                                        </View>
-                                    )}
+                                    <View style={{ marginTop: 2, alignItems: 'center' }}>
+                                        {convention.attestation_signer_name && (
+                                            <Text style={{ fontSize: 8 }}>
+                                                {convention.attestation_signer_name}
+                                            </Text>
+                                        )}
+                                        <Text style={{ fontSize: 6, color: 'gray' }}>Signé graphiquement le {new Date(convention.attestationDate || '').toLocaleDateString()}</Text>
+                                    </View>
                                 </>
                             ) : (
-                                <Text style={{ color: 'green', fontSize: 10, textAlign: 'center', marginTop: 20 }}>SIGNE ELECTRONIQUEMENT</Text>
+                                <View style={{ padding: 10, alignItems: 'center', justifyContent: 'center', height: '100%' }}>
+                                    <Text style={{ color: '#0369a1', fontSize: 10, fontFamily: pdfTheme.fonts.bold }}>SIGNE ELECTRONIQUEMENT PAR OTP</Text>
+                                    <Text style={{ fontSize: 8, marginTop: 4 }}>Par {convention.attestation_signer_name || 'le représentant'}</Text>
+                                    <View style={{ marginTop: 6, padding: 4, border: '1pt solid #bae6fd', backgroundColor: '#f0f9ff', borderRadius: 2 }}>
+                                        <Text style={{ fontSize: 6, color: '#0369a1' }}>Vérifié par la plateforme le {new Date(convention.attestationDate || '').toLocaleDateString()}</Text>
+                                    </View>
+                                </View>
                             )
                         ) : (
                             <Text style={{ color: '#ccc', textAlign: 'center', marginTop: 25 }}>Signature en attente</Text>

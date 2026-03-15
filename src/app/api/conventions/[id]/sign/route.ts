@@ -4,6 +4,71 @@ import pool from '@/lib/pg';
 // import { getServerSession } from "next-auth"; // REMOVED - using 'auth' from src/auth for v5 or compatible
 import { auth } from "@/auth"; // Assuming auth.ts exists in src/ based on 'handlers' export seen in [...nextauth]
 import crypto from 'crypto';
+import { sendEmail } from '@/lib/email';
+
+// 📝 Étape 2 : Template Universel de Confirmation
+function getSignatureConfirmationHtml(recipientName: string, studentName: string) {
+    return `
+        <div style="font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 8px;">
+            <h2 style="color: #2563eb;">Confirmation de signature électronique</h2>
+            <p>Bonjour ${recipientName},</p>
+            <p>Votre signature électronique pour la convention de stage de <strong>${studentName}</strong> a bien été enregistrée avec succès.</p>
+            <p>Vous pouvez consulter l'état d'avancement du document et le télécharger une fois toutes les signatures réunies depuis votre espace Pledgeum.</p>
+            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 0.9em; color: #666;">
+                <p>Cordialement,<br/>L'équipe Pledgeum</p>
+            </div>
+        </div>
+    `;
+}
+
+// 📭 Étape 1 : Dispatcher de Destinataires
+function getRecipientInfo(role: string, convention: any) {
+    const data = convention.data || {};
+    const metadata = convention.metadata || {};
+    const studentName = data.eleve_nom ? `${data.eleve_prenom} ${data.eleve_nom}` : (metadata.eleve_nom ? `${metadata.eleve_prenom} ${metadata.eleve_nom}` : "l'élève");
+
+    switch (role) {
+        case 'student':
+            return {
+                email: data.eleve_email || metadata.eleve_email,
+                name: data.eleve_prenom || studentName,
+                studentName
+            };
+        case 'parent':
+            return {
+                email: data.rep_legal_email || metadata.rep_legal_email,
+                name: data.rep_legal_prenom || "Responsable Légal",
+                studentName
+            };
+        case 'teacher':
+            return {
+                email: data.prof_suivi_email || metadata.prof_suivi_email || data.teacher_email || metadata.teacher_email,
+                name: data.prof_prenom || metadata.prof_prenom || "Enseignant Référent",
+                studentName
+            };
+        case 'tutor':
+            return {
+                email: data.tuteur_email || metadata.tuteur_email,
+                name: data.tuteur_prenom || "Tuteur",
+                studentName
+            };
+        case 'company_head':
+        case 'company_head_tutor':
+            return {
+                email: data.ent_rep_email || metadata.ent_rep_email || data.entreprise_directeur_email,
+                name: data.ent_rep_prenom || "Représentant Entreprise",
+                studentName
+            };
+        case 'school_head':
+            return {
+                email: metadata.signatories?.principal?.email || metadata.head_email,
+                name: metadata.signatories?.principal?.name || "Chef d'Établissement",
+                studentName
+            };
+        default:
+            return { email: null, name: null, studentName };
+    }
+}
 
 export async function POST(
     req: Request,
@@ -28,11 +93,12 @@ export async function POST(
         }
 
         // --- 1. Fetch Current Convention Data ---
-        const convRes = await pool.query('SELECT metadata, status FROM conventions WHERE id = $1', [conventionId]);
+        const convRes = await pool.query('SELECT data, metadata, status FROM conventions WHERE id = $1', [conventionId]);
         if (convRes.rowCount === 0) {
             return NextResponse.json({ error: 'Convention not found' }, { status: 404 });
         }
         const convention = convRes.rows[0];
+        const data = convention.data || {};
         const metadata = convention.metadata || {};
         const sigs = metadata.signatures || {};
 
@@ -152,33 +218,6 @@ export async function POST(
                         if (conv.est_mineur && conv.rep_legal_email) {
                             const parentEmail = conv.rep_legal_email.toLowerCase().trim();
                             console.log(`[SIGN_DEBUG] Parent Email found: ${parentEmail} (Type: ${typeof parentEmail})`);
-
-                            // Import sendEmail directly to avoid HTTP loopback issues in sendNotification
-                            const { sendEmail } = await import('@/lib/email');
-
-                            // [NEW] Notify Student (Confirmation)
-                            if (conv.eleve_email) {
-                                console.log(`[Sign] Sending confirmation to Student: ${conv.eleve_email}`);
-                                try {
-                                    const studentResult = await sendEmail({
-                                        to: conv.eleve_email,
-                                        subject: `Confirmation de signature`,
-                                        text: `Bonjour ${conv.eleve_prenom || 'Elève'},\n\n` +
-                                            `Vous avez signé votre convention.\n` +
-                                            `Nous avons envoyé une demande de validation à votre représentant légal (${parentEmail}).\n\n` +
-                                            `Cordialement,\nL'équipe Pledgeum`
-                                    });
-                                    if (!studentResult.success) {
-                                        console.error(`[Sign] Failed to email student:`, studentResult.error);
-                                        // Optional: Do we warn if student email fails? 
-                                        // Prompt says "Unmask error in src/lib/email.ts" and "If email fails ... include warning". 
-                                        // Usually specifically about the Parent email which is critical.
-                                        // But let's capture it.
-                                    }
-                                } catch (e) {
-                                    console.error(`[Sign] Failed to email student:`, e);
-                                }
-                            }
 
                             // Check if parent user exists
                             const userCheck = await pool.query('SELECT id FROM users WHERE email = $1', [parentEmail]);
@@ -353,57 +392,41 @@ export async function POST(
             // The user request specifically mentioned updating metadata for student/parent/teacher legacy fields.
             // But let's handle the others for completeness if they come through this route.
             case 'company_head':
-                newStatus = dualSign ? 'SIGNED_TUTOR' : 'SIGNED_COMPANY';
-                const companyHash = generateSignatureHash('company_head', now, code);
-                const companySignatureData = {
-                    signedAt: now,
-                    img: signatureImage,
-                    code: code,
-                    signatureId: code,
-                    hash: companyHash,
-                    ip: ip,
-                };
-
-                let companyMetadataSigs: any = { company_head: companySignatureData };
-                if (dualSign) {
-                    companyMetadataSigs.tutor = companySignatureData;
-                }
-
-                metadataUpdates = { signatures: companyMetadataSigs };
-
-                auditLog = {
-                    date: now,
-                    action: 'SIGNED',
-                    actorEmail: session.user.email || 'company_head',
-                    details: dualSign ? 'Signature Chef d\'entreprise & Tuteur' : 'Signature Chef d\'entreprise',
-                    ip: ip
-                };
-                break;
-
             case 'tutor':
-                newStatus = 'SIGNED_TUTOR';
-                const tutorHash = generateSignatureHash('tutor', now, code);
-                const tutorSignatureData = {
+            case 'company_head_tutor':
+                // Final status for Company/Tutor phase is SIGNED_TUTOR if both are done.
+                // If dualSign is checked, we force moving to SIGNED_TUTOR.
+                newStatus = dualSign ? 'SIGNED_TUTOR' : (role === 'company_head' ? 'SIGNED_COMPANY' : 'SIGNED_TUTOR');
+
+                const signatureHash = generateSignatureHash(role, now, code);
+                const signatureData = {
                     signedAt: now,
                     img: signatureImage,
                     code: code,
                     signatureId: code,
-                    hash: tutorHash,
+                    hash: signatureHash,
                     ip: ip,
                 };
 
-                let tutorMetadataSigs: any = { tutor: tutorSignatureData };
+                let signatureMetadata: any = {};
+
+                // If dualSign is active, we populate BOTH keys in metadata.signatures
                 if (dualSign) {
-                    tutorMetadataSigs.company_head = tutorSignatureData;
+                    signatureMetadata.tutor = signatureData;
+                    signatureMetadata.company_head = signatureData;
+                } else {
+                    // Otherwise, only the acting role (map company_head_tutor to tutor if not dual)
+                    const sigKey = role === 'company_head' ? 'company_head' : 'tutor';
+                    signatureMetadata[sigKey] = signatureData;
                 }
 
-                metadataUpdates = { signatures: tutorMetadataSigs };
+                metadataUpdates = { signatures: signatureMetadata };
 
                 auditLog = {
                     date: now,
                     action: 'SIGNED',
-                    actorEmail: session.user.email || 'tutor',
-                    details: dualSign ? 'Signature Tuteur & Chef d\'entreprise' : 'Signature Tuteur',
+                    actorEmail: session.user.email || role,
+                    details: dualSign ? 'Signature cumulée (Entreprise & Tuteur)' : `Signature ${role}`,
                     ip: ip
                 };
                 break;
@@ -564,6 +587,23 @@ export async function POST(
                 }
             }
             // --- FIN NOTIFICATIONS ---
+
+            // --- 🎯 Étape 3 : Signature Confirmation Email (UNIVERSAL) ---
+            const recipient = getRecipientInfo(role, updatedConvention);
+            if (recipient && recipient.email) {
+                console.log(`[Universal Email] Sending confirmation to ${role}: ${recipient.email}`);
+                try {
+                    await sendEmail({
+                        to: recipient.email,
+                        subject: `Confirmation de signature - ${recipient.studentName}`,
+                        text: `Bonjour, Votre signature électronique pour la convention de stage de ${recipient.studentName} a bien été enregistrée avec succès. Vous pouvez consulter l'état d'avancement du document depuis votre espace.`,
+                        // Attach HTML for premium feel
+                        html: getSignatureConfirmationHtml(recipient.name || "Signataire", recipient.studentName)
+                    } as any);
+                } catch (emailErr) {
+                    console.error("[Universal Email] CRASH ignored:", emailErr);
+                }
+            }
 
             return NextResponse.json({
                 success: true,

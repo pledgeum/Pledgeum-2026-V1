@@ -21,8 +21,9 @@ const stepSchema = conventionSchema.pick({
     ecole_chef_email: true,
     prof_nom: true,
     prof_email: true,
-    ecole_lat: true,
-    ecole_lng: true,
+    ecole_lat: z.number().optional(),
+    ecole_lng: z.number().optional(),
+    schoolId: z.string().optional(),
 });
 
 
@@ -59,6 +60,7 @@ export function Step1School() {
         form.setValue('ecole_adresse', `${school.adresse}, ${school.cp} ${school.ville}`);
         if (school.lat) form.setValue('ecole_lat', school.lat);
         if (school.lng) form.setValue('ecole_lng', school.lng);
+        if (school.uai) form.setValue('schoolId', school.uai);
         setSchoolQuery(school.nom); // Update search box to match
         setShowResults(false);
     };
@@ -180,6 +182,7 @@ export function Step1School() {
                                 if (phone) form.setValue('ecole_tel', phone);
                                 if (headName) form.setValue('ecole_chef_nom', headName);
                                 if (headEmail) form.setValue('ecole_chef_email', headEmail);
+                                if (uai) form.setValue('schoolId', uai);
                             }
                         } else if (schoolName && (!form.getValues('ecole_nom') || isSchoolLocked)) {
                             // Fallback to Store if direct fetch returned nothing (e.g. invalid UAI) but Store has data
@@ -189,6 +192,7 @@ export function Step1School() {
                             if (schoolPhone) form.setValue('ecole_tel', schoolPhone);
                             if (schoolHeadName) form.setValue('ecole_chef_nom', schoolHeadName);
                             if (schoolHeadEmail) form.setValue('ecole_chef_email', schoolHeadEmail);
+                            if (userUai || (profileData as any).uai) form.setValue('schoolId', userUai || (profileData as any).uai);
                         }
                     };
 

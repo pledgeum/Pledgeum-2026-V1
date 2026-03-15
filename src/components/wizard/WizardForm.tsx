@@ -10,7 +10,7 @@ import { Step2Student } from './Step2Student';
 import { Step3Company } from './Step3Company';
 import { Step4Internship } from './Step4Internship';
 import { cn } from '@/lib/utils';
-import { Wand2, CheckCircle, Eraser } from 'lucide-react';
+import { Wand2, CheckCircle, Eraser, AlertCircle } from 'lucide-react';
 import SignatureCanvas from 'react-signature-canvas';
 
 import { useSession } from "next-auth/react";
@@ -144,7 +144,7 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
             }, 2000);
         } catch (err: any) {
             console.error('[Wizard] Submission Error:', err);
-            setError("Une erreur est survenue lors de l'envoi de la convention. Veuillez réessayer.");
+            setError(err.message || "Une erreur est survenue lors de l'envoi de la convention. Veuillez réessayer.");
         } finally {
             setIsLoading(false);
         }
@@ -170,6 +170,33 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
             }
         };
     }, [data, signature, isSuccess]);
+
+    // Action 3: Strict profile check for students
+    const { role, uai, profileData } = useUserStore();
+    const isIncompleteProfile = role === 'student' && (!uai || !profileData.classId);
+
+    if (isIncompleteProfile && !isSuccess) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex flex-col items-center justify-center p-6">
+                <div className="bg-white p-8 rounded-2xl shadow-xl max-w-md w-full border border-red-100 text-center">
+                    <div className="mx-auto flex items-center justify-center h-16 w-16 rounded-full bg-red-100 mb-6">
+                        <AlertCircle className="h-10 w-10 text-red-600" />
+                    </div>
+                    <h2 className="text-2xl font-bold text-gray-900 mb-2">Profil Incomplet</h2>
+                    <p className="text-gray-600 mb-8">
+                        Vous devez être rattaché à une <strong>classe</strong> et un <strong>établissement</strong> pour pouvoir créer une convention.
+                        Veuillez contacter votre administrateur ou compléter votre profil.
+                    </p>
+                    <button 
+                        onClick={() => window.location.href = '/dashboard'}
+                        className="w-full py-3 bg-gray-900 text-white font-bold rounded-xl hover:bg-gray-800 transition-colors"
+                    >
+                        Retour au tableau de bord
+                    </button>
+                </div>
+            </div>
+        );
+    }
 
     return (
         <div className="min-h-screen bg-gray-50 flex flex-col items-center py-10 px-4 sm:px-6 lg:px-8 relative">

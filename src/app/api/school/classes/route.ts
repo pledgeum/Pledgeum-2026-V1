@@ -8,7 +8,7 @@ export async function PUT(req: Request) {
     let client: any;
     try {
         const body = await req.json();
-        const { classId, mainTeacherId, cpeId, uai } = body; // classId is the Firestore ID (simple class ID)
+        const { classId, mainTeacherId, cpeId, pfmpPeriods, uai } = body; // classId is the Firestore ID (simple class ID)
 
         if (!classId || !uai) {
             return NextResponse.json({ error: "Missing classId or uai" }, { status: 400 });
@@ -75,14 +75,18 @@ export async function PUT(req: Request) {
         const updateClassRes = await client.query(`
             UPDATE classes 
             SET 
-                main_teacher_id = COALESCE($1, main_teacher_id),
-                cpe_id = COALESCE($2, cpe_id),
+                main_teacher_id = CASE WHEN $1::text IS NOT NULL OR $4 = true THEN $1 ELSE main_teacher_id END,
+                cpe_id = CASE WHEN $2::text IS NOT NULL OR $5 = true THEN $2 ELSE cpe_id END,
+                pfmp_periods = CASE WHEN $3::jsonb IS NOT NULL THEN $3 ELSE pfmp_periods END,
                 updated_at = NOW()
-            WHERE id = $3
+            WHERE id = $6
             RETURNING id
         `, [
             mainTeacherId !== undefined ? (mainTeacherId || null) : null,
             cpeId !== undefined ? (cpeId || null) : null,
+            pfmpPeriods !== undefined ? JSON.stringify(pfmpPeriods) : null,
+            mainTeacherId === null, // Flag to allow setting to null if explicitly provided
+            cpeId === null,         // Flag to allow setting to null if explicitly provided
             pgClassId
         ]);
 
@@ -159,6 +163,7 @@ export async function GET(req: Request) {
                 u_cpe.first_name as cpe_first,
                 u_cpe.last_name as cpe_last,
                 u_cpe.email as cpe_email,
+                c.pfmp_periods,
                 (SELECT COUNT(*) FROM users s WHERE s.class_id = c.id AND s.role = 'student') as student_count,
                 (SELECT COUNT(DISTINCT teacher_uid) FROM teacher_assignments ta WHERE ta.class_id = c.id) as teacher_count
             FROM classes c
@@ -191,7 +196,8 @@ export async function GET(req: Request) {
                     firstName: row.cpe_first,
                     lastName: row.cpe_last,
                     email: row.cpe_email
-                } : null
+                } : null,
+                pfmpPeriods: row.pfmp_periods || []
             };
         });
 

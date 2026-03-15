@@ -27,6 +27,7 @@ export const conventionSchema = z.object({
     eleve_tel: z.string().optional(),
     eleve_email: z.string().email("Email invalide"),
     eleve_classe: z.string().min(1, "La classe est requise"),
+    class_id: z.string().optional(),
     diplome_intitule: z.string().min(2, "L'intitulé du diplôme est requis"),
 
     // Représentant Légal (Conditionnel)
@@ -89,6 +90,35 @@ export const conventionSchema = z.object({
 
     // Sécurité / Cloisonnement
     schoolId: z.string().optional(),
+    is_out_of_period: z.boolean().optional(),
+    selected_periods: z.array(z.string()).optional(),
+    selected_periods_labels: z.array(z.string()).optional(),
+    adjusted_periods: z.record(z.string(), z.object({
+        start: z.string(),
+        end: z.string()
+    })).optional(),
 });
 
 export type ConventionData = z.infer<typeof conventionSchema>;
+
+export const attestationSchema = z.object({
+    id: z.string().uuid().optional(),
+    convention_id: z.string(),
+    total_days_paid: z.number().default(0),
+    total_weeks_diploma: z.number().int().default(0),
+    absences_hours: z.number().default(0),
+    activities: z.string().optional(),
+    skills_evaluation: z.string().optional(),
+    gratification_amount: z.string().default('0'),
+    signer_name: z.string().optional(),
+    signer_function: z.string().optional(),
+    signature_date: z.string().optional(),
+    signature_img: z.string().optional(),
+    signature_code: z.string().optional(),
+    pdf_hash: z.string().optional(),
+    audit_logs: z.array(z.any()).default([]),
+    created_at: z.string().optional(),
+    updated_at: z.string().optional(),
+});
+
+export type AttestationData = z.infer<typeof attestationSchema>;

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useRef, useMemo, useEffect } from 'react';
-import { X, Search, Plus, Trash, Edit, Mail, AlertTriangle, ShieldCheck, Download, Users, Briefcase, Sparkles, FileUp, HelpCircle, Archive, Key, Building, GraduationCap, Lock, Shield, FileSpreadsheet, UserPlus, Trash2, Building2, Loader2, ChevronDown, Check, Calendar, AlertCircle, MapPin, ClipboardList, Star, Info, Server } from 'lucide-react';
+import { X, Search, Plus, Trash, Edit, Mail, AlertTriangle, ShieldCheck, Download, Users, Briefcase, Sparkles, FileUp, HelpCircle, Archive, Key, Building, GraduationCap, Lock, Shield, FileSpreadsheet, UserPlus, Trash2, Building2, Loader2, ChevronDown, ChevronUp, Check, Calendar, AlertCircle, MapPin, ClipboardList, Star, Info, Server } from 'lucide-react';
 import { useSchoolStore, COLLABORATOR_LABELS, CollaboratorRole, Teacher, Student, ClassDefinition, PartnerCompany } from '@/store/school';
 import { StructureImportReviewModal } from './StructureImportReviewModal';
 import { TeacherImportReviewModal } from './TeacherImportReviewModal';
@@ -87,6 +87,7 @@ function CheckableDropdown({ label, options, selected, onChange }: CheckableDrop
 
 export default function SchoolAdminDashboard() {
     const [activeTab, setActiveTab] = useState<'classes' | 'partners' | 'identity' | 'pfmp' | 'config' | 'collaborators' | 'rgpd'>('rgpd');
+    const [isAdminPanelOpen, setIsAdminPanelOpen] = useState(false);
 
     const {
         collaborators, classes, addCollaborator, removeCollaborator, addClass, removeClass, updateClass,
@@ -622,35 +623,56 @@ export default function SchoolAdminDashboard() {
                 </div>
             )}
 
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
-                <div className="bg-gray-50 border-b border-gray-200">
-                    <nav className="flex overflow-x-auto scrollbar-hide">
-                        {[
-                            { id: 'rgpd', label: 'RGPD', icon: ShieldCheck },
-                            { id: 'identity', label: 'Identité', icon: Building, warning: missingIdentity },
-                            { id: 'collaborators', label: 'Collaborateurs', icon: Users },
-                            { id: 'classes', label: 'Classes & Imports', icon: GraduationCap, warning: missingClasses },
-                            { id: 'config', label: 'Sélection des conventions types', icon: Sparkles, warning: missingConfig },
-                            { id: 'pfmp', label: 'Calendrier PFMP', icon: Calendar },
-                            { id: 'partners', label: 'Partenaires', icon: Building2 },
-                        ].map((tab) => (
-                            <button
-                                key={tab.id}
-                                onClick={() => setActiveTab(tab.id as any)}
-                                className={`flex items-center px-6 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap relative ${activeTab === tab.id
-                                    ? 'border-blue-600 text-blue-600 bg-white'
-                                    : 'border-transparent text-gray-500 hover:text-blue-600 hover:bg-gray-100'
-                                    }`}
-                            >
-                                <tab.icon className="w-4 h-4 mr-2" />
-                                {tab.label}
-                                {tab.warning && <span className="absolute top-3 right-3 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>}
-                            </button>
-                        ))}
-                    </nav>
-                </div>
+            <div className="flex justify-start">
+                <button
+                    onClick={() => setIsAdminPanelOpen(!isAdminPanelOpen)}
+                    className="flex items-center px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm bg-white"
+                >
+                    {isAdminPanelOpen ? (
+                        <>
+                            <ChevronUp className="w-4 h-4 mr-2" />
+                            Fermer l'administration
+                        </>
+                    ) : (
+                        <>
+                            <span className="mr-2">⚙️</span>
+                            Administrer l'établissement
+                            <ChevronDown className="w-4 h-4 ml-2" />
+                        </>
+                    )}
+                </button>
+            </div>
 
-                <div className="p-6">
+            {isAdminPanelOpen && (
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
+                    <div className="bg-gray-50 border-b border-gray-200">
+                        <nav className="flex overflow-x-auto scrollbar-hide">
+                            {[
+                                { id: 'rgpd', label: 'RGPD', icon: ShieldCheck },
+                                { id: 'identity', label: 'Identité', icon: Building, warning: missingIdentity },
+                                { id: 'collaborators', label: 'Collaborateurs', icon: Users },
+                                { id: 'classes', label: 'Classes & Imports', icon: GraduationCap, warning: missingClasses },
+                                { id: 'config', label: 'Sélection des conventions types', icon: Sparkles, warning: missingConfig },
+                                { id: 'pfmp', label: 'Calendrier PFMP', icon: Calendar },
+                                { id: 'partners', label: 'Partenaires', icon: Building2 },
+                            ].map((tab) => (
+                                <button
+                                    key={tab.id}
+                                    onClick={() => setActiveTab(tab.id as any)}
+                                    className={`flex items-center px-6 py-4 text-sm font-medium border-b-2 transition-colors whitespace-nowrap relative ${activeTab === tab.id
+                                        ? 'border-blue-600 text-blue-600 bg-white'
+                                        : 'border-transparent text-gray-500 hover:text-blue-600 hover:bg-gray-100'
+                                        }`}
+                                >
+                                    <tab.icon className="w-4 h-4 mr-2" />
+                                    {tab.label}
+                                    {tab.warning && <span className="absolute top-3 right-3 w-2 h-2 bg-red-500 rounded-full animate-pulse"></span>}
+                                </button>
+                            ))}
+                        </nav>
+                    </div>
+
+                    <div className="p-6">
                     {activeTab === 'classes' && (
                         <div className="space-y-8">
                             <div className="bg-blue-50 p-6 rounded-lg border border-blue-100">
@@ -1144,6 +1166,7 @@ export default function SchoolAdminDashboard() {
                     )}
                 </div>
             </div>
+        )}
 
             {/* Support Modals */}
             {importReviewData && (

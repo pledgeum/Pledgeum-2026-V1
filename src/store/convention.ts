@@ -70,6 +70,7 @@ export interface Convention extends Omit<ConventionData, 'signatures'> {
     attestation_gratification?: string;
     attestation_fait_a?: string;
     attestation_total_jours?: number;
+    attestation_total_semaines?: number;
     attestation_signature_img?: string;
     attestation_signature_code?: string;
     attestation_signer_name?: string;
@@ -80,12 +81,20 @@ export interface Convention extends Omit<ConventionData, 'signatures'> {
     derogationJustification?: string;
 
     visit?: {
-        tracking_teacher_email: string;
+        tracking_teacher_email?: string; // Optional for drafts
         tracking_teacher_first_name?: string;
         tracking_teacher_last_name?: string;
         distance_km?: number;
         status?: string;
         scheduled_date?: string;
+        // Draft fields
+        draft_tracking_teacher_email?: string;
+        draft_distance_km?: number;
+    };
+    school?: {
+        address?: string;
+        zipCode?: string;
+        city?: string;
     };
 
     signatures: {
@@ -103,6 +112,7 @@ export interface Convention extends Omit<ConventionData, 'signatures'> {
         date: string;
     }[];
     invalidEmails?: string[]; // List of roles with invalid emails
+    is_out_of_period?: boolean;
 }
 
 interface ConventionState {
@@ -122,9 +132,10 @@ interface ConventionState {
     sendReminder: (id: string) => Promise<void>;
     bulkSignConventions: (ids: string[], role: string, signatureImage?: string) => Promise<void>;
     reportAbsence: (conventionId: string, absence: Omit<Absence, 'id' | 'reportedAt'>) => Promise<void>;
-    validateAttestation: (conventionId: string, finalAbsences: number, signatureImg?: string, signerName?: string, signerFunction?: string) => Promise<void>;
+    validateAttestation: (conventionId: string, finalAbsences: number, signatureImg?: string, signerName?: string, signerFunction?: string, totalDaysPaid?: number, totalWeeksDiploma?: number) => Promise<void>;
     verifySignature: (code: string) => Promise<Convention | null>;
     updateEmail: (id: string, role: string, newEmail: string) => Promise<void>;
+    saveDraftAssignments: (assignments: Record<string, { email: string, distance: number }>) => Promise<void>;
 
     updateAbsence: (conventionId: string, absenceId: string, reason: string) => Promise<void>;
     reset: () => void;
@@ -608,40 +619,50 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
         return [];
     },
 
-    // --- NEW: Create Convention via API (Restoring functionality) ---
     createConvention: async (data: any) => {
         set({ isLoading: true });
         try {
-            console.log("[Store] Creating convention via API...", data);
+            const { uai: userUai, profileData } = useUserStore.getState();
+
+            // Action 3: Explicit Mapping of essential IDs for Backend Security Guard
+            // Ensure schoolId and classId captured during Wizard steps are included
+            const payload = {
+                ...data,
+                // Critical Mapping: Backend expects establishment_uai and class_id
+                establishment_uai: data.schoolId || userUai || (profileData as any).uai,
+                class_id: data.class_id || (profileData as any).classId || (profileData as any).class_id,
+            };
+
+            console.log("[Store] Creating convention via API...", payload);
             const response = await fetch('/api/conventions', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
+                body: JSON.stringify(payload)
             });
 
             if (!response.ok) {
+                // Action 4: End of Ghost Convention. If API fails, we do NOT update local state.
                 const err = await response.json();
-                throw new Error(err.error || 'Failed to create convention');
+                const errorMessage = err.error || 'Erreur lors de la sauvegarde : données de profil incomplètes ou invalides.';
+                throw new Error(errorMessage);
             }
 
             const { data: createdConvention } = await response.json();
 
             // Map DB columns (snake_case) to Frontend model (camelCase)
-            // This mirrors the logic in fetchConventions to ensure consistency
             const mappedConvention = {
                 ...(createdConvention.metadata || {}),
                 ...createdConvention,
-                studentId: createdConvention.studentId || createdConvention.student_uid || data.studentId, // Fallback to arg
-                schoolId: createdConvention.schoolId || createdConvention.establishment_uai || createdConvention.establishmentUai || data.schoolId, // Fallback to data
+                studentId: createdConvention.studentId || createdConvention.student_uid || data.studentId,
+                schoolId: createdConvention.schoolId || createdConvention.establishment_uai || createdConvention.establishmentUai || data.schoolId,
                 createdAt: createdConvention.createdAt || createdConvention.created_at || new Date().toISOString(),
                 updatedAt: createdConvention.updatedAt || createdConvention.updated_at || new Date().toISOString(),
                 stage_date_debut: createdConvention.dateStart || createdConvention.date_start || (createdConvention.metadata && createdConvention.metadata.stage_date_debut) || data.stage_date_debut,
                 stage_date_fin: createdConvention.dateEnd || createdConvention.date_end || (createdConvention.metadata && createdConvention.metadata.stage_date_fin) || data.stage_date_fin,
-                // Ensure signatures object is preserved (it's in metadata but flattened in some views)
                 signatures: createdConvention.metadata?.signatures || createdConvention.signatures || {}
             };
 
-            // Add to local state
+            // Only add to local state if server confirmed success
             set((state) => ({
                 conventions: [...state.conventions, mappedConvention],
                 isLoading: false
@@ -652,7 +673,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
         } catch (error) {
             console.error("Error creating convention:", error);
             set({ isLoading: false });
-            throw error;
+            throw error; // Let UI handle error display
         }
     },
 
@@ -869,36 +890,53 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
         }
     },
 
-    validateAttestation: async (conventionId, finalAbsencesCount, signatureImg, signerName, signerFunction) => {
+    validateAttestation: async (conventionId, finalAbsencesCount, signatureImg, signerName, signerFunction, totalDaysPaid, totalWeeksDiploma) => {
         try {
             const convention = get().conventions.find(c => c.id === conventionId);
             if (!convention) throw new Error("Convention introuvable");
 
             const code = generateSignatureCode();
-            const attestationData = {
-                attestationSigned: true,
-                attestationDate: new Date().toISOString(),
-                attestation_signature_img: signatureImg,
-                attestation_signature_code: code,
-                attestation_signer_name: signerName,
-                attestation_signer_function: signerFunction
-            };
 
-            // Compute Hash
-            const tempConv = { ...convention, ...attestationData } as Convention;
-            const { hashDisplay } = await generateVerificationUrl(tempConv, 'attestation');
-
-            if (!useDemoStore.getState().isDemoMode) {
-                await updateDoc(doc(db, "conventions", conventionId), {
-                    ...attestationData,
-                    attestationHash: hashDisplay,
-                    auditLogs: arrayUnion({
+            // Prepare the attestation payload for our new API
+            const attestationPayload: any = {
+                total_days_paid: totalDaysPaid || 0,
+                total_weeks_diploma: totalWeeksDiploma || 0,
+                absences_hours: finalAbsencesCount || 0,
+                activities: convention.activites || convention.stage_activites || '',
+                skills_evaluation: convention.attestation_competences || '',
+                gratification_amount: convention.attestation_gratification || '0',
+                signer_name: signerName,
+                signer_function: signerFunction,
+                signature_date: new Date().toISOString(),
+                signature_img: signatureImg,
+                signature_code: code,
+                audit_logs: [
+                    ...(convention.auditLogs || []),
+                    {
                         date: new Date().toISOString(),
                         action: 'ATTESTATION_SIGNED' as const,
-                        actorEmail: convention.ent_rep_email, // Assuming signed by company rep usually
+                        actorEmail: convention.ent_rep_email,
                         details: `Signature de l'attestation par ${signerName} (${signerFunction})`
-                    })
+                    }
+                ]
+            };
+
+            // Compute Hash (Local logic for generation, but we'll save it)
+            const tempConv = { ...convention, ...attestationPayload, attestationSigned: true, attestationDate: attestationPayload.signature_date } as any;
+            const { hashDisplay } = await generateVerificationUrl(tempConv, 'attestation');
+            (attestationPayload as any).pdf_hash = hashDisplay;
+
+            if (!useDemoStore.getState().isDemoMode) {
+                const response = await fetch(`/api/conventions/${conventionId}/attestation`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(attestationPayload)
                 });
+
+                if (!response.ok) {
+                    const errorData = await response.json();
+                    throw new Error(errorData.error || "Erreur lors de la sauvegarde de l'attestation");
+                }
             }
 
             const newLog: AuditLog = {
@@ -912,7 +950,14 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 conventions: state.conventions.map(c =>
                     c.id === conventionId ? {
                         ...c,
-                        ...attestationData,
+                        attestationSigned: true,
+                        attestationDate: attestationPayload.signature_date,
+                        attestation_total_jours: totalDaysPaid,
+                        attestation_total_semaines: totalWeeksDiploma,
+                        attestation_signature_img: signatureImg,
+                        attestation_signature_code: code,
+                        attestation_signer_name: signerName,
+                        attestation_signer_function: signerFunction,
                         attestationHash: hashDisplay,
                         auditLogs: [...(c.auditLogs || []), newLog]
                     } : c
@@ -978,11 +1023,27 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                         }
                     }
 
-                    // 2. Create Mission Order
+                    // 2. Handle Revocation Alerte
+                    const prevTeacherEmail = convention.prof_suivi_email || convention.visit?.tracking_teacher_email;
+                    if (prevTeacherEmail && prevTeacherEmail !== trackingTeacherEmail) {
+                        const odm = useMissionOrderStore.getState().getMissionOrderByConvention(conventionId);
+                        const isSigned = !!odm?.signature_data?.head?.hash || !!odm?.signature_data?.teacher?.hash;
+
+                        if (isSigned) {
+                            console.log(`[REVOCATION] Notifying ${prevTeacherEmail} about ODM cancellation`);
+                            await sendNotification(
+                                prevTeacherEmail,
+                                `Annulation d'Ordre de Mission - ${convention.eleve_prenom} ${convention.eleve_nom}`,
+                                `Bonjour,\n\nNous vous informons que votre assignation pour le suivi de stage de ${convention.eleve_prenom} ${convention.eleve_nom} a été modifiée.\n\nEn conséquence, l'Ordre de Mission précédemment généré (et potentiellement signé) est annulé et ne doit plus être utilisé.\n\nUn nouvel ODM a été généré pour le nouvel enseignant assigné.\n\nCordialement,\nL'administration.`
+                            );
+                        }
+                    }
+
+                    // 3. Create/Update Mission Order
                     await useMissionOrderStore.getState().createMissionOrder({
                         conventionId: convention.id,
-                        teacherId: trackingTeacherEmail, // Email as ID for now
-                        studentId: convention.studentId, // or name
+                        teacherId: trackingTeacherEmail,
+                        studentId: convention.studentId,
                         schoolAddress,
                         companyAddress,
                         distanceKm: Math.round(finalDistance * 10) / 10
@@ -998,8 +1059,8 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
     },
 
     verifySignature: async (rawCode) => {
-        // Aggressive sanitization: keep only alphanumeric
-        const code = (rawCode || '').replace(/[^A-Za-z0-9]/g, '').toUpperCase().trim();
+        // Remove aggressive sanitization to preserve dashes/case for server verify
+        const code = (rawCode || '').trim();
         if (!code) return null;
 
         const { conventions } = get();
@@ -1091,6 +1152,46 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
         } catch (error) {
             console.error("Error updating email:", error);
             throw error;
+        }
+    },
+
+    saveDraftAssignments: async (assignments) => {
+        if (Object.keys(assignments).length === 0) return;
+        
+        try {
+            console.log("[Store] Saving draft assignments...", assignments);
+            const response = await fetch('/api/mission-orders/draft-save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ assignments })
+            });
+
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || 'Failed to save draft assignments');
+            }
+
+            // Sync Local State: Update conventions in the store to reflect the new drafts
+            set((state) => ({
+                conventions: state.conventions.map(conv => {
+                    const draft = assignments[conv.id];
+                    if (draft) {
+                        return {
+                            ...conv,
+                            visit: {
+                                ...(conv.visit || { tracking_teacher_email: '' }), // Provide a default or preserve
+                                draft_tracking_teacher_email: draft.email,
+                                draft_distance_km: draft.distance
+                            }
+                        };
+                    }
+                    return conv;
+                })
+            }));
+
+            console.log("[Store] Draft assignments saved and synced successfully");
+        } catch (error) {
+            console.error("Error saving draft assignments:", error);
         }
     },
 

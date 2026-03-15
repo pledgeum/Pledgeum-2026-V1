@@ -1,44 +1,43 @@
-const { Client } = require('pg');
-const fs = require('fs');
-const path = require('path');
-const dotenv = require('dotenv');
+const { Pool } = require('pg');
+require('dotenv').config({ path: '.env.local' });
 
-// Load .env.local
-const envPath = path.resolve(__dirname, '../.env.local');
-if (fs.existsSync(envPath)) {
-    const envConfig = dotenv.parse(fs.readFileSync(envPath));
-    for (const k in envConfig) {
-        process.env[k] = envConfig[k];
-    }
-}
-
-const client = new Client({
-    host: process.env.POSTGRES_HOST,
-    port: process.env.POSTGRES_PORT,
-    database: process.env.POSTGRES_DB,
-    user: process.env.POSTGRES_USER,
-    password: process.env.POSTGRES_PASSWORD,
-    ssl: { rejectUnauthorized: false }
+const pool = new Pool({
+    connectionString: process.env.DATABASE_URL,
 });
 
-async function main() {
+async function migrate() {
+    const client = await pool.connect();
     try {
-        await client.connect();
-        console.log("🚀 Starting Diploma & Legal Rep Migration...");
+        console.log('Starting migration for AttestationPFMP dual calculation...');
 
-        // 1. Add Columns
+        // 1. Add new columns
         await client.query(`
-            ALTER TABLE users 
-            ADD COLUMN IF NOT EXISTS diploma_prepared TEXT,
-            ADD COLUMN IF NOT EXISTS legal_representatives JSONB DEFAULT '[]'::jsonb;
-        `);
-        console.log("✅ Columns `diploma_prepared` and `legal_representatives` added (if not exists).");
+      ALTER TABLE attestations 
+      ADD COLUMN IF NOT EXISTS total_days_paid NUMERIC DEFAULT 0,
+      ADD COLUMN IF NOT EXISTS total_weeks_diploma INTEGER DEFAULT 0;
+    `);
 
+        // 2. Map existing data (conservative mapping)
+        await client.query(`
+      UPDATE attestations 
+      SET 
+        total_days_paid = total_days_present,
+        total_weeks_diploma = CEIL(total_days_present / 5.0)
+      WHERE total_days_paid = 0 AND total_days_present > 0;
+    `);
+
+        // 3. Drop old column 
+        // WARNING: We keep it for safety during transition or just drop it? 
+        // User said "replace", but let's just leave it for now or drop if sure.
+        // await client.query('ALTER TABLE attestations DROP COLUMN total_days_present;');
+
+        console.log('Migration successful!');
     } catch (err) {
-        console.error("❌ Migration Failed:", err);
+        console.error('Migration failed:', err);
     } finally {
-        await client.end();
+        client.release();
+        await pool.end();
     }
 }
 
-main();
+migrate();

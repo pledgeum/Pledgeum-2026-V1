@@ -42,8 +42,62 @@ export default async function VerifyPage({ searchParams }: VerifyPageProps) {
     // SCENARIO 1: Manual Code Verification (Alphanumeric)
     if (manualCode && !encodedData) {
         try {
+            const isOdmPrefix = manualCode.startsWith('ODM');
+
+            const checkMissionOrder = async (searchStr: string) => {
+                const moQuery = `
+                    SELECT m.id, m.status, m.signature_data, m.created_at,
+                           c.id as convention_id, c.metadata, c.date_start, c.date_end, c.type
+                    FROM mission_orders m
+                    JOIN conventions c ON c.id = m.convention_id
+                    WHERE (
+                        m.id::text ILIKE $1 
+                        OR REPLACE(m.id::text, '-', '') ILIKE $1 
+                        OR REPLACE(m.id::text, 'odm_', '') ILIKE $1
+                        OR m.signature_data->'teacher'->>'hash' ILIKE $1
+                        OR m.signature_data->'head'->>'hash' ILIKE $1
+                        OR m.signature_data->>'hash' ILIKE $1
+                    )
+                    LIMIT 1
+                `;
+                const moRes = await pool.query(moQuery, [`%${searchStr}%`]);
+                if (moRes.rowCount && moRes.rowCount > 0) {
+                    const mo = moRes.rows[0];
+                    const meta = mo.metadata || {};
+                    const moSigs = mo.signature_data || {};
+                    const sigs = [];
+
+                    if (moSigs.teacher?.date) sigs.push({ n: meta.prof_nom || 'Enseignant', r: 'Enseignant', d: moSigs.teacher.date });
+                    if (moSigs.head?.date || moSigs.date) sigs.push({ n: meta.ecole_chef_nom || "Chef d'Établissement", r: "Chef d'Établissement", d: moSigs.head?.date || moSigs.date });
+
+                    const payload = {
+                        id: mo.id,
+                        mo: true,
+                        s: (meta.eleve_nom || '') + ' ' + (meta.eleve_prenom || ''),
+                        e: meta.ent_nom || '',
+                        d: {
+                            s: mo.date_start || meta.stage_date_debut,
+                            f: mo.date_end || meta.stage_date_fin
+                        },
+                        sigs
+                    };
+                    return { payload, dbDetails: mo };
+                }
+                return null;
+            };
+
+            if (isOdmPrefix) {
+                const moSearchStr = manualCode.replace('ODM', '');
+                const omResult = await checkMissionOrder(moSearchStr);
+                if (omResult) {
+                    return <ValidState payload={omResult.payload} dbDetails={omResult.dbDetails} />;
+                }
+                return <ErrorState message="Ce code n'est associé à aucun Ordre de Mission valide." />;
+            }
+
+            // Normal Conventions Query
             const query = `
-                SELECT id, status, metadata, created_at, date_start, date_end
+                SELECT id, status, metadata, created_at, date_start, date_end, type
                 FROM conventions 
                 WHERE (
                     id::text ILIKE $1 
@@ -67,43 +121,48 @@ export default async function VerifyPage({ searchParams }: VerifyPageProps) {
                 LIMIT 1
             `;
             const values = [`%${manualCode}%`, `%${manualCode}%`];
-            // Ensure we use % at the end for prefix matching if not already there
             const res = await pool.query(query, values);
 
-            if (res.rowCount === 0) {
-                return <ErrorState message="Ce code n'est associé à aucun document valide ou certificat répertorié." />;
+            if (res?.rowCount && res.rowCount > 0) {
+                const convention = res.rows[0];
+                const meta = convention.metadata || {};
+                const payload = {
+                    id: convention.id,
+                    t: convention.type === 'PFMP_STANDARD' ? 'c' : 'a',
+                    s: (meta.eleve_nom || '') + ' ' + (meta.eleve_prenom || ''),
+                    e: meta.ent_nom || '',
+                    d: {
+                        s: convention.date_start || meta.stage_date_debut,
+                        f: convention.date_end || meta.stage_date_fin
+                    },
+                    sigs: meta.signatures ? Object.entries(meta.signatures).map(([role, data]: [string, any]) => {
+                        let name = data.name;
+                        if (!name || name === role) {
+                            if (role === 'student') name = `${meta.eleve_prenom} ${meta.eleve_nom}`;
+                            else if (role === 'parent') name = meta.rep_legal_nom;
+                            else if (role === 'teacher') name = meta.prof_nom;
+                            else if (role === 'company_head' || role === 'company') name = meta.ent_rep_nom;
+                            else if (role === 'tutor') name = meta.tuteur_nom;
+                            else if (role === 'head') name = meta.ecole_chef_nom;
+                        }
+                        return {
+                            n: name || role,
+                            r: role,
+                            d: data.signedAt
+                        };
+                    }).filter(s => s.d) : []
+                };
+
+                return <ValidState payload={payload} dbDetails={convention} />;
             }
 
-            const convention = res.rows[0];
-            const meta = convention.metadata || {};
-            const payload = {
-                id: convention.id,
-                t: convention.type === 'PFMP_STANDARD' ? 'c' : 'a',
-                s: (meta.eleve_nom || '') + ' ' + (meta.eleve_prenom || ''),
-                e: meta.ent_nom || '',
-                d: {
-                    s: convention.date_start || meta.stage_date_debut,
-                    f: convention.date_end || meta.stage_date_fin
-                },
-                sigs: meta.signatures ? Object.entries(meta.signatures).map(([role, data]: [string, any]) => {
-                    let name = data.name;
-                    if (!name || name === role) {
-                        if (role === 'student') name = `${meta.eleve_prenom} ${meta.eleve_nom}`;
-                        else if (role === 'parent') name = meta.rep_legal_nom;
-                        else if (role === 'teacher') name = meta.prof_nom;
-                        else if (role === 'company_head' || role === 'company') name = meta.ent_rep_nom;
-                        else if (role === 'tutor') name = meta.tuteur_nom;
-                        else if (role === 'head') name = meta.ecole_chef_nom;
-                    }
-                    return {
-                        n: name || role,
-                        r: role,
-                        d: data.signedAt
-                    };
-                }).filter(s => s.d) : []
-            };
+            // Fallback: If not found in conventions, it could be a raw ODM hash without 'ODM' prefix
+            const omFallbackResult = await checkMissionOrder(manualCode);
+            if (omFallbackResult) {
+                return <ValidState payload={omFallbackResult.payload} dbDetails={omFallbackResult.dbDetails} />;
+            }
 
-            return <ValidState payload={payload} dbDetails={convention} />;
+            return <ErrorState message="Ce code n'est associé à aucun document valide ou certificat répertorié." />;
         } catch (e) {
             console.error("Manual Verify Error:", e);
             return <ErrorState message="Erreur lors de la communication avec le serveur de vérification." />;
@@ -134,21 +193,41 @@ export default async function VerifyPage({ searchParams }: VerifyPageProps) {
     let dbDetails: any = null;
 
     try {
-        const res = await pool.query('SELECT status, pdf_hash, updated_at, metadata FROM conventions WHERE id = $1', [payload.id]);
+        if (payload.mo) {
+            // For mission orders, the payload ID is the CONVENTION ID because it's linked dynamically
+            const res = await pool.query('SELECT status, signature_data, updated_at FROM mission_orders WHERE convention_id = $1', [payload.id]);
 
-        if (res.rowCount === 0) {
-            dbStatus = 'NOT_FOUND';
-        } else {
-            const row = res.rows[0];
-            dbDetails = row;
-
-            if (['REJECTED', 'ANNULEE', 'CANCELLED'].includes(row.status)) {
-                dbStatus = 'REVOKED';
-            }
-            else if (['SIGNED_BY_SCHOOL', 'VALIDATED_HEAD', 'COMPLETED'].includes(row.status)) {
-                dbStatus = 'VALID';
+            if (!res?.rowCount || res.rowCount === 0) {
+                dbStatus = 'NOT_FOUND';
             } else {
-                dbStatus = 'IN_PROGRESS';
+                const row = res.rows[0];
+                dbDetails = row;
+
+                if (['REJECTED', 'CANCELLED'].includes(row.status)) {
+                    dbStatus = 'REVOKED';
+                } else if (row.status === 'SIGNED' || row.signature_data?.head?.hash) {
+                    dbStatus = 'VALID';
+                } else {
+                    dbStatus = 'IN_PROGRESS';
+                }
+            }
+        } else {
+            const res = await pool.query('SELECT status, pdf_hash, updated_at, metadata FROM conventions WHERE id = $1', [payload.id]);
+
+            if (!res?.rowCount || res.rowCount === 0) {
+                dbStatus = 'NOT_FOUND';
+            } else {
+                const row = res.rows[0];
+                dbDetails = row;
+
+                if (['REJECTED', 'ANNULEE', 'CANCELLED'].includes(row.status)) {
+                    dbStatus = 'REVOKED';
+                }
+                else if (['SIGNED_BY_SCHOOL', 'VALIDATED_HEAD', 'COMPLETED'].includes(row.status)) {
+                    dbStatus = 'VALID';
+                } else {
+                    dbStatus = 'IN_PROGRESS';
+                }
             }
         }
     } catch (e) {

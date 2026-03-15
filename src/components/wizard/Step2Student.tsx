@@ -19,6 +19,7 @@ const stepSchema = conventionSchema.pick({
     eleve_tel: true,
     eleve_email: true,
     eleve_classe: true,
+    class_id: true,
     diplome_intitule: true,
     est_mineur: true,
     rep_legal_nom: true,
@@ -136,7 +137,8 @@ export function Step2Student() {
                             setIfEmpty('eleve_ville', profileData.city);
                         }
 
-                        setIfEmpty('eleve_classe', profileData.class);
+                        setIfEmpty('eleve_classe', profileData.class || (profileData as any).classe);
+                        setIfEmpty('class_id', profileData.classId || (profileData as any).class_id);
                         setIfEmpty('diplome_intitule', profileData.diploma);
 
                         // Only pre-fill parent data if the student is MINOR (based on calculated age)
@@ -178,6 +180,7 @@ export function Step2Student() {
 
                 return (
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
+                        <input type="hidden" {...form.register('class_id')} />
                         {/* est_mineur is registered via useEffect */}
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Nom</label>

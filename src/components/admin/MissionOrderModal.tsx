@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { X, Check, MapPin, AlertTriangle, FileText, Calendar } from 'lucide-react';
-import { useMissionOrderStore, MissionOrder } from '@/store/missionOrder';
+import { useMissionOrderStore, MissionOrder, isOdmPendingForHead } from '@/store/missionOrder';
 import { useConventionStore } from '@/store/convention';
 import { useUserStore } from '@/store/user';
 import { SignatureModal } from '@/components/ui/SignatureModal';
@@ -23,7 +23,7 @@ export function MissionOrderModal({ isOpen, onClose }: MissionOrderModalProps) {
 
     if (!isOpen) return null;
 
-    const pendingOrders = missionOrders.filter(o => o.status === 'PENDING');
+    const pendingOrders = missionOrders.filter(isOdmPendingForHead);
 
     const toggleSelection = (id: string) => {
         const newSet = new Set(selectedIds);

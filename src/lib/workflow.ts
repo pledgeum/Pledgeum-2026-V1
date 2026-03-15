@@ -83,7 +83,7 @@ export async function updateConventionStatus(
             query += `, validated_at = NOW(), token_company = $${paramIdx++} `;
             updates.push(tokenCompany);
         }
-        else if (newStatus === 'SIGNED_COMPANY') {
+        else if (newStatus === 'SIGNED_COMPANY' || newStatus === 'SIGNED_TUTOR') {
             const tokenSchool = randomBytes(32).toString('hex');
             query += `, signature_company_at = NOW(), token_school = $${paramIdx++} `;
             updates.push(tokenSchool);

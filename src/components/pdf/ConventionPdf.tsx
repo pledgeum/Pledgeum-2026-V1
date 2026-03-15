@@ -281,6 +281,30 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                         <Text style={styles.label}>Au :</Text>
                         <Text style={styles.value}>{formatDate(data.stage_date_fin)}</Text>
                     </View>
+
+                    {/* Periods Detail */}
+                    {data.selected_periods_labels && data.selected_periods_labels.length > 0 && (
+                        <View style={{ marginTop: 4, paddingLeft: 10, borderLeftWidth: 1, borderLeftColor: '#e5e7eb' }}>
+                            <Text style={{ fontSize: 7, color: '#4b5563', fontFamily: pdfTheme.fonts.bold, marginBottom: 2 }}>
+                                Périodes officielles suivies :
+                            </Text>
+                            {data.selected_periods_labels.map((label, idx) => (
+                                <Text key={idx} style={{ fontSize: 7, color: '#6b7280' }}>• {label}</Text>
+                            ))}
+                        </View>
+                    )}
+
+                    {/* Out of Period Alert */}
+                    {data.is_out_of_period && (
+                        <View style={{ marginTop: 5, padding: 4, backgroundColor: '#fff7ed', borderWidth: 0.5, borderColor: '#fbbf24', borderRadius: 2 }}>
+                            <Text style={{ fontSize: 7, color: '#92400e', fontFamily: pdfTheme.fonts.bold }}>
+                                ⚠️ Stage de Rattrapage / Dates dérogatoires
+                            </Text>
+                            <Text style={{ fontSize: 6, color: '#b45309', marginTop: 1 }}>
+                                Ce stage se déroule en dehors du calendrier collectif de la classe.
+                            </Text>
+                        </View>
+                    )}
                 </View>
 
                 {/* HORAIRES */}

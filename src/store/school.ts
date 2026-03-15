@@ -252,7 +252,7 @@ export const useSchoolStore = create<SchoolState>()(
                             studentsList: [],
                             studentCount: apiCls.studentCount || 0,
                             teacherCount: apiCls.teacherCount || 0,
-                            pfmpPeriods: []
+                            pfmpPeriods: apiCls.pfmpPeriods || []
                         };
                         loadedClasses.push(newCls);
                         classesMap.set(apiCls.id, newCls);
@@ -551,7 +551,7 @@ export const useSchoolStore = create<SchoolState>()(
 
 
             addClass: (cls) => set((state) => ({
-                classes: [...state.classes, { ...cls, id: Math.random().toString(36).substr(2, 9), teachersList: [], studentsList: [], studentCount: 0, teacherCount: 0 }]
+                classes: [...state.classes, { ...cls, id: Math.random().toString(36).substr(2, 9), teachersList: [], studentsList: [], studentCount: 0, teacherCount: 0, pfmpPeriods: [] }]
             })),
 
             removeClass: (id) => set((state) => ({
@@ -589,31 +589,100 @@ export const useSchoolStore = create<SchoolState>()(
                 }
             },
 
-            addPfmpPeriod: (periodData) => set((state) => ({
-                classes: state.classes.map((c) => {
-                    if (c.id !== periodData.classId) return c;
-                    return {
+            addPfmpPeriod: (periodData) => {
+                set((state) => ({
+                    classes: state.classes.map((c) => {
+                        if (c.id !== periodData.classId) return c;
+                        return {
+                            ...c,
+                            pfmpPeriods: [...(c.pfmpPeriods || []), createPfmpPeriod(periodData)]
+                        };
+                    })
+                }));
+
+                // Persistence: Use fresh state AFTER set
+                const state = get();
+                const updatedClass = state.classes.find(c => c.id === periodData.classId);
+                if (updatedClass) {
+                    import('@/store/user').then(({ useUserStore }) => {
+                        const uai = useUserStore.getState().uai || useUserStore.getState().schoolId;
+                        if (uai) {
+                            fetch('/api/school/classes', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    classId: periodData.classId,
+                                    pfmpPeriods: updatedClass.pfmpPeriods,
+                                    uai: uai
+                                })
+                            }).catch(e => console.error("Failed to persist PFMP period add:", e));
+                        }
+                    });
+                }
+            },
+
+            updatePfmpPeriod: (periodId, updates) => {
+                set((state) => ({
+                    classes: state.classes.map((c) => ({
                         ...c,
-                        pfmpPeriods: [...(c.pfmpPeriods || []), createPfmpPeriod(periodData)]
-                    };
-                })
-            })),
+                        pfmpPeriods: (c.pfmpPeriods || []).map(p =>
+                            p.id === periodId ? { ...p, ...updates } : p
+                        )
+                    }))
+                }));
 
-            updatePfmpPeriod: (periodId, updates) => set((state) => ({
-                classes: state.classes.map((c) => ({
-                    ...c,
-                    pfmpPeriods: (c.pfmpPeriods || []).map(p =>
-                        p.id === periodId ? { ...p, ...updates } : p
-                    )
-                }))
-            })),
+                // Find the class containing this period for persistence: Use fresh state AFTER set
+                const state = get();
+                const targetClass = state.classes.find(c => (c.pfmpPeriods || []).some(p => p.id === periodId));
+                if (targetClass) {
+                    import('@/store/user').then(({ useUserStore }) => {
+                        const uai = useUserStore.getState().uai || useUserStore.getState().schoolId;
+                        if (uai) {
+                            fetch('/api/school/classes', {
+                                method: 'PUT',
+                                headers: { 'Content-Type': 'application/json' },
+                                body: JSON.stringify({
+                                    classId: targetClass.id,
+                                    pfmpPeriods: targetClass.pfmpPeriods,
+                                    uai: uai
+                                })
+                            }).catch(e => console.error("Failed to persist PFMP period update:", e));
+                        }
+                    });
+                }
+            },
 
-            deletePfmpPeriod: (periodId) => set((state) => ({
-                classes: state.classes.map((c) => ({
-                    ...c,
-                    pfmpPeriods: (c.pfmpPeriods || []).filter(p => p.id !== periodId)
-                }))
-            })),
+            deletePfmpPeriod: (periodId) => {
+                // Find class BEFORE state update to know which class to sync
+                const targetClassBefore = get().classes.find(c => (c.pfmpPeriods || []).some(p => p.id === periodId));
+
+                set((state) => ({
+                    classes: state.classes.map((c) => ({
+                        ...c,
+                        pfmpPeriods: (c.pfmpPeriods || []).filter(p => p.id !== periodId)
+                    }))
+                }));
+
+                if (targetClassBefore) {
+                    const freshClass = get().classes.find(c => c.id === targetClassBefore.id);
+                    if (freshClass) {
+                        import('@/store/user').then(({ useUserStore }) => {
+                            const uai = useUserStore.getState().uai || useUserStore.getState().schoolId;
+                            if (uai) {
+                                fetch('/api/school/classes', {
+                                    method: 'PUT',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify({
+                                        classId: freshClass.id,
+                                        pfmpPeriods: freshClass.pfmpPeriods,
+                                        uai: uai
+                                    })
+                                }).catch(e => console.error("Failed to persist PFMP period deletion:", e));
+                            }
+                        });
+                    }
+                }
+            },
 
             importTeachers: (classId, teachers) => set((state) => ({
                 classes: state.classes.map((c) => {

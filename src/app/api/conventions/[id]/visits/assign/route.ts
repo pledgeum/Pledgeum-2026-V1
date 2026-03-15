@@ -13,9 +13,10 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         }
 
         const conventionId = params.id;
-
         const data = await req.json();
         const { trackingTeacherEmail, distanceKm } = data;
+
+        console.log(`[API_ASSIGN] Convention: ${conventionId}, Teacher: ${trackingTeacherEmail}, Dist: ${distanceKm}`);
 
         if (!trackingTeacherEmail) {
             return NextResponse.json({ error: 'Missing trackingTeacherEmail' }, { status: 400 });
@@ -31,6 +32,8 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
             DO UPDATE SET 
                 tracking_teacher_email = $2, 
                 distance_km = $3, 
+                draft_tracking_teacher_email = NULL,
+                draft_distance_km = NULL,
                 updated_at = NOW()
             RETURNING *;
         `;

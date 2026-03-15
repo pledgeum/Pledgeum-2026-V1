@@ -1,6 +1,7 @@
 
 import React from 'react';
 import { Badge } from '@/components/ui/badge';
+import { AlertTriangle } from 'lucide-react';
 
 export type WorkflowStatus =
     | 'DRAFT'
@@ -29,7 +30,7 @@ const statusConfig: Record<WorkflowStatus, { label: string; className: string }>
     CANCELLED: { label: 'Annulée', className: 'bg-red-100 text-red-800 border-red-200' },
 };
 
-export const ConventionStatusBadge = ({ status, signatures }: { status: string, signatures?: any }) => {
+export const ConventionStatusBadge = ({ status, signatures, isOutOfPeriod }: { status: string, signatures?: any, isOutOfPeriod?: boolean }) => {
     // Default to DRAFT if unknown
     const config = statusConfig[status as WorkflowStatus] || statusConfig['DRAFT'];
 
@@ -45,8 +46,16 @@ export const ConventionStatusBadge = ({ status, signatures }: { status: string, 
         : config.label;
 
     return (
-        <Badge variant="outline" className={`px-2 py-1 ${effectiveClass}`}>
-            {effectiveLabel}
-        </Badge>
+        <div className="flex flex-col items-end gap-1">
+            <Badge variant="outline" className={`px-2 py-1 ${effectiveClass}`}>
+                {effectiveLabel}
+            </Badge>
+            {isOutOfPeriod && (
+                <Badge variant="outline" className="bg-orange-100 text-orange-800 border-orange-200 px-2 py-0.5 text-[10px] uppercase font-bold flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3" />
+                    Rattrapage / Dérogatoire
+                </Badge>
+            )}
+        </div>
     );
 };

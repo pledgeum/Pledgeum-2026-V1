@@ -53,7 +53,15 @@ export async function generateVerificationUrl(data: Convention, type: 'conventio
     // 2. Sign
     console.log("[SignAction] Payload to sign:", JSON.stringify(payload, null, 2));
     const signature = signData(payload);
-    const hashDisplay = signature.substring(0, 12).toUpperCase();
+    let hashDisplay = signature.substring(0, 12).toUpperCase();
+
+    // Add prefix for UI/PDF consistency
+    if (type === 'attestation' && !hashDisplay.startsWith('ATT-')) {
+        hashDisplay = `ATT-${hashDisplay}`;
+    } else if (type === 'mission_order' && !hashDisplay.startsWith('ODM-')) {
+        hashDisplay = `ODM-${hashDisplay}`;
+    }
+
     console.log("[SignAction] Generated hashDisplay:", hashDisplay);
 
     // 3. Encode Payload
@@ -65,15 +73,28 @@ export async function generateVerificationUrl(data: Convention, type: 'conventio
     const url = `${baseUrl}/verify?data=${base64Data}&sig=${signature}`;
 
     // 5. Persist to DB ONLY IF DATA IS COMPLETE and we have an ID
-    if (isDataComplete && type === 'convention' && payload.id) {
+    if (isDataComplete && payload.id) {
         try {
             const { default: pool } = await import('@/lib/pg');
             if (pool) {
-                await pool.query('UPDATE conventions SET pdf_hash = $1 WHERE id = $2', [hashDisplay, payload.id]);
-                console.log(`[SignAction] Persisted valid pdf_hash ${hashDisplay} for ${payload.id}`);
+                // Remove prefix before persistence to DB if we want to search with prefix logic in route.ts
+                const dbHash = hashDisplay.replace('ATT-', '').replace('ODM-', '');
+
+                if (type === 'convention') {
+                    await pool.query('UPDATE conventions SET pdf_hash = $1 WHERE id = $2', [dbHash, payload.id]);
+                    console.log(`[SignAction] Persisted valid pdf_hash ${dbHash} for convention ${payload.id}`);
+                } else if (type === 'mission_order') {
+                    // Update mission_orders table using convention_id
+                    await pool.query('UPDATE mission_orders SET pdf_hash = $1 WHERE convention_id = $2', [dbHash, payload.id]);
+                    console.log(`[SignAction] Persisted valid pdf_hash ${dbHash} for mission_order (conv_id: ${payload.id})`);
+                } else if (type === 'attestation') {
+                    // Update attestations table
+                    await pool.query('UPDATE attestations SET pdf_hash = $1 WHERE convention_id = $2', [dbHash, payload.id]);
+                    console.log(`[SignAction] Persisted valid pdf_hash ${dbHash} for attestation (conv_id: ${payload.id})`);
+                }
             }
         } catch (e) {
-            console.error("[SignAction] Failed to persist pdf_hash:", e);
+            console.error(`[SignAction] Failed to persist pdf_hash for ${type}:`, e);
         }
     } else if (!isDataComplete) {
         console.warn("[SignAction] Skipping DB persistence: Data is incomplete", { id: payload.id, studentName, enterpriseName, dateStart });

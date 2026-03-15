@@ -18,6 +18,7 @@ interface SignatureModalProps {
     hideOtp?: boolean;
     canSignDual?: boolean;
     dualRoleLabel?: string;
+    documentType?: 'convention' | 'mission_order' | 'attestation';
 }
 
 export function SignatureModal({
@@ -30,7 +31,8 @@ export function SignatureModal({
     conventionId,
     hideOtp = false,
     canSignDual = false,
-    dualRoleLabel = "Signer pour les deux rôles"
+    dualRoleLabel = "Signer pour les deux rôles",
+    documentType = 'convention'
 }: SignatureModalProps) {
     const [activeTab, setActiveTab] = useState<'canvas' | 'otp'>('canvas');
     const [otpCode, setOtpCode] = useState('');
@@ -51,7 +53,7 @@ export function SignatureModal({
     const studentClass = convention ? classes.find(c => c.name === convention.eleve_classe || c.id === convention.eleve_classe) : null;
 
     // Check if dates match any official period
-    const isDerogation = (() => {
+    const isDerogation = convention?.is_out_of_period ?? (() => {
         if (!convention || !studentClass || !studentClass.pfmpPeriods || studentClass.pfmpPeriods.length === 0) return false;
 
         // Return TRUE if NO period matches the convention dates exactly
@@ -195,7 +197,13 @@ export function SignatureModal({
         }
 
         try {
-            const res = await fetch('/api/otp/send', {
+            const apiPath = documentType === 'mission_order'
+                ? `/api/mission-orders/${conventionId}/send-otp`
+                : documentType === 'attestation'
+                    ? `/api/conventions/${conventionId}/attestation/send-otp`
+                    : '/api/otp/send';
+
+            const res = await fetch(apiPath, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
@@ -279,12 +287,18 @@ export function SignatureModal({
         }
 
         try {
-            const res = await fetch('/api/otp/verify', {
+            const apiPath = documentType === 'mission_order'
+                ? `/api/mission-orders/${conventionId}/verify-otp`
+                : documentType === 'attestation'
+                    ? `/api/conventions/${conventionId}/attestation/verify-otp`
+                    : '/api/otp/verify';
+
+            const res = await fetch(apiPath, {
                 method: 'POST',
                 headers: {
                     'Content-Type': 'application/json',
                 },
-                body: JSON.stringify({ email: signeeEmail, code: otpCode })
+                body: JSON.stringify({ email: signeeEmail, code: otpCode, signerName: signeeName })
             });
 
             if (res.ok) {
@@ -311,7 +325,7 @@ export function SignatureModal({
 
                     ctx.font = 'italic 12px Arial';
                     ctx.fillStyle = '#64748b';
-                    ctx.fillText('Authentifié par Convention PFMP', 30, 135);
+                    ctx.fillText('Authentifié par Plateforme PFMP', 30, 135);
                 }
                 const dataUrl = canvas.toDataURL('image/png');
 

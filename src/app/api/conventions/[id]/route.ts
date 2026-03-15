@@ -73,7 +73,8 @@ export async function PUT(
             teacherName: 'prof_nom',
             teacherEmail: 'prof_email',
             assuranceName: 'assurance_nom',
-            assurancePolicy: 'assurance_police'
+            assurancePolicy: 'assurance_police',
+            is_out_of_period: 'is_out_of_period'
         };
 
         // Fields that are stored in metadata JSONB instead of columns

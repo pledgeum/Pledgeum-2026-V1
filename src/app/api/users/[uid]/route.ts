@@ -106,6 +106,7 @@ export async function GET(
                 zipCode: user.zip_code || undefined, // Fix: Add zipCode
                 city: user.city || undefined,        // Fix: Add city
                 class: user.class_name || undefined, // Fix: Add Class to profileData
+                classId: user.class_id || undefined, // Fix: Add classId to profileData
                 birthDate: user.birth_date ? new Date(user.birth_date).toISOString() : undefined, // Fix: Add birthDate to profileData
                 diploma: user.diploma_prepared || undefined, // Fix: Add Diploma
                 legalRepresentatives: user.legal_representatives || [], // Fix: Add Legal Reps

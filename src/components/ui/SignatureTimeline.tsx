@@ -15,12 +15,19 @@ export function SignatureTimeline({ convention, onRemind, onEditEmail }: Signatu
 
     useEffect(() => {
         const interval = setInterval(() => {
+            if (!convention?.updatedAt) return;
             const lastUpdate = new Date(convention.updatedAt).getTime();
             const now = Date.now();
-            setElapsedTime(now - lastUpdate);
-        }, 1000); // Check every second
+            const diff = now - lastUpdate;
+            
+            // Only update if the difference is significant (avoiding churn)
+            setElapsedTime(prev => {
+                if (Math.abs(prev - diff) < 500) return prev;
+                return diff;
+            });
+        }, 1000);
         return () => clearInterval(interval);
-    }, [convention.updatedAt]);
+    }, [convention?.updatedAt]);
 
     // Thresholds
     // const INITIAL_DELAY = 5 * 1000; // 5s wait after step starts

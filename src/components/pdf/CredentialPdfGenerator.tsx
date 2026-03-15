@@ -19,8 +19,8 @@ export async function generateTeacherCredentialsBlob(teachers: Teacher[], classI
     return await pdf(<TeacherCredentialsPdf teachers={teachers} className={classInfo.name} schoolName={schoolName} />).toBlob();
 }
 
-export async function generateMissionOrderBlob(missionOrder: MissionOrder, convention: Convention, qrCodeUrl?: string) {
-    return await pdf(<MissionOrderPdf missionOrder={missionOrder} convention={convention} qrCodeUrl={qrCodeUrl} />).toBlob();
+export async function generateMissionOrderBlob(missionOrder: MissionOrder, convention: Convention, qrCodeUrl?: string, hashCode?: string) {
+    return await pdf(<MissionOrderPdf missionOrder={missionOrder} convention={convention} qrCodeUrl={qrCodeUrl} hashCode={hashCode} />).toBlob();
 }
 
 export async function generateAttestationBlob(convention: Convention, totalAbsenceHours: number, qrCodeUrl?: string, hashCode?: string) {
