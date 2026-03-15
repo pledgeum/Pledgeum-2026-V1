@@ -1459,10 +1459,14 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
 
       } catch (error: any) {
         console.error("Sign Error:", error);
+        // Feedback visuel pour l'utilisateur
         addNotification({
           title: 'Erreur de signature',
           message: error.message || "Impossible de signer la convention. Vérifiez que c'est bien votre tour.",
         });
+        // On re-propagée l'erreur pour que le SignatureModal puisse arrêter le chargement
+        // et rester sur l'écran de signature au lieu d'afficher un succès erroné.
+        throw error;
       }
     }
     // REMOVED: setIsSigModalOpen(false); 

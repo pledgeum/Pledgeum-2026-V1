@@ -279,6 +279,9 @@ export async function POST(req: Request) {
                 );
             }
 
+            // --- PRE-IDENTIFICATION ---
+            const conventionsId = 'conv_' + Math.random().toString(36).substr(2, 9);
+
             // --- SIGNATURE & STATUS LOGIC ---
             let initialStatus = 'DRAFT';
             if (data.signatures && data.signatures.studentImg) {
@@ -290,11 +293,15 @@ export async function POST(req: Request) {
                     return ip === '::1' ? '127.0.0.1 (Localhost)' : ip;
                 };
 
+                const dynamicCode = Math.random().toString(36).substring(2, 10).toUpperCase();
+                const signatureHashInput = `${conventionsId}:student:${now}:${dynamicCode}`;
+                const dynamicHash = crypto.createHash('sha256').update(signatureHashInput).digest('hex');
+
                 const studentSig = {
                     signedAt: now,
                     img: data.signatures.studentImg,
-                    code: 'CANVAS',
-                    hash: crypto.createHash('sha256').update(`student:${now}:CANVAS`).digest('hex'),
+                    code: dynamicCode,
+                    hash: dynamicHash,
                     ip: getIp(req),
                 };
 
@@ -389,7 +396,6 @@ export async function POST(req: Request) {
                 ]);
             }
 
-            const conventionsId = 'conv_' + Math.random().toString(36).substr(2, 9);
 
             const query = `
                 INSERT INTO conventions (

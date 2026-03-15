@@ -5,6 +5,7 @@ import pool from '@/lib/pg';
 import { auth } from "@/auth"; // Assuming auth.ts exists in src/ based on 'handlers' export seen in [...nextauth]
 import crypto from 'crypto';
 import { sendEmail } from '@/lib/email';
+import { sendNotification, createInAppNotification } from '@/lib/notification';
 
 // 📝 Étape 2 : Template Universel de Confirmation
 function getSignatureConfirmationHtml(recipientName: string, studentName: string) {
@@ -23,45 +24,49 @@ function getSignatureConfirmationHtml(recipientName: string, studentName: string
 
 // 📭 Étape 1 : Dispatcher de Destinataires
 function getRecipientInfo(role: string, convention: any) {
-    const data = convention.data || {};
     const metadata = convention.metadata || {};
-    const studentName = data.eleve_nom ? `${data.eleve_prenom} ${data.eleve_nom}` : (metadata.eleve_nom ? `${metadata.eleve_prenom} ${metadata.eleve_nom}` : "l'élève");
+    const data = convention.data || {};
+    
+    // Hybrid extraction for backward compatibility
+    const getField = (key: string) => metadata[key] || data[key];
+
+    const studentName = getField('eleve_nom') ? `${getField('eleve_prenom')} ${getField('eleve_nom')}` : "l'élève";
 
     switch (role) {
         case 'student':
             return {
-                email: data.eleve_email || metadata.eleve_email,
-                name: data.eleve_prenom || studentName,
+                email: getField('eleve_email'),
+                name: getField('eleve_prenom') || studentName,
                 studentName
             };
         case 'parent':
             return {
-                email: data.rep_legal_email || metadata.rep_legal_email,
-                name: data.rep_legal_prenom || "Responsable Légal",
+                email: getField('rep_legal_email'),
+                name: getField('rep_legal_prenom') || "Responsable Légal",
                 studentName
             };
         case 'teacher':
             return {
-                email: data.prof_suivi_email || metadata.prof_suivi_email || data.teacher_email || metadata.teacher_email,
-                name: data.prof_prenom || metadata.prof_prenom || "Enseignant Référent",
+                email: getField('prof_suivi_email') || getField('teacher_email'),
+                name: getField('prof_prenom') || "Enseignant Référent",
                 studentName
             };
         case 'tutor':
             return {
-                email: data.tuteur_email || metadata.tuteur_email,
-                name: data.tuteur_prenom || "Tuteur",
+                email: getField('tuteur_email'),
+                name: getField('tuteur_prenom') || "Tuteur",
                 studentName
             };
         case 'company_head':
         case 'company_head_tutor':
             return {
-                email: data.ent_rep_email || metadata.ent_rep_email || data.entreprise_directeur_email,
-                name: data.ent_rep_prenom || "Représentant Entreprise",
+                email: getField('ent_rep_email') || getField('entreprise_directeur_email'),
+                name: getField('ent_rep_prenom') || "Représentant Entreprise",
                 studentName
             };
         case 'school_head':
             return {
-                email: metadata.signatories?.principal?.email || metadata.head_email,
+                email: metadata.signatories?.principal?.email || getField('head_email'),
                 name: metadata.signatories?.principal?.name || "Chef d'Établissement",
                 studentName
             };
@@ -93,12 +98,11 @@ export async function POST(
         }
 
         // --- 1. Fetch Current Convention Data ---
-        const convRes = await pool.query('SELECT data, metadata, status FROM conventions WHERE id = $1', [conventionId]);
+        const convRes = await pool.query('SELECT metadata, status, student_uid FROM conventions WHERE id = $1', [conventionId]);
         if (convRes.rowCount === 0) {
             return NextResponse.json({ error: 'Convention not found' }, { status: 404 });
         }
         const convention = convRes.rows[0];
-        const data = convention.data || {};
         const metadata = convention.metadata || {};
         const sigs = metadata.signatures || {};
 
@@ -210,9 +214,9 @@ export async function POST(
                 // Fetch convention details to get Parent Info
                 try {
                     console.log(`[SIGN_DEBUG] Starting signature process for convention: ${conventionId}`);
-                    const convRes = await pool.query(`SELECT data, metadata FROM conventions WHERE id = $1`, [conventionId]);
+                    const convRes = await pool.query(`SELECT metadata FROM conventions WHERE id = $1`, [conventionId]);
                     if (convRes.rows.length > 0) {
-                        const conv = { ...convRes.rows[0].data, ...convRes.rows[0].metadata };
+                        const conv = convRes.rows[0].metadata || {};
 
                         // Only if minor and parent email exists
                         if (conv.est_mineur && conv.rep_legal_email) {
@@ -350,9 +354,9 @@ export async function POST(
 
                 // --- EMAIL TRIGGER: Notify Company/Tutor ---
                 try {
-                    const convRes = await pool.query(`SELECT data FROM conventions WHERE id = $1`, [conventionId]);
+                    const convRes = await pool.query(`SELECT metadata FROM conventions WHERE id = $1`, [conventionId]);
                     if (convRes.rows.length > 0) {
-                        const convData = convRes.rows[0].data;
+                        const convData = convRes.rows[0].metadata || {};
                         const tutorEmail = convData.tuteur_email;
                         const entEmail = convData.ent_rep_email;
                         // Use a Set to avoid duplicate emails if tutor == rep
@@ -557,53 +561,88 @@ export async function POST(
                 }
             );
 
-            // --- NOTIFICATIONS ENTREPRISE ---
+            // --- 🎯 communication & notifications (NON-BLOCKING) ---
+            const metadata = updatedConvention.metadata || {};
+            const data = updatedConvention.data || {};
+            const getField = (key: string) => metadata[key] || data[key];
+            const sigs = metadata.signatures || {};
+
+            const studentEmail = getField('eleve_email');
+            const parentEmail = getField('rep_legal_email');
+            const studentName = getField('eleve_nom') ? `${getField('eleve_prenom')} ${getField('eleve_nom')}` : "l'élève";
+            const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.pledgeum.fr';
+
+            const notificationTasks: Promise<any>[] = [];
+
+            // 1. NOTIFICATIONS ENTREPRISE (Triggered by Teacher/School Head)
             const isTeacherValidated = (statusToApply === 'VALIDATED_TEACHER' || currentWeight >= 3);
             const isCompanyTurn = isTeacherValidated && (!sigs.tutor || !sigs.company_head);
-            const isDirectTrigger = (role === 'teacher' || (role === 'school_head' && isCompanyTurn)); // Usually teacher is the gate, but just in case.
+            const isDirectTrigger = (role === 'teacher' || (role === 'school_head' && isCompanyTurn));
 
             if (isCompanyTurn && isDirectTrigger) {
-                const tutorEmail = convention.data?.tuteur_email || metadata.tuteur_email || metadata.tutor?.email;
-                const headEmail = convention.data?.ent_rep_email || metadata.ent_rep_email || metadata.signatories?.head?.email;
-                const studentName = convention.data?.eleve_nom ? `${convention.data?.eleve_nom} ${convention.data?.eleve_prenom}` : (metadata.eleve_nom ? `${metadata.eleve_nom} ${metadata.eleve_prenom}` : "l'élève");
-
-                const { sendEmail } = await import('@/lib/email');
-                const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.pledgeum.fr';
+                const tutorEmail = metadata.tuteur_email || metadata.tutor?.email;
+                const headEmail = metadata.ent_rep_email || metadata.signatories?.head?.email;
 
                 if (tutorEmail && !sigs.tutor) {
-                    await sendEmail({
+                    notificationTasks.push(sendEmail({
                         to: tutorEmail,
                         subject: `[Action Requise] Convention de stage à signer - ${studentName}`,
                         text: `Bonjour,\n\nLa convention de stage de ${studentName} requiert votre signature en tant que Tuteur.\nVous pouvez la consulter et la signer sur votre espace :\n${appUrl}/login\n\nCordialement,\nL'équipe Pledgeum`
-                    });
+                    }).catch(e => console.error("[Notif] Tutor email failed", e)));
                 }
 
                 if (headEmail && !sigs.company_head && tutorEmail !== headEmail) {
-                    await sendEmail({
+                    notificationTasks.push(sendEmail({
                         to: headEmail,
                         subject: `[Action Requise] Convention de stage à signer - ${studentName}`,
                         text: `Bonjour,\n\nLa convention de stage de ${studentName} requiert votre signature en tant que Chef d'Entreprise.\nVous pouvez la consulter et la signer sur votre espace :\n${appUrl}/login\n\nCordialement,\nL'équipe Pledgeum`
-                    });
+                    }).catch(e => console.error("[Notif] Head email failed", e)));
                 }
             }
-            // --- FIN NOTIFICATIONS ---
 
-            // --- 🎯 Étape 3 : Signature Confirmation Email (UNIVERSAL) ---
+            // 2. Signature Confirmation Email (UNIVERSAL for current signer)
             const recipient = getRecipientInfo(role, updatedConvention);
             if (recipient && recipient.email) {
                 console.log(`[Universal Email] Sending confirmation to ${role}: ${recipient.email}`);
-                try {
-                    await sendEmail({
-                        to: recipient.email,
-                        subject: `Confirmation de signature - ${recipient.studentName}`,
-                        text: `Bonjour, Votre signature électronique pour la convention de stage de ${recipient.studentName} a bien été enregistrée avec succès. Vous pouvez consulter l'état d'avancement du document depuis votre espace.`,
-                        // Attach HTML for premium feel
-                        html: getSignatureConfirmationHtml(recipient.name || "Signataire", recipient.studentName)
-                    } as any);
-                } catch (emailErr) {
-                    console.error("[Universal Email] CRASH ignored:", emailErr);
+                notificationTasks.push((async () => {
+                    try {
+                        await sendEmail({
+                            to: recipient.email,
+                            subject: `Confirmation de signature - ${recipient.studentName}`,
+                            text: `Bonjour, Votre signature électronique pour la convention de stage de ${recipient.studentName} a bien été enregistrée avec succès. Vous pouvez consulter l'état d'avancement du document depuis votre espace.`,
+                            html: getSignatureConfirmationHtml(recipient.name || "Signataire", recipient.studentName)
+                        } as any);
+                    } catch (emailErr) {
+                        console.error("[Universal Email] SIGNER confirmation failed:", emailErr);
+                    }
+                })());
+            }
+
+            // 3. Notify Student on any third-party signature
+            if (role !== 'student' && studentEmail) {
+                const subject = `Nouvelle signature sur votre convention - ${studentName}`;
+                const message = `Bonjour ${getField('eleve_prenom') || 'élève'},\n\nUne nouvelle signature (${role}) a été apposée sur votre convention de stage. Vous pouvez suivre l'état d'avancement ici : ${appUrl}/dashboard`;
+                
+                notificationTasks.push(sendNotification(studentEmail, subject, message).catch(e => console.error("[Notif] Student notification failed", e)));
+                
+                if (updatedConvention.student_uid) {
+                    notificationTasks.push(createInAppNotification(updatedConvention.student_uid, subject, message).catch(e => console.error("[Notif] Student In-App failed", e)));
                 }
             }
+
+            // 4. Notify Parent on any third-party signature (if minor)
+            if (role !== 'parent' && getField('est_mineur') && parentEmail) {
+                const subject = `Suivi convention - Nouvelle signature pour ${studentName}`;
+                const message = `Bonjour, La convention de stage de ${studentName} vient de recevoir une nouvelle signature (${role}). Prochaine étape : voir le tableau de bord.`;
+                
+                notificationTasks.push(sendEmail({ to: parentEmail, subject, text: message }).catch(e => console.error("[Notif] Parent notification failed", e)));
+            }
+
+            // Execute all notifications without blocking the response
+            Promise.allSettled(notificationTasks).then(results => {
+                const failures = results.filter(r => r.status === 'rejected');
+                console.log(`[Notification Engine] Finished ${results.length} tasks. Failures: ${failures.length}`);
+            });
 
             return NextResponse.json({
                 success: true,
