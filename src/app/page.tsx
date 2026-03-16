@@ -1122,7 +1122,7 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
   const [evaluationTemplates, setEvaluationTemplates] = useState<any[]>([]);
   useEffect(() => {
     // Only fetch for relevant roles to avoid unnecessary reads
-    if (role === 'student' || role === 'parent' || role === 'company_head') return;
+    if (role === 'student' || role === 'parent') return;
 
     const fetchTemplates = async () => {
       try {
@@ -1256,6 +1256,7 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
 
   const isActionable = (conv: Convention, role: UserRole) => {
     const status = conv.status;
+    if (status === 'REJECTED') return false;
 
     if (role === 'teacher') {
       // Teacher validates SUBMITTED only if Major, otherwise waits for SIGNED_PARENT
@@ -1639,17 +1640,14 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
         const actionable = isActionable(conv, role);
 
         // Find assigned evaluation for this convention's class
-        const assignedTemplate = (() => {
-          const cls = classes.find(c => c.name === conv.eleve_classe);
-          if (!cls) return null;
-          return evaluationTemplates.find(t => t.assignedClassIds?.includes(cls.id));
-        })();
+        const assignedTemplate = evaluationTemplates.find(t => t.assignedClassIds?.includes(conv.classId));
 
         // Check if user is authorized to FILL the evaluation
         const canFillEvaluation = assignedTemplate && (
           (role === 'teacher' && (conv.prof_email === userEmail || conv.prof_suivi_email === userEmail)) || // Teacher
           (role === 'teacher_tracker' && conv.prof_suivi_email === userEmail) || // Tracker
           (role === 'tutor' && conv.tuteur_email === userEmail) || // Tutor
+          (role === 'company_head_tutor' && conv.tuteur_email === userEmail) || // Dual Role
           (userEmail === 'pledgeum@gmail.com' && (role === 'teacher' || role === 'tutor' || role === 'teacher_tracker')) // TEST ACCOUNT (Only if acts as Teacher/Tutor)
         );
 
@@ -1732,7 +1730,7 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
                   )}
 
                   {/* Pedagogical Tracking Assignment - Live Dropdown for Teacher */}
-                  {(role === 'teacher' || role === 'ddfpt' || role === 'at_ddfpt') && (
+                  {(role === 'teacher' || role === 'ddfpt' || role === 'at_ddfpt') && conv.status !== 'REJECTED' && (
                     <div className="mt-3 bg-indigo-50 p-2 rounded-md border border-indigo-100 inline-block min-w-[250px]">
                       <label className="block text-xs font-bold text-indigo-800 mb-1 flex items-center">
                         <UserPlus className="w-3 h-3 mr-1" />
@@ -1800,6 +1798,17 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
               {/* Status Label - Right Side */}
               <div className="flex flex-col items-end space-y-1">
                 <ConventionStatusBadge status={conv.status} signatures={conv.signatures} isOutOfPeriod={conv.is_out_of_period} />
+                {conv.status === 'REJECTED' && conv.rejection_reason && (
+                  <div className="mt-2 text-left bg-red-50 border border-red-100 rounded-lg p-3 text-red-700 animate-in fade-in slide-in-from-top-1">
+                    <div className="flex items-center gap-2 mb-1">
+                      <AlertTriangle className="w-4 h-4" />
+                      <span className="font-bold text-xs uppercase tracking-tight">Convention Refusée</span>
+                    </div>
+                    <p className="text-sm italic leading-tight">
+                      &ldquo; {conv.rejection_reason} &rdquo;
+                    </p>
+                  </div>
+                )}
                 <span className="text-xs text-gray-500">
                   {conv.updatedAt && !isNaN(new Date(conv.updatedAt).getTime())
                     ? `Mis à jour le ${new Date(conv.updatedAt).toLocaleDateString()}`
@@ -1811,7 +1820,14 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
             {/* Footer: Timeline + Actions */}
             <div className="mt-6 flex flex-col sm:flex-row sm:justify-between items-center gap-4 border-t pt-4 flex-wrap">
               <div className="w-full sm:w-auto overflow-x-auto pb-2 sm:pb-0">
-                <SignatureTimeline convention={conv} />
+                <SignatureTimeline 
+                  convention={conv} 
+                  onEditEmail={(roleTarget) => {
+                    setSelectedConventionId(conv.id);
+                    setEmailEditRole(roleTarget);
+                    setIsEmailModalOpen(true);
+                  }}
+                />
               </div>
 
               {/* Class Documents Button - Visible to School Staff and Students */}
@@ -1897,7 +1913,7 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
                 )}
 
                 {/* Mission Order Button - Visible to all Staff */}
-                {!['student', 'parent', 'tutor', 'company_head', 'company_head_tutor'].includes(role) && (() => {
+                {!['student', 'parent', 'tutor', 'company_head', 'company_head_tutor'].includes(role) && conv.status !== 'REJECTED' && (() => {
                   const odm = missionOrders.find(m => m.conventionId === conv.id);
                   const isHeadSigned = !!odm?.signature_data?.head?.hash;
                   const isTeacherSigned = !!odm?.signature_data?.teacher?.hash;
@@ -1996,8 +2012,7 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
         isOpen={activeModal === 'signature'}
         onClose={() => setActiveModal(null)}
         onSign={handleSign}
-
-
+        role={role}
         conventionId={selectedConventionId || ''}
         signeeName={(() => {
           const c = conventions.find(c => c.id === selectedConventionId);
@@ -2120,22 +2135,18 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
           <EmailCorrectionModal
             isOpen={isEmailModalOpen}
             onClose={() => setIsEmailModalOpen(false)}
-            roleName={emailEditRole}
+            roleName={emailEditRole === 'company' ? 'Entreprise' : emailEditRole === 'tutor' ? 'Tuteur' : emailEditRole}
+            roleTarget={emailEditRole === 'company' ? 'company_head' : emailEditRole}
+            conventionId={selectedConventionId}
             currentEmail={(() => {
               const c = conventions.find(c => c.id === selectedConventionId);
-              // Simple mapping, robust implementation would be cleaner
               if (!c) return '';
-              if (emailEditRole === 'student') return c.eleve_email;
-              if (emailEditRole === 'parent') return c.rep_legal_email;
-              if (emailEditRole === 'company') return c.ent_rep_email;
+              if (emailEditRole === 'student' || emailEditRole === 'eleve') return c.eleve_email;
+              if (emailEditRole === 'parent' || emailEditRole === 'rep_legal') return c.rep_legal_email;
+              if (emailEditRole === 'company' || emailEditRole === 'company_head') return c.ent_rep_email;
               if (emailEditRole === 'tutor') return c.tuteur_email;
               return '';
             })() ?? ''}
-            onSave={async (newEmail) => {
-              await updateEmail(selectedConventionId, emailEditRole, newEmail);
-              setIsEmailModalOpen(false);
-              addNotification({ title: "Email mis à jour", message: "L'adresse a été corrigée et la notification renvoyée." });
-            }}
           />
         )
       }
@@ -2223,6 +2234,7 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
             signeeName={name}
             signeeEmail={userEmail}
             conventionId={odmPreviewData.odm.id}
+            role={odmSignatureRole || 'teacher'}
             documentType="mission_order"
             hideOtp={odmSignatureRole !== 'teacher'} // OTP specifically for teacher signature as per request
           />

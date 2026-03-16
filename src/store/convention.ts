@@ -59,6 +59,9 @@ export interface Convention extends Omit<ConventionData, 'signatures'> {
     updatedAt: string;
     lastReminderAt?: string; // Timestamp of the last reminder sent
     metadata?: Record<string, any>; // Flexible metadata storage for backward compatibility or extra fields
+    rejection_reason?: string;
+    rejectedByLabel?: string;
+    rejectedByRole?: string;
     dateStart?: string;
     dateEnd?: string;
 
@@ -96,6 +99,9 @@ export interface Convention extends Omit<ConventionData, 'signatures'> {
         zipCode?: string;
         city?: string;
     };
+    evaluationAnswers?: Record<string, Record<number, any>>;
+    evaluationFinalGrade?: string;
+    evaluationDate?: string;
 
     signatures: {
         student?: SignatureDetail;
@@ -138,6 +144,7 @@ interface ConventionState {
     saveDraftAssignments: (assignments: Record<string, { email: string, distance: number }>) => Promise<void>;
 
     updateAbsence: (conventionId: string, absenceId: string, reason: string) => Promise<void>;
+    rejectConvention: (id: string, role: string, reason: string) => Promise<void>;
     reset: () => void;
 }
 
@@ -366,10 +373,14 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                     stage_date_fin: c.dateEnd || c.date_end || (c.metadata && c.metadata.stage_date_fin),
                     studentId: c.studentId || c.student_uid,
                     schoolId: c.schoolId || c.establishment_uai || c.establishmentUai,
+                    rejection_reason: c.rejectionReason || c.rejection_reason || (c.metadata && c.metadata.rejection_reason),
 
                     // Ensure dates are stringified if needed (though API JSON does this)
                     createdAt: c.createdAt || c.created_at,
                     updatedAt: c.updatedAt || c.updated_at,
+                    evaluationAnswers: c.evaluationAnswers,
+                    evaluationFinalGrade: c.evaluationFinalGrade,
+                    evaluationDate: c.evaluationDate,
                 }));
 
                 set({ conventions: mappedConventions });
@@ -886,6 +897,30 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             }));
         } catch (error) {
             console.error("Error updating absence:", error);
+            throw error;
+        }
+    },
+
+    rejectConvention: async (id, role, reason) => {
+        try {
+            const res = await fetch(`/api/conventions/${id}/reject`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ role, reason })
+            });
+            if (!res.ok) {
+                const data = await res.json();
+                throw new Error(data.error || 'Erreur lors du refus');
+            }
+
+            // Update local state
+            const { conventions } = get();
+            const updatedConventions = conventions.map(c =>
+                c.id === id ? { ...c, status: 'REJECTED' } : c
+            );
+            set({ conventions: updatedConventions });
+        } catch (error) {
+            console.error('Error rejecting convention:', error);
             throw error;
         }
     },

@@ -1,6 +1,7 @@
 
-import { Check, Clock, Circle, Bell, AlertTriangle } from 'lucide-react';
+import { Check, Clock, Circle, Bell, AlertTriangle, PenTool } from 'lucide-react';
 import { Convention } from '@/store/convention';
+import { useUserStore } from '@/store/user';
 import { useState, useEffect } from 'react';
 
 interface SignatureTimelineProps {
@@ -11,6 +12,7 @@ interface SignatureTimelineProps {
 
 export function SignatureTimeline({ convention, onRemind, onEditEmail }: SignatureTimelineProps) {
     const isMinor = convention.est_mineur;
+    const { role } = useUserStore();
     const [elapsedTime, setElapsedTime] = useState<number>(0);
 
     useEffect(() => {
@@ -133,7 +135,6 @@ export function SignatureTimeline({ convention, onRemind, onEditEmail }: Signatu
                                     </button>
                                 )}
 
-                                {/* Invalid Email Correction Hint (Below) */}
                                 {isInvalidEmail && (
                                     <button
                                         onClick={() => onEditEmail && onEditEmail(step.id)}
@@ -141,6 +142,17 @@ export function SignatureTimeline({ convention, onRemind, onEditEmail }: Signatu
                                         title="Corriger l'email"
                                     >
                                         <AlertTriangle className="w-4 h-4" />
+                                    </button>
+                                )}
+
+                                {/* Restricted Edit Button for Student (Tutor/Company) */}
+                                {!isInvalidEmail && (step.id === 'company' || step.id === 'tutor') && step.status !== 'completed' && role === 'student' && (
+                                    <button
+                                        onClick={() => onEditEmail && onEditEmail(step.id)}
+                                        className="absolute -bottom-6 text-gray-400 hover:text-blue-600 hover:bg-blue-50 transition-colors p-1 rounded-full z-20 cursor-pointer"
+                                        title={`Modifier l'email du ${step.label}`}
+                                    >
+                                        <PenTool className="w-3.5 h-3.5" />
                                     </button>
                                 )}
 

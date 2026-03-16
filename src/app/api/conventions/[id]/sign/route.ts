@@ -7,6 +7,36 @@ import crypto from 'crypto';
 import { sendEmail } from '@/lib/email';
 import { sendNotification, createInAppNotification } from '@/lib/notification';
 
+const ROLE_LABELS: Record<string, string> = {
+    'student': "L'élève",
+    'tutor': "Le tuteur de stage",
+    'company_head': "Le représentant de l'entreprise",
+    'company_head_tutor': "Le représentant de l'entreprise et tuteur",
+    'teacher': "L'enseignant référent",
+    'school_head': "Le chef d'établissement",
+    'rep_legal': "Le représentant légal",
+    'parent': "Le représentant légal"
+};
+
+function getSignerIdentity(role: string, convention: any) {
+    const metadata = convention.metadata || {};
+    const data = convention.data || {};
+    const get = (k: string) => metadata[k] || data[k];
+
+    const label = ROLE_LABELS[role] || role;
+    
+    let name = "";
+    if (role === 'student') name = `${get('eleve_prenom') || ''} ${get('eleve_nom') || ''}`;
+    else if (role === 'parent' || role === 'rep_legal') name = `${get('rep_legal_prenom') || ''} ${get('rep_legal_nom') || ''}`;
+    else if (role === 'teacher') name = `${get('prof_prenom') || ''} ${get('prof_nom') || ''}`;
+    else if (role === 'tutor') name = `${get('tuteur_prenom') || ''} ${get('tuteur_nom') || ''}`;
+    else if (role === 'company_head' || role === 'company_head_tutor') name = `${get('ent_rep_prenom') || ''} ${get('ent_rep_nom') || ''}`;
+    else if (role === 'school_head') name = metadata.signatories?.principal?.name || `${get('head_prenom') || ''} ${get('head_nom') || ''}`;
+
+    const trimmedName = name.trim();
+    return trimmedName ? `${label} ${trimmedName}` : label;
+}
+
 // 📝 Étape 2 : Template Universel de Confirmation
 function getSignatureConfirmationHtml(recipientName: string, studentName: string) {
     return `
@@ -105,6 +135,11 @@ export async function POST(
         const convention = convRes.rows[0];
         const metadata = convention.metadata || {};
         const sigs = metadata.signatures || {};
+
+        if (convention.status === 'REJECTED') {
+            const rejectedBy = metadata.rejectedByLabel || "un signataire";
+            return NextResponse.json({ error: `Cette convention a été refusée par ${rejectedBy} et ne peut plus être signée.` }, { status: 400 });
+        }
 
         // --- 2. Secure Age Calculation ---
         let isMinor = metadata.est_mineur;
@@ -587,7 +622,7 @@ export async function POST(
                     notificationTasks.push(sendEmail({
                         to: tutorEmail,
                         subject: `[Action Requise] Convention de stage à signer - ${studentName}`,
-                        text: `Bonjour,\n\nLa convention de stage de ${studentName} requiert votre signature en tant que Tuteur.\nVous pouvez la consulter et la signer sur votre espace :\n${appUrl}/login\n\nCordialement,\nL'équipe Pledgeum`
+                        text: `Bonjour,\n\nLa convention de stage de ${studentName} requiert votre signature en tant que Tuteur de stage.\nVous pouvez la consulter et la signer sur votre espace :\n${appUrl}/login\n\nCordialement,\nL'équipe Pledgeum`
                     }).catch(e => console.error("[Notif] Tutor email failed", e)));
                 }
 
@@ -595,7 +630,7 @@ export async function POST(
                     notificationTasks.push(sendEmail({
                         to: headEmail,
                         subject: `[Action Requise] Convention de stage à signer - ${studentName}`,
-                        text: `Bonjour,\n\nLa convention de stage de ${studentName} requiert votre signature en tant que Chef d'Entreprise.\nVous pouvez la consulter et la signer sur votre espace :\n${appUrl}/login\n\nCordialement,\nL'équipe Pledgeum`
+                        text: `Bonjour,\n\nLa convention de stage de ${studentName} requiert votre signature en tant que Représentant de l'entreprise.\nVous pouvez la consulter et la signer sur votre espace :\n${appUrl}/login\n\nCordialement,\nL'équipe Pledgeum`
                     }).catch(e => console.error("[Notif] Head email failed", e)));
                 }
             }
@@ -620,8 +655,9 @@ export async function POST(
 
             // 3. Notify Student on any third-party signature
             if (role !== 'student' && studentEmail) {
+                const signerIdentity = getSignerIdentity(role, updatedConvention);
                 const subject = `Nouvelle signature sur votre convention - ${studentName}`;
-                const message = `Bonjour ${getField('eleve_prenom') || 'élève'},\n\nUne nouvelle signature (${role}) a été apposée sur votre convention de stage. Vous pouvez suivre l'état d'avancement ici : ${appUrl}/dashboard`;
+                const message = `Bonjour ${getField('eleve_prenom') || 'élève'},\n\n${signerIdentity} a apposé sa signature sur votre convention de stage. Vous pouvez suivre l'état d'avancement ici : ${appUrl}/dashboard`;
                 
                 notificationTasks.push(sendNotification(studentEmail, subject, message).catch(e => console.error("[Notif] Student notification failed", e)));
                 
@@ -632,8 +668,9 @@ export async function POST(
 
             // 4. Notify Parent on any third-party signature (if minor)
             if (role !== 'parent' && getField('est_mineur') && parentEmail) {
+                const signerIdentity = getSignerIdentity(role, updatedConvention);
                 const subject = `Suivi convention - Nouvelle signature pour ${studentName}`;
-                const message = `Bonjour, La convention de stage de ${studentName} vient de recevoir une nouvelle signature (${role}). Prochaine étape : voir le tableau de bord.`;
+                const message = `Bonjour,\n\nLa convention de stage de ${studentName} vient de recevoir une nouvelle signature de la part de : ${signerIdentity}.\nProchaine étape : voir le tableau de bord sur ${appUrl}/dashboard`;
                 
                 notificationTasks.push(sendEmail({ to: parentEmail, subject, text: message }).catch(e => console.error("[Notif] Parent notification failed", e)));
             }

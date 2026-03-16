@@ -3,7 +3,7 @@ import React, { useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { useSession } from "next-auth/react";
 import { useUserStore } from '@/store/user';
-import { Loader2, CheckCircle, Send, FileSignature, PenTool } from 'lucide-react';
+import { Loader2, CheckCircle, Send, FileSignature, PenTool, AlertTriangle } from 'lucide-react';
 import { toast } from 'react-hot-toast';
 
 interface ConventionActionsProps {
@@ -75,8 +75,29 @@ export const ConventionActions = ({ convention, onUpdate, onSign }: ConventionAc
     };
 
     const isMinor = getIsMinor();
+    const isRejected = convention.status === 'REJECTED';
+    const rejectionReason = convention.rejection_reason || convention.metadata?.rejection_reason || "Aucun motif précisé";
+    const rejectedBy = convention.metadata?.rejectedByLabel || "un signataire";
 
     // --- BUTTON LOGIC ---
+
+    // 0. Global Check for REJECTED status
+    if (isRejected) {
+        return (
+            <Button
+                variant="outline"
+                className="bg-gray-50 text-gray-500 border-gray-200 opacity-70 cursor-not-allowed hover:bg-gray-50"
+                onClick={() => {
+                    toast.error(
+                        `Signature bloquée.\nRefusé par : ${rejectedBy}\nMotif : ${rejectionReason}`,
+                        { duration: 6000, icon: '🚫' }
+                    );
+                }}
+            >
+                <PenTool className="w-4 h-4 mr-2" /> Signature bloquée (Refusée)
+            </Button>
+        );
+    }
 
     // 1. Student: DRAFT -> SUBMITTED
     if (userRole === 'student' && convention.status === 'DRAFT' && !sigs.student) {

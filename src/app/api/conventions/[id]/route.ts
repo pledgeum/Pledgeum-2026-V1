@@ -3,6 +3,196 @@ import { NextResponse } from 'next/server';
 import pool from '@/lib/pg';
 import { auth } from '@/auth';
 
+export async function GET(
+    req: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    try {
+        const session = await auth();
+        if (!session || !session.user || !session.user.email) {
+            return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+        }
+
+        const { id: conventionId } = await params;
+
+        if (!pool) {
+            return NextResponse.json({ error: 'Database configuration missing' }, { status: 500 });
+        }
+
+        const client = await pool.connect();
+        try {
+            // 1. Fetch LIVE User Data from Postgres for security check
+            const userRes = await client.query('SELECT role, uid, establishment_uai FROM users WHERE email = $1', [session.user.email.toLowerCase().trim()]);
+            const dbUser = userRes.rows[0];
+
+            if (!dbUser) {
+                return NextResponse.json({ error: 'User not found' }, { status: 404 });
+            }
+
+            const userRole = dbUser.role;
+            const userId = dbUser.uid;
+            const userUai = dbUser.establishment_uai;
+
+            // 2. Fetch Convention Data
+            const queryStr = `
+                SELECT 
+                    c.id,
+                    c.status,
+                    c.metadata,
+                    c.duration_hours as "durationHours",
+                    TO_CHAR(c.date_start, 'YYYY-MM-DD') as "dateStart",
+                    TO_CHAR(c.date_end, 'YYYY-MM-DD') as "dateEnd",
+                    c.is_out_of_period as "is_out_of_period",
+                    c.validated_at as "validatedAt",
+                    c.signature_company_at as "signatureCompanyAt",
+                    c.signature_school_at as "signatureSchoolAt",
+                    c.tutor_email as "tutorEmail",
+                    c.tutor_name as "tutorName",
+                    c.company_siret as "companySiret",
+                    c.student_uid as "studentId",
+                    c.establishment_uai as "establishmentUai",
+                    c.establishment_uai as "schoolId",
+                    c.class_id as "classId",
+                    c.pdf_hash as "pdfHash",
+                    c.rejection_reason as "rejectionReason",
+                    c.token_company as "tokenCompany",
+                    c.token_school as "tokenSchool",
+                    c.created_at as "createdAt",
+                    c.updated_at as "updatedAt",
+                    COALESCE(
+                        (
+                            SELECT jsonb_agg(jsonb_build_object(
+                                'id', a.id,
+                                'type', a.type,
+                                'date', TO_CHAR(a.date, 'YYYY-MM-DD'),
+                                'duration', a.duration,
+                                'reason', a.reason,
+                                'reportedBy', a.reported_by,
+                                'reportedAt', a.reported_at
+                            ))
+                            FROM absences a WHERE a.convention_id = c.id
+                        ), '[]'::jsonb
+                    ) as absences,
+                    -- LIVE TEACHER DATA
+                    u.email as "teacherEmail",
+                    u.first_name as "teacherFirstName",
+                    u.last_name as "teacherLastName",
+                    -- VISITS DATA
+                    v.tracking_teacher_email,
+                    v.distance_km AS visit_distance_km,
+                    v.status AS visit_status,
+                    v.scheduled_date AS visit_scheduled_date,
+                    v.draft_tracking_teacher_email,
+                    v.draft_distance_km,
+                    tu.first_name AS tracking_teacher_first_name,
+                    tu.last_name AS tracking_teacher_last_name,
+                    est.address AS school_address,
+                    est.postal_code AS school_zip_code,
+                    est.city AS school_city,
+                    -- ATTESTATION DATA
+                    att.total_days_present AS attestation_total_jours,
+                    att.absences_hours AS attestation_absences_hours,
+                    att.activities AS activites,
+                    att.skills_evaluation AS attestation_competences,
+                    att.gratification_amount AS attestation_gratification,
+                    att.signer_name AS attestation_signer_name,
+                    att.signer_function AS attestation_signer_function,
+                    TO_CHAR(att.signature_date, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "attestationDate",
+                    att.signature_img AS attestation_signature_img,
+                    att.signature_code AS attestation_signature_code,
+                    att.pdf_hash AS "attestationHash",
+                    -- EVALUATION DATA
+                    ev.answers AS "evaluationAnswers",
+                    ev.final_grade AS "evaluationFinalGrade",
+                    ev.teacher_signed_at AS "evaluationDate"
+                FROM conventions c
+                LEFT JOIN classes cls ON c.class_id = cls.id
+                LEFT JOIN establishments est ON c.establishment_uai = est.uai
+                LEFT JOIN users u ON cls.main_teacher_id = u.uid
+                LEFT JOIN visits v ON c.id = v.convention_id
+                LEFT JOIN users tu ON v.tracking_teacher_email = tu.email
+                LEFT JOIN attestations att ON c.id = att.convention_id
+                LEFT JOIN evaluations ev ON c.id = ev.convention_id AND ev.status = 'FINALIZED'
+                WHERE c.id = $1
+            `;
+
+            const res = await client.query(queryStr, [conventionId]);
+
+            if (res.rowCount === 0) {
+                return NextResponse.json({ error: 'Convention not found' }, { status: 404 });
+            }
+
+            const convention = res.rows[0];
+
+            // 3. Authorization Check
+            let isAuthorized = false;
+
+            const normalizedUserEmail = session.user.email.toLowerCase().trim();
+
+            if (userRole === 'admin' || userRole === 'SUPER_ADMIN') {
+                isAuthorized = true;
+            } else if (userRole === 'school_head' || userRole === 'ddfpt' || userRole === 'at_ddfpt' || userRole === 'business_manager') {
+                isAuthorized = convention.establishmentUai === userUai;
+            } else if (userRole === 'teacher' || userRole === 'teacher_tracker') {
+                const teacherEmail = (convention.teacherEmail || convention.metadata?.prof_email)?.toLowerCase().trim();
+                const trackingEmail = (convention.tracking_teacher_email || convention.metadata?.prof_suivi_email)?.toLowerCase().trim();
+                isAuthorized = (normalizedUserEmail === teacherEmail) || (normalizedUserEmail === trackingEmail);
+            } else if (userRole === 'student') {
+                isAuthorized = (convention.studentId === userId) || (convention.studentId === session.user.email);
+            } else if (userRole === 'parent') {
+                isAuthorized = convention.metadata?.rep_legal_email?.toLowerCase() === normalizedUserEmail;
+            } else if (userRole === 'tutor' || userRole === 'company_head' || userRole === 'company_head_tutor') {
+                const tutorEmail = (convention.tutorEmail || convention.metadata?.tuteur_email)?.toLowerCase().trim();
+                const repEmail = (convention.metadata?.ent_rep_email)?.toLowerCase().trim();
+                isAuthorized = (normalizedUserEmail === tutorEmail) || (normalizedUserEmail === repEmail);
+            }
+
+            if (!isAuthorized) {
+                return NextResponse.json({ error: 'Unauthorized access to this convention' }, { status: 403 });
+            }
+
+            // Map and return
+            const mappedConvention = {
+                ...convention,
+                attestationSigned: !!convention.attestationDate,
+                signatures: convention.metadata?.signatures || {},
+                visit: convention.tracking_teacher_email || convention.draft_tracking_teacher_email ? {
+                    tracking_teacher_email: convention.tracking_teacher_email,
+                    tracking_teacher_first_name: convention.tracking_teacher_first_name,
+                    tracking_teacher_last_name: convention.tracking_teacher_last_name,
+                    distance_km: convention.visit_distance_km,
+                    status: convention.visit_status,
+                    scheduled_date: convention.visit_scheduled_date,
+                    draft_tracking_teacher_email: convention.draft_tracking_teacher_email,
+                    draft_distance_km: convention.draft_distance_km
+                } : null,
+                prof_suivi_email: convention.tracking_teacher_email || convention.metadata?.prof_suivi_email || null,
+                school: {
+                    address: convention.school_address,
+                    zipCode: convention.school_zip_code,
+                    city: convention.school_city
+                }
+            };
+
+            return NextResponse.json({ success: true, convention: mappedConvention });
+
+        } finally {
+            client.release();
+        }
+    } catch (error: any) {
+        console.error('[API_GET_CONVENTION] Error:', error);
+        return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
+    }
+}
+
+export async function PATCH(
+    req: Request,
+    { params }: { params: Promise<{ id: string }> }
+) {
+    // Forward to PUT for now, or implement separate logic if needed
+    return PUT(req, { params });
+}
+
 export async function PUT(
     req: Request,
     { params }: { params: Promise<{ id: string }> }

@@ -10,7 +10,7 @@ import { useRouter } from 'next/navigation';
 type RowType = 'text' | 'number' | 'checkbox' | 'checkbox_single' | 'checkbox_multi';
 
 interface Row {
-    id: number;
+    id: string | number;
     cells: string[];
     type: RowType;
 }
@@ -38,11 +38,12 @@ export const EvaluationGridBuilder = ({ initialData, templateId, mode = 'create'
     const [title, setTitle] = useState(initialData?.title || "Nouvelle Évaluation");
     const [subtitle, setSubtitle] = useState(initialData?.subtitle || "");
     const [headers, setHeaders] = useState<string[]>(initialData?.structure?.headers || ["Critère", "Note /20", "Observation"]);
-    const [rows, setRows] = useState<Row[]>(initialData?.structure?.rows || [{ id: Date.now(), cells: ["", "", ""], type: 'text' }]);
+    const [rows, setRows] = useState<Row[]>(initialData?.structure?.rows || [{ id: 'row_' + Math.random().toString(36).substr(2, 9), cells: ["", "", ""], type: 'text' }]);
 
-    // Synthesis State
+    // Synthesis & Grade State
     const [synthesisEnabled, setSynthesisEnabled] = useState(initialData?.synthesis?.enabled || false);
     const [synthesisTitle, setSynthesisTitle] = useState(initialData?.synthesis?.title || "Synthèse");
+    const [finalGradeEnabled, setFinalGradeEnabled] = useState(initialData?.finalGradeEnabled || false);
 
     // Handlers for Columns
     const addColumn = () => {
@@ -69,7 +70,7 @@ export const EvaluationGridBuilder = ({ initialData, templateId, mode = 'create'
     // Handlers for Rows
     const addRow = () => {
         const newRow: Row = {
-            id: Date.now(),
+            id: 'row_' + Math.random().toString(36).substr(2, 9),
             cells: new Array(headers.length).fill(""),
             type: 'text'
         };
@@ -114,12 +115,13 @@ export const EvaluationGridBuilder = ({ initialData, templateId, mode = 'create'
                 subtitle,
                 structure: {
                     headers,
-                    rows
-                },
-                synthesis: synthesisEnabled ? {
-                    enabled: true,
-                    title: synthesisTitle
-                } : null
+                    rows,
+                    synthesis: synthesisEnabled ? {
+                        enabled: true,
+                        title: synthesisTitle
+                    } : null,
+                    finalGradeEnabled
+                }
             };
 
             if (mode === 'edit' && templateId) {
@@ -403,8 +405,8 @@ export const EvaluationGridBuilder = ({ initialData, templateId, mode = 'create'
                 </div>
             </div>
 
-            {/* Synthesis Section Configuration */}
-            <div className="border border-gray-200 rounded-lg p-6 bg-gray-50/50">
+            {/* Synthesis & Global Configuration */}
+            <div className="border border-gray-200 rounded-lg p-6 bg-gray-50/50 space-y-6">
                 <div className="flex items-start space-x-4">
                     <div className="p-2 bg-blue-50 text-blue-600 rounded-lg">
                         <Settings2 className="w-5 h-5" />
@@ -449,6 +451,29 @@ export const EvaluationGridBuilder = ({ initialData, templateId, mode = 'create'
                                 </div>
                             </div>
                         )}
+                    </div>
+                </div>
+
+                <div className="border-t border-gray-200 pt-6 flex items-start space-x-4">
+                    <div className="p-2 bg-purple-50 text-purple-600 rounded-lg">
+                        <Hash className="w-5 h-5" />
+                    </div>
+                    <div className="flex-1">
+                        <div className="flex items-center justify-between">
+                            <div>
+                                <h3 className="text-sm font-semibold text-gray-900">Note Finale</h3>
+                                <p className="text-sm text-gray-500">Ajouter un champ de note finale (exclusivement réservé à l'enseignant).</p>
+                            </div>
+                            <label className="relative inline-flex items-center cursor-pointer">
+                                <input
+                                    type="checkbox"
+                                    checked={finalGradeEnabled}
+                                    onChange={(e) => setFinalGradeEnabled(e.target.checked)}
+                                    className="sr-only peer"
+                                />
+                                <div className="w-11 h-6 bg-gray-200 peer-focus:outline-none peer-focus:ring-4 peer-focus:ring-blue-300 rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:bg-purple-600"></div>
+                            </label>
+                        </div>
                     </div>
                 </div>
             </div>

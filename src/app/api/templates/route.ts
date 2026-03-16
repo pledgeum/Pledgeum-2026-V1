@@ -16,7 +16,7 @@ export async function GET(req: Request) {
         let sqlQuery = '';
         let values: any[] = [];
 
-        if (role === 'at_ddfpt') {
+        if (role === 'at_ddfpt' || role === 'teacher' || role === 'ddfpt' || role === 'tutor' || role === 'company_head' || role === 'company_head_tutor') {
             sqlQuery = `SELECT * FROM evaluation_templates ORDER BY created_at DESC;`;
         } else {
             sqlQuery = `SELECT * FROM evaluation_templates WHERE author_id = $1 ORDER BY created_at DESC;`;

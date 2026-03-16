@@ -109,6 +109,39 @@ const localStyles = StyleSheet.create({
         fontSize: 5,
         color: '#0369a1',
         fontFamily: pdfTheme.fonts.bold,
+    },
+    rejectionBox: {
+        borderColor: '#ef4444',
+        backgroundColor: '#fef2f2',
+    },
+    rejectionText: {
+        fontSize: 14,
+        color: '#b91c1c',
+        fontFamily: pdfTheme.fonts.bold,
+        textAlign: 'center',
+        marginTop: 5,
+        textTransform: 'uppercase',
+    },
+    rejectionReasonBox: {
+        marginTop: 10,
+        padding: 8,
+        borderWidth: 1,
+        borderColor: '#fca5a5',
+        backgroundColor: '#fff1f1',
+        borderRadius: 4,
+    },
+    rejectionReasonTitle: {
+        fontSize: 9,
+        color: '#b91c1c',
+        fontFamily: pdfTheme.fonts.bold,
+        marginBottom: 4,
+        textTransform: 'uppercase',
+    },
+    rejectionReasonText: {
+        fontSize: 10,
+        color: '#7f1d1d',
+        fontFamily: pdfTheme.fonts.italic,
+        lineHeight: 1.4,
     }
 });
 
@@ -469,29 +502,52 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                     À l’issue de la période, le responsable de l’entreprise délivre une attestation type (annexe) qui doit être complétée et signée le dernier jour du stage.
                 </Text>
 
+
                 {/* SIGNATURES */}
                 <View wrap={false}>
                     <Text style={{ marginTop: 20, fontWeight: 'bold', fontSize: 11, borderTopWidth: 1, paddingTop: 10 }}>Signatures et cachets</Text>
                     <View style={styles.signatureRow}>
-                        <View style={[styles.signatureBox, data.signatures?.head?.hash ? localStyles.signatureBoxValid : {}]}>
+                        <View style={[
+                            styles.signatureBox, 
+                            data.signatures?.head?.hash ? localStyles.signatureBoxValid : {},
+                            (data.status === 'REJECTED' && (data as any).metadata?.rejectedByRole === 'school_head') ? localStyles.rejectionBox : {}
+                        ]}>
                             <Text style={styles.signatureLabel}>Le chef d’établissement</Text>
-                            <SignatureContent
-                                img={data.signatures?.head?.img}
-                                hash={data.signatures?.head?.hash}
-                                date={data.signatures?.head?.signedAt}
-                                code={data.signatures?.head?.code}
-                                signatureId={data.signatures?.head?.signatureId}
-                            />
+                            {data.status === 'REJECTED' && (data as any).metadata?.rejectedByRole === 'school_head' ? (
+                                <Text style={localStyles.rejectionText}>REFUSÉE</Text>
+                            ) : (
+                                <SignatureContent
+                                    img={data.signatures?.head?.img}
+                                    hash={data.signatures?.head?.hash}
+                                    date={data.signatures?.head?.signedAt}
+                                    code={data.signatures?.head?.code}
+                                    signatureId={data.signatures?.head?.signatureId}
+                                />
+                            )}
                         </View>
-                        <View style={[styles.signatureBox, (data.signatures?.company_head?.hash || (data.signatures?.tutor?.hash && data.ent_rep_email === data.tuteur_email)) ? localStyles.signatureBoxValid : {}]}>
+                        <View style={[
+                            styles.signatureBox, 
+                            (data.signatures?.company_head?.hash || (data.signatures?.tutor?.hash && data.ent_rep_email === data.tuteur_email)) ? localStyles.signatureBoxValid : {},
+                            (data.status === 'REJECTED' && (
+                                (data as any).metadata?.rejectedByRole === 'company_head' || 
+                                (data as any).metadata?.rejectedByRole === 'company_head_tutor'
+                            )) ? localStyles.rejectionBox : {}
+                        ]}>
                             <Text style={styles.signatureLabel}>Le représentant de l’entreprise</Text>
-                            <SignatureContent
-                                img={data.signatures?.company_head?.img || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.img : undefined)}
-                                hash={data.signatures?.company_head?.hash || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.hash : undefined)}
-                                date={data.signatures?.company_head?.signedAt || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.signedAt : undefined)}
-                                code={data.signatures?.company_head?.code || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.code : undefined)}
-                                signatureId={data.signatures?.company_head?.signatureId || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.signatureId : undefined)}
-                            />
+                            {data.status === 'REJECTED' && (
+                                (data as any).metadata?.rejectedByRole === 'company_head' || 
+                                (data as any).metadata?.rejectedByRole === 'company_head_tutor'
+                            ) ? (
+                                <Text style={localStyles.rejectionText}>REFUSÉE</Text>
+                            ) : (
+                                <SignatureContent
+                                    img={data.signatures?.company_head?.img || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.img : undefined)}
+                                    hash={data.signatures?.company_head?.hash || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.hash : undefined)}
+                                    date={data.signatures?.company_head?.signedAt || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.signedAt : undefined)}
+                                    code={data.signatures?.company_head?.code || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.code : undefined)}
+                                    signatureId={data.signatures?.company_head?.signatureId || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.signatureId : undefined)}
+                                />
+                            )}
                         </View>
                         <View style={[styles.signatureBox, data.signatures?.student?.hash ? localStyles.signatureBoxValid : {}]}>
                             <Text style={styles.signatureLabel}>L’élève</Text>
@@ -504,51 +560,99 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                             />
                         </View>
                         {/* Legal Rep Box - Always Visible */}
-                        <View style={[styles.signatureBox, (data.signatures?.parent?.hash || (data.est_mineur === false && data.signatures?.student?.hash)) ? localStyles.signatureBoxValid : {}]}>
+                        <View style={[
+                            styles.signatureBox, 
+                            (data.signatures?.parent?.hash || (data.est_mineur === false && data.signatures?.student?.hash)) ? localStyles.signatureBoxValid : {},
+                            (data.status === 'REJECTED' && (
+                                (data as any).metadata?.rejectedByRole === 'parent' || 
+                                (data as any).metadata?.rejectedByRole === 'rep_legal'
+                            )) ? localStyles.rejectionBox : {}
+                        ]}>
                             <Text style={styles.signatureLabel}>Le rep. légal {data.est_mineur ? '' : '(l\'élève majeur)'}</Text>
-                            {/* If Minor: Show Parent Signature */}
-                            {data.est_mineur && (
-                                <SignatureContent
-                                    img={data.signatures?.parent?.img}
-                                    hash={data.signatures?.parent?.hash}
-                                    date={data.signatures?.parent?.signedAt}
-                                    code={data.signatures?.parent?.code}
-                                    signatureId={data.signatures?.parent?.signatureId}
-                                />
-                            )}
-                            {/* If Major: Show Student Signature (Self-Representation) */}
-                            {!data.est_mineur && (
-                                <SignatureContent
-                                    img={data.signatures?.student?.img}
-                                    hash={data.signatures?.student?.hash}
-                                    date={data.signatures?.student?.signedAt}
-                                    code={data.signatures?.student?.code}
-                                    signatureId={data.signatures?.student?.signatureId}
-                                />
+                            {data.status === 'REJECTED' && (
+                                (data as any).metadata?.rejectedByRole === 'parent' || 
+                                (data as any).metadata?.rejectedByRole === 'rep_legal'
+                            ) ? (
+                                <Text style={localStyles.rejectionText}>REFUSÉE</Text>
+                            ) : (
+                                <>
+                                    {/* If Minor: Show Parent Signature */}
+                                    {data.est_mineur && (
+                                        <SignatureContent
+                                            img={data.signatures?.parent?.img}
+                                            hash={data.signatures?.parent?.hash}
+                                            date={data.signatures?.parent?.signedAt}
+                                            code={data.signatures?.parent?.code}
+                                            signatureId={data.signatures?.parent?.signatureId}
+                                        />
+                                    )}
+                                    {/* If Major: Show Student Signature (Self-Representation) */}
+                                    {!data.est_mineur && (
+                                        <SignatureContent
+                                            img={data.signatures?.student?.img}
+                                            hash={data.signatures?.student?.hash}
+                                            date={data.signatures?.student?.signedAt}
+                                            code={data.signatures?.student?.code}
+                                            signatureId={data.signatures?.student?.signatureId}
+                                        />
+                                    )}
+                                </>
                             )}
                         </View>
-                        <View style={[styles.signatureBox, (data.signatures?.tutor?.hash || (data.signatures?.company_head?.hash && data.ent_rep_email === data.tuteur_email)) ? localStyles.signatureBoxValid : {}]}>
+                        <View style={[
+                            styles.signatureBox, 
+                            (data.signatures?.tutor?.hash || (data.signatures?.company_head?.hash && data.ent_rep_email === data.tuteur_email)) ? localStyles.signatureBoxValid : {},
+                            (data.status === 'REJECTED' && (
+                                (data as any).metadata?.rejectedByRole === 'tutor' || 
+                                (data as any).metadata?.rejectedByRole === 'company_head_tutor'
+                            )) ? localStyles.rejectionBox : {}
+                        ]}>
                             <Text style={styles.signatureLabel}>Le tuteur</Text>
-                            <SignatureContent
-                                img={data.signatures?.tutor?.img || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.img : undefined)}
-                                hash={data.signatures?.tutor?.hash || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.hash : undefined)}
-                                date={data.signatures?.tutor?.signedAt || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.signedAt : undefined)}
-                                code={data.signatures?.tutor?.code || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.code : undefined)}
-                                signatureId={data.signatures?.tutor?.signatureId || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.signatureId : undefined)}
-                            />
+                            {data.status === 'REJECTED' && (
+                                (data as any).metadata?.rejectedByRole === 'tutor' || 
+                                (data as any).metadata?.rejectedByRole === 'company_head_tutor'
+                            ) ? (
+                                <Text style={localStyles.rejectionText}>REFUSÉE</Text>
+                            ) : (
+                                <SignatureContent
+                                    img={data.signatures?.tutor?.img || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.img : undefined)}
+                                    hash={data.signatures?.tutor?.hash || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.hash : undefined)}
+                                    date={data.signatures?.tutor?.signedAt || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.signedAt : undefined)}
+                                    code={data.signatures?.tutor?.code || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.code : undefined)}
+                                    signatureId={data.signatures?.tutor?.signatureId || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.signatureId : undefined)}
+                                />
+                            )}
                         </View>
-                        <View style={[styles.signatureBox, data.signatures?.teacher?.hash ? localStyles.signatureBoxValid : {}]}>
+                        <View style={[
+                            styles.signatureBox, 
+                            data.signatures?.teacher?.hash ? localStyles.signatureBoxValid : {},
+                            (data.status === 'REJECTED' && (data as any).metadata?.rejectedByRole === 'teacher') ? localStyles.rejectionBox : {}
+                        ]}>
                             <Text style={styles.signatureLabel}>L’enseignant référent/Prof. Principal</Text>
-                            <SignatureContent
-                                img={data.signatures?.teacher?.img}
-                                hash={data.signatures?.teacher?.hash}
-                                date={data.signatures?.teacher?.signedAt}
-                                code={data.signatures?.teacher?.code}
-                                signatureId={data.signatures?.teacher?.signatureId}
-                            />
+                            {data.status === 'REJECTED' && (data as any).metadata?.rejectedByRole === 'teacher' ? (
+                                <Text style={localStyles.rejectionText}>REFUSÉE</Text>
+                            ) : (
+                                <SignatureContent
+                                    img={data.signatures?.teacher?.img}
+                                    hash={data.signatures?.teacher?.hash}
+                                    date={data.signatures?.teacher?.signedAt}
+                                    code={data.signatures?.teacher?.code}
+                                    signatureId={data.signatures?.teacher?.signatureId}
+                                />
+                            )}
                         </View>
                     </View>
                 </View>
+
+                {/* REJECTION MOTIF - BELOW SIGNATURES IF REJECTED */}
+                {data.status === 'REJECTED' && (
+                    <View style={localStyles.rejectionReasonBox}>
+                        <Text style={localStyles.rejectionReasonTitle}>⚠️ MOTIF DU REFUS DE LA CONVENTION</Text>
+                        <Text style={localStyles.rejectionReasonText}>
+                            &ldquo; {data.rejection_reason || (data as any).metadata?.rejection_reason || "Aucun motif précisé"} &rdquo;
+                        </Text>
+                    </View>
+                )}
                 {data.status === 'VALIDATED_HEAD' && qrCodeUrl && <QrCodeFooter url={qrCodeUrl} code={hashCode} />}
             </Page>
 
@@ -618,6 +722,35 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                     <Text style={styles.value}>{data.gratification_montant || '0'} € / mois</Text>
                 </View>
             </Page>
+            
+            {/* --- ANNEXE 3: EVALUATION --- */}
+            {data.evaluationAnswers && (
+                <Page size="A4" style={styles.page}>
+                    <Text style={styles.annexTitle}>ANNEXE 3 : ÉVALUATION PROFESSIONNELLE</Text>
+                    
+                    <View style={styles.row}>
+                        <Text style={styles.label}>Date de l'évaluation :</Text>
+                        <Text style={styles.value}>{data.evaluationDate ? new Date(data.evaluationDate).toLocaleDateString('fr-FR') : 'Non renseignée'}</Text>
+                    </View>
+                    <View style={styles.row}>
+                        <Text style={styles.label}>Note / Appréciation globale :</Text>
+                        <Text style={[styles.value, { fontFamily: pdfTheme.fonts.bold, color: pdfTheme.colors.primary }]}>
+                            {data.evaluationFinalGrade || 'N/A'}
+                        </Text>
+                    </View>
+
+                    <Text style={[styles.sectionTitle, { marginTop: 15 }]}>Synthèse de l'enseignant</Text>
+                    <View style={[styles.table, { minHeight: 100, padding: 8 }]}>
+                        <Text style={styles.text}>{ (data as any).synthesis || '...' }</Text>
+                    </View>
+
+                    <Text style={[styles.text, { fontSize: 8, color: '#666', marginTop: 20 }]}>
+                        Ce document constitue une annexe officielle à la convention de stage et valide les compétences acquises par l'élève durant sa période de formation en milieu professionnel.
+                    </Text>
+                    
+                    {data.status === 'VALIDATED_HEAD' && qrCodeUrl && <QrCodeFooter url={qrCodeUrl} code={hashCode} />}
+                </Page>
+            )}
 
 
             {/* --- QR CODE FOOTER (All Pages) --- */}

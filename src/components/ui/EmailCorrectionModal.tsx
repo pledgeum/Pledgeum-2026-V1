@@ -1,15 +1,17 @@
 import { useState, useEffect } from 'react';
 import { X, AlertTriangle, Save, Loader2 } from 'lucide-react';
+import { toast } from 'react-hot-toast';
 
 interface EmailCorrectionModalProps {
     isOpen: boolean;
     onClose: () => void;
     currentEmail: string;
     roleName: string;
-    onSave: (newEmail: string) => Promise<void>;
+    roleTarget: string; // The backend-friendly role ID (tuteur, entreprise, etc)
+    conventionId: string;
 }
 
-export function EmailCorrectionModal({ isOpen, onClose, currentEmail, roleName, onSave }: EmailCorrectionModalProps) {
+export function EmailCorrectionModal({ isOpen, onClose, currentEmail, roleName, roleTarget, conventionId }: EmailCorrectionModalProps) {
     const [email, setEmail] = useState(currentEmail);
     const [isLoading, setIsLoading] = useState(false);
     const [error, setError] = useState('');
@@ -33,11 +35,35 @@ export function EmailCorrectionModal({ isOpen, onClose, currentEmail, roleName, 
 
         try {
             setIsLoading(true);
-            await onSave(email);
+            
+            const response = await fetch(`/api/conventions/${conventionId}/update-email`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    roleTarget,
+                    newEmail: email
+                })
+            });
+
+            const data = await response.json();
+
+            if (!response.ok) {
+                throw new Error(data.error || 'Erreur lors de la mise à jour');
+            }
+
+            if (data.warning) {
+                toast(data.warning, { icon: '⚠️' });
+            } else {
+                toast.success("Email mis à jour et invitation renvoyée !");
+            }
+
             onClose();
-        } catch (err) {
+        } catch (err: any) {
             console.error(err);
-            setError("Erreur lors de la mise à jour de l'email.");
+            setError(err.message || "Erreur lors de la mise à jour de l'email.");
+            toast.error(err.message || "Erreur lors de la mise à jour");
         } finally {
             setIsLoading(false);
         }
@@ -73,6 +99,7 @@ export function EmailCorrectionModal({ isOpen, onClose, currentEmail, roleName, 
                             onChange={(e) => setEmail(e.target.value)}
                             placeholder="exemple@email.com"
                             className={`w-full px-3 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500 outline-none transition-all ${error ? 'border-red-500 ring-red-200' : 'border-gray-300'}`}
+                            autoFocus
                         />
                         {error && <p className="text-xs text-red-500 mt-1">{error}</p>}
                     </div>

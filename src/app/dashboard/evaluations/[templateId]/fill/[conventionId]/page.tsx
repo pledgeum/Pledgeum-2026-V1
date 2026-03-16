@@ -2,8 +2,6 @@
 
 import React, { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { doc, getDoc } from 'firebase/firestore';
-import { db } from '@/lib/firebase';
 import { useSession } from "next-auth/react";
 import { useUserStore } from '@/store/user';
 import { toast } from 'sonner';
@@ -23,6 +21,7 @@ interface EvaluationTemplate {
     }[];
     synthesisEnabled?: boolean;
     synthesisTitle?: string;
+    finalGradeEnabled?: boolean;
 }
 
 interface EvaluationSubmission {
@@ -31,7 +30,12 @@ interface EvaluationSubmission {
     conventionId: string;
     studentId: string; // email or id
     answers: Record<string, Record<number, any>>; // rowId -> colIndex -> value
+    tutorAnswers?: Record<string, Record<number, any>>;
     synthesis?: string;
+    status?: 'DRAFT' | 'FINALIZED';
+    finalGrade?: string;
+    teacherSignedAt?: string;
+    teacherSignatureImg?: string;
     updatedAt: any;
     updatedBy: string;
 }
@@ -40,8 +44,8 @@ interface EvaluationSubmission {
 export default function EvaluationFillingPage() {
     const params = useParams();
     const router = useRouter();
-    const { data: session, status } = useSession();
-    const loading = status === "loading";
+    const { data: session, status: authStatus } = useSession();
+    const loading = authStatus === "loading";
     const user = session?.user;
     const { role } = useUserStore();
 
@@ -52,12 +56,17 @@ export default function EvaluationFillingPage() {
     const [template, setTemplate] = useState<EvaluationTemplate | null>(null);
     const [convention, setConvention] = useState<Convention | null>(null);
     const [answers, setAnswers] = useState<Record<string, Record<number, any>>>({});
+    const [tutorAnswers, setTutorAnswers] = useState<Record<string, Record<number, any>>>({});
     const [evaluationData, setEvaluationData] = useState<EvaluationSubmission | null | undefined>(undefined); // undefined = loading/unknown, null = not found, obj = found
     const [synthesis, setSynthesis] = useState('');
+    const [finalGrade, setFinalGrade] = useState('');
+    const [evalStatus, setEvalStatus] = useState<'DRAFT' | 'FINALIZED'>('DRAFT');
     const [isLoading, setIsLoading] = useState(true);
     const [isSaving, setIsSaving] = useState(false);
     const [readOnly, setReadOnly] = useState(false);
     const [accessDenied, setAccessDenied] = useState(false);
+    const [isTeacher, setIsTeacher] = useState(false);
+    const [isTutor, setIsTutor] = useState(false);
 
     useEffect(() => {
         if (!loading && !user) {
@@ -106,7 +115,8 @@ export default function EvaluationFillingPage() {
                 headers,
                 rows,
                 synthesisEnabled,
-                synthesisTitle
+                synthesisTitle,
+                finalGradeEnabled: data.finalGradeEnabled || data.structure?.finalGradeEnabled || false
             };
 
             setTemplate(templateData);
@@ -118,37 +128,39 @@ export default function EvaluationFillingPage() {
                 router.back();
                 return;
             }
-            const conventionData = await conventionResponse.json() as Convention;
+            const { convention: conventionData } = await conventionResponse.json();
             setConvention(conventionData);
 
             // 3. Check Permissions
-            const userEmail = user?.email;
+            const userEmail = user?.email || "";
             const isTestAccount = userEmail === 'pledgeum@gmail.com';
 
-            // Refined Can Edit Logic: Restricted strictly to involved roles OR Test Account actively in those roles
-            const isTeacher = role === 'teacher' || role === 'teacher_tracker';
-            const isTutor = role === 'tutor' || role === 'company_head';
+            const normalizedUserEmail = userEmail.toLowerCase().trim();
+            const teacherEmail = (conventionData.prof_email || conventionData.teacherEmail || conventionData.metadata?.prof_email)?.toLowerCase().trim();
+            const trackingTeacherEmail = (conventionData.prof_suivi_email || conventionData.tracking_teacher_email || conventionData.metadata?.prof_suivi_email)?.toLowerCase().trim();
+            const tutorEmail = (conventionData.tutor_email || conventionData.tutorEmail || conventionData.metadata?.tuteur_email)?.toLowerCase().trim();
+            const repEmail = (conventionData.ent_rep_email || conventionData.metadata?.ent_rep_email)?.toLowerCase().trim();
 
-            const canEdit =
-                (isTeacher && (userEmail === conventionData.prof_email || userEmail === conventionData.prof_suivi_email || isTestAccount)) ||
-                (isTutor && (userEmail === conventionData.tuteur_email || userEmail === conventionData.ent_rep_email || isTestAccount)) ||
-                (isTestAccount && (role === 'teacher' || role === 'tutor' || role === 'teacher_tracker'));
+            const isTeacherRole = role === 'teacher' || role === 'teacher_tracker';
+            const isTutorRole = role === 'tutor' || role === 'company_head' || role === 'company_head_tutor';
+
+            const userIsTeacher = !!(isTeacherRole && (normalizedUserEmail === teacherEmail || normalizedUserEmail === trackingTeacherEmail || isTestAccount));
+            const userIsTutor = !!(isTutorRole && (normalizedUserEmail === tutorEmail || normalizedUserEmail === repEmail || isTestAccount));
+
+            setIsTeacher(userIsTeacher);
+            setIsTutor(userIsTutor);
 
             const canView =
                 role === 'school_head' ||
                 role === 'ddfpt' ||
                 role === 'at_ddfpt' ||
                 (role === 'student' && userEmail === conventionData.studentId) ||
-                canEdit;
+                userIsTeacher || userIsTutor;
 
             if (!canView) {
                 setAccessDenied(true);
                 setIsLoading(false);
                 return;
-            }
-
-            if (!canEdit) {
-                setReadOnly(true);
             }
 
             // 4. Fetch Existing Submission from Postgres API
@@ -160,17 +172,29 @@ export default function EvaluationFillingPage() {
                 if (submissionResult.evaluation) {
                     const data = submissionResult.evaluation as EvaluationSubmission;
                     setAnswers(data.answers || {});
+                    setTutorAnswers(data.tutorAnswers || {});
                     setSynthesis(data.synthesis || '');
+                    setFinalGrade(data.finalGrade || '');
+                    setEvalStatus(data.status || 'DRAFT');
                     setEvaluationData(data);
+
+                    // Global Lock if FINALIZED
+                    if (data.status === 'FINALIZED') {
+                        setReadOnly(true);
+                    } else if (!userIsTeacher && !userIsTutor) {
+                        setReadOnly(true);
+                    }
                 } else {
-                    if (!canEdit) {
+                    if (!userIsTeacher && !userIsTutor) {
                         setEvaluationData(null);
+                        setReadOnly(true);
                     } else {
                         setEvaluationData({} as any);
                     }
                 }
             } else {
-                setEvaluationData(canEdit ? {} as any : null);
+                setEvaluationData((userIsTeacher || userIsTutor) ? {} as any : null);
+                if (!userIsTeacher && !userIsTutor) setReadOnly(true);
             }
 
         } catch (error) {
@@ -205,31 +229,58 @@ export default function EvaluationFillingPage() {
         }));
     };
 
-    const handleSave = async () => {
+    const handleSave = async (status: 'DRAFT' | 'FINALIZED' = 'DRAFT', signatureData?: any) => {
         if (readOnly || !user || !template || !convention) return;
         setIsSaving(true);
+        console.log("🕵️‍♂️ [FORENSIC] FRONTEND SAVING...");
+        console.log("- Status:", status);
+        console.log("- Answers Keys:", Object.keys(answers));
+        console.log("- Full Payload:", JSON.stringify({ answers, synthesis, finalGrade }));
+
         try {
-            const response = await fetch('/api/evaluations', {
-                method: 'POST',
+            const response = await fetch(`/api/evaluations/${conventionId}/${templateId}`, {
+                method: 'PATCH',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    conventionId,
-                    templateId,
-                    evaluatorEmail: user.email,
                     answers,
-                    synthesis
+                    synthesis,
+                    final_grade: finalGrade,
+                    status: status,
+                    signature: signatureData
                 })
             });
 
-            if (!response.ok) throw new Error("Erreur serveur API");
+            console.log("DEBUG: Save evaluation response status:", response.status);
+            if (response.ok) {
+                const resJson = await response.json();
+                console.log("DEBUG: Save evaluation success payload:", resJson);
+                console.log("DEBUG: Server reported rowCount:", resJson.debug?.rowCount);
+                console.log("DEBUG: Server received answers count:", resJson.debug?.receivedAnswersCount);
+            }
 
-            toast.success("Évaluation sauvegardée avec succès");
+            if (!response.ok) {
+                const err = await response.json();
+                throw new Error(err.error || "Erreur serveur API");
+            }
+
+            toast.success(status === 'FINALIZED' ? "Évaluation finalisée et signée !" : "Évaluation sauvegardée en brouillon");
             router.push('/');
-        } catch (error) {
+        } catch (error: any) {
             console.error("Error saving evaluation:", error);
-            toast.error("Erreur lors de la sauvegarde.");
+            toast.error(error.message || "Erreur lors de la sauvegarde.");
         } finally {
             setIsSaving(false);
+        }
+    };
+
+    const handleFinalize = () => {
+        if (!isTeacher) return;
+        if (confirm("Voulez-vous finaliser cette évaluation ? Elle ne sera plus modifiable par quiconque.")) {
+            handleSave('FINALIZED', {
+                img: "SIGNATURE_CAPTURÉE",
+                hash: "SIG_" + Math.random().toString(36).substr(2, 9),
+                ip: "127.0.0.1"
+            });
         }
     };
 
@@ -285,15 +336,15 @@ export default function EvaluationFillingPage() {
                 <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
                     <div>
                         <h3 className="text-sm font-medium text-muted-foreground">Élève</h3>
-                        <p className="text-lg font-semibold">{convention.eleve_nom} {convention.eleve_prenom}</p>
+                        <p className="text-lg font-semibold">{(convention as any).eleve_nom || convention.metadata?.eleve_nom} { (convention as any).eleve_prenom || convention.metadata?.eleve_prenom}</p>
                     </div>
                     <div>
                         <h3 className="text-sm font-medium text-muted-foreground">Classe</h3>
-                        <p className="text-lg font-semibold">{convention.eleve_classe}</p>
+                        <p className="text-lg font-semibold">{(convention as any).eleve_classe || convention.metadata?.eleve_classe}</p>
                     </div>
                     <div>
                         <h3 className="text-sm font-medium text-muted-foreground">Entreprise</h3>
-                        <p className="text-lg font-semibold">{convention.ent_nom}</p>
+                        <p className="text-lg font-semibold">{(convention as any).ent_nom || convention.metadata?.ent_nom}</p>
                     </div>
                 </div>
             </div>
@@ -324,15 +375,22 @@ export default function EvaluationFillingPage() {
                                         const colIndex = i + 1;
                                         const inputType = row.type || 'text';
                                         const cellValue = answers[row.id]?.[colIndex];
+                                        const tutorValue = tutorAnswers[row.id]?.[colIndex];
+                                        const isModifiedByTeacher = isTeacher && tutorValue !== undefined && cellValue !== tutorValue;
 
                                         return (
-                                            <td key={colIndex} className="px-4 py-3 align-top">
+                                            <td key={colIndex} className="px-4 py-3 align-top relative group/cell">
+                                                {isModifiedByTeacher && (
+                                                    <div className="absolute -top-1 -right-1 z-10" title={`Valeur initiale du tuteur: ${tutorValue}`}>
+                                                        <span className="flex h-3 w-3 rounded-full bg-orange-500 border-2 border-white shadow-sm" />
+                                                    </div>
+                                                )}
                                                 {inputType === 'text' && (
                                                     <textarea
                                                         disabled={readOnly}
                                                         value={cellValue || ''}
                                                         onChange={(e) => handleAnswerChange(row.id, colIndex, e.target.value)}
-                                                        className="flex min-h-[60px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y"
+                                                        className={`flex min-h-[60px] w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 resize-y ${isModifiedByTeacher ? 'border-orange-200 bg-orange-50/20' : 'border-input'}`}
                                                         placeholder="Votre réponse..."
                                                     />
                                                 )}
@@ -342,12 +400,12 @@ export default function EvaluationFillingPage() {
                                                         disabled={readOnly}
                                                         value={cellValue || ''}
                                                         onChange={(e) => handleAnswerChange(row.id, colIndex, e.target.value)}
-                                                        className="flex h-10 w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                                        className={`flex h-10 w-full rounded-md border bg-background px-3 py-2 text-sm ring-offset-background file:border-0 file:bg-transparent file:text-sm file:font-medium placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50 ${isModifiedByTeacher ? 'border-orange-200 bg-orange-50/20' : 'border-input'}`}
                                                         placeholder="0"
                                                     />
                                                 )}
                                                 {(inputType === 'checkbox' || inputType === 'checkbox_multi' || inputType === 'checkbox_single') && (
-                                                    <div className="flex justify-center pt-2">
+                                                    <div className={`flex flex-col items-center justify-center p-2 rounded-md ${isModifiedByTeacher ? 'bg-orange-50/20 ring-1 ring-orange-200' : ''}`}>
                                                         {inputType === 'checkbox_single' ? (
                                                             <div
                                                                 onClick={() => !readOnly && handleAnswerChange(row.id, colIndex, !cellValue)}
@@ -364,6 +422,7 @@ export default function EvaluationFillingPage() {
                                                                 className="h-5 w-5 rounded border-gray-500 text-black focus:ring-black disabled:opacity-50 cursor-pointer disabled:cursor-not-allowed"
                                                             />
                                                         )}
+                                                        {isModifiedByTeacher && <span className="text-[10px] text-orange-600 mt-1 font-medium">Modifié</span>}
                                                     </div>
                                                 )}
                                             </td>
@@ -376,17 +435,57 @@ export default function EvaluationFillingPage() {
                 </div>
             </div>
 
-            {/* Synthesis Section */}
-            {template.synthesisEnabled && (
-                <div className="rounded-lg border bg-card text-card-foreground shadow-sm p-6 space-y-4">
-                    <h3 className="text-lg font-semibold">{template.synthesisTitle || "Synthèse globale"}</h3>
-                    <textarea
-                        disabled={readOnly}
-                        value={synthesis}
-                        onChange={(e) => setSynthesis(e.target.value)}
-                        className="flex min-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
-                        placeholder="Observation générale, points forts, points à améliorer..."
-                    />
+            {/* Synthesis & Final Grade Section */}
+            {(template.synthesisEnabled || (template.finalGradeEnabled && isTeacher)) && (
+                <div className="grid grid-cols-1 md:grid-cols-3 gap-8">
+                    {/* Synthesis */}
+                    {template.synthesisEnabled && (
+                        <div className={`rounded-lg border bg-card text-card-foreground shadow-sm p-6 space-y-4 ${template.finalGradeEnabled && isTeacher ? 'md:col-span-2' : 'md:col-span-3'}`}>
+                            <h3 className="text-lg font-semibold">{template.synthesisTitle || "Synthèse globale"}</h3>
+                            <textarea
+                                disabled={readOnly}
+                                value={synthesis}
+                                onChange={(e) => setSynthesis(e.target.value)}
+                                className="flex min-h-[150px] w-full rounded-md border border-input bg-background px-3 py-2 text-sm ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 disabled:cursor-not-allowed disabled:opacity-50"
+                                placeholder="Observation générale, points forts, points à améliorer..."
+                            />
+                        </div>
+                    )}
+
+                    {/* Final Grade - Teacher Only */}
+                    {template.finalGradeEnabled && (isTeacher || readOnly) && (
+                        <div className="rounded-lg border border-purple-100 bg-purple-50/30 p-6 space-y-4">
+                            <h3 className="text-lg font-semibold text-purple-900">Note Finale</h3>
+                            <p className="text-xs text-purple-600 mb-2">Réservé à l'enseignant. Cette note sera figer lors de la signature.</p>
+                            <input
+                                type="text"
+                                disabled={readOnly || !isTeacher}
+                                value={finalGrade}
+                                onChange={(e) => setFinalGrade(e.target.value)}
+                                className="flex h-12 w-full text-center text-xl font-bold rounded-md border border-purple-200 bg-white px-3 py-2 ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-purple-500 disabled:opacity-50"
+                                placeholder="Note / 20"
+                            />
+                        </div>
+                    )}
+                </div>
+            )}
+
+            {/* Signature Info if FINALIZED */}
+            {evalStatus === 'FINALIZED' && evaluationData?.teacherSignedAt && (
+                <div className="mt-8 p-6 bg-green-50 border border-green-200 rounded-xl flex items-center justify-between">
+                    <div>
+                        <h3 className="text-green-800 font-bold flex items-center">
+                            <Save className="h-5 w-5 mr-2" /> Évaluation Validée et Signée
+                        </h3>
+                        <p className="text-green-700 text-sm mt-1">
+                            Signé par l'enseignant le {new Date(evaluationData.teacherSignedAt).toLocaleDateString('fr-FR')} à {new Date(evaluationData.teacherSignedAt).toLocaleTimeString('fr-FR')}
+                        </p>
+                    </div>
+                    {evaluationData.teacherSignatureImg && (
+                        <div className="bg-white p-2 rounded border border-green-100">
+                            <img src={evaluationData.teacherSignatureImg} alt="Signature" className="h-12 w-auto grayscale" />
+                        </div>
+                    )}
                 </div>
             )}
 
@@ -395,16 +494,27 @@ export default function EvaluationFillingPage() {
 
             {/* Floating Action Bar */}
             {!readOnly && (
-                <div className="fixed bottom-0 left-0 right-0 p-4 bg-white border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.1)] flex justify-end items-center z-40 md:bg-transparent md:border-none md:shadow-none md:pointer-events-none">
-                    <div className="w-full max-w-5xl mx-auto flex justify-end px-4 md:px-0 pointer-events-auto">
+                <div className="fixed bottom-0 left-0 right-0 p-4 bg-white/80 backdrop-blur-md border-t border-gray-200 shadow-[0_-4px_12px_-2px_rgba(0,0,0,0.1)] flex justify-end items-center z-40">
+                    <div className="w-full max-w-5xl mx-auto flex justify-end gap-4 px-4">
                         <button
-                            onClick={handleSave}
+                            onClick={() => handleSave('DRAFT')}
                             disabled={isSaving}
-                            className="flex items-center px-6 py-3 text-base font-bold text-white bg-blue-600 border border-transparent rounded-full shadow-xl hover:bg-blue-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-blue-500 transition-transform hover:scale-105 disabled:opacity-50 disabled:cursor-not-allowed"
+                            className="flex items-center px-6 py-3 text-base font-semibold text-gray-700 bg-white border border-gray-300 rounded-full shadow-sm hover:bg-gray-50 transition-all disabled:opacity-50"
                         >
                             {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
-                            Sauvegarder l'évaluation
+                            Sauvegarder Brouillon
                         </button>
+                        
+                        {isTeacher && (
+                            <button
+                                onClick={handleFinalize}
+                                disabled={isSaving}
+                                className="flex items-center px-8 py-3 text-base font-bold text-white bg-black rounded-full shadow-xl hover:bg-gray-800 transition-all hover:scale-105 disabled:opacity-50"
+                            >
+                                {isSaving ? <Loader2 className="mr-2 h-5 w-5 animate-spin" /> : <Save className="mr-2 h-5 w-5" />}
+                                Signer et Figer
+                            </button>
+                        )}
                     </div>
                 </div>
             )}

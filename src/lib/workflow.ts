@@ -22,6 +22,8 @@ export async function updateConventionStatus(
     newStatus: WorkflowStatus,
     metadataParts: {
         reason?: string,
+        rejectedByLabel?: string,
+        rejectedByRole?: string,
         actorId?: string,
         pdfHash?: string,
         signatures?: any, // Generic signatures object to merge
@@ -106,8 +108,16 @@ export async function updateConventionStatus(
             }
         }
         else if (newStatus === 'REJECTED') {
+            const reason = metadataParts.reason || 'No reason provided';
             query += `, rejection_reason = $${paramIdx++} `;
-            updates.push(metadataParts.reason || 'No reason provided');
+            updates.push(reason);
+            finalMetadata.rejection_reason = reason; // Store in metadata too
+            if (metadataParts.rejectedByLabel) {
+                finalMetadata.rejectedByLabel = metadataParts.rejectedByLabel;
+            }
+            if (metadataParts.rejectedByRole) {
+                finalMetadata.rejectedByRole = metadataParts.rejectedByRole;
+            }
         }
 
         // Apply Final Metadata Update

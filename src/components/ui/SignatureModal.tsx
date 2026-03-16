@@ -15,6 +15,7 @@ interface SignatureModalProps {
     signeeName: string;
     signeeEmail: string;
     conventionId: string;
+    role: string;
     hideOtp?: boolean;
     canSignDual?: boolean;
     dualRoleLabel?: string;
@@ -29,6 +30,7 @@ export function SignatureModal({
     signeeName,
     signeeEmail,
     conventionId,
+    role,
     hideOtp = false,
     canSignDual = false,
     dualRoleLabel = "Signer pour les deux rôles",
@@ -41,11 +43,13 @@ export function SignatureModal({
     const [isDualSignChecked, setIsDualSignChecked] = useState(false);
     const [justification, setJustification] = useState('');
     const [isSuccess, setIsSuccess] = useState(false);
+    const [view, setView] = useState<'sign' | 'reject'>('sign');
+    const [rejectionReason, setRejectionReason] = useState('');
     const [emailErrorDetails, setEmailErrorDetails] = useState<string | null>(null);
 
     const sigCanvas = useRef<any>({});
     const { isDemoMode, openEmailModal } = useDemoStore();
-    const { conventions, updateConvention } = useConventionStore();
+    const { conventions, updateConvention, rejectConvention } = useConventionStore();
     const { classes } = useSchoolStore();
 
     // Derogation / Date Check Logic
@@ -79,6 +83,8 @@ export function SignatureModal({
             setActiveTab('canvas');
             setIsDualSignChecked(false);
             setIsSuccess(false); // Reset success state
+            setView('sign');
+            setRejectionReason('');
         }
     }, [isOpen]);
 
@@ -86,21 +92,29 @@ export function SignatureModal({
 
     // SUCCESS VIEW
     if (isSuccess) {
+        const isRejected = view === 'reject';
         return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
                 <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col items-center p-6 text-center space-y-4 animate-in fade-in zoom-in-95">
-                    <div className="bg-green-100 p-4 rounded-full">
-                        <CheckCircle className="w-12 h-12 text-green-600" />
+                    <div className={isRejected ? "bg-red-100 p-4 rounded-full" : "bg-green-100 p-4 rounded-full"}>
+                        {isRejected ? (
+                            <X className="w-12 h-12 text-red-600" />
+                        ) : (
+                            <CheckCircle className="w-12 h-12 text-green-600" />
+                        )}
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900">Convention signée avec succès ! ✅</h3>
+                    <h3 className="text-2xl font-bold text-gray-900">
+                        {isRejected ? "Convention refusée" : "Convention signée avec succès ! ✅"}
+                    </h3>
                     <p className="text-gray-600 text-lg">
-                        La convention a bien été signée.
-                        {emailErrorDetails ? (
+                        {isRejected 
+                            ? "Le refus a bien été enregistré. Les responsables ont été notifiés." 
+                            : "La convention a bien été signée."
+                        }
+                        {!isRejected && emailErrorDetails && (
                             <span className="block mt-2 text-orange-600 font-bold text-base">
                                 Attention : L'email de confirmation n'a pas pu être envoyé.
                             </span>
-                        ) : (
-                            " Un email de confirmation a été envoyé."
                         )}
                     </p>
 
@@ -173,6 +187,22 @@ export function SignatureModal({
         } catch (e: any) {
             console.error(e);
             alert(e.message || "Erreur lors de la signature");
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleRejectSubmit = async () => {
+        if (!rejectionReason.trim()) {
+            alert("Veuillez indiquer le motif du refus.");
+            return;
+        }
+        setLoading(true);
+        try {
+            await rejectConvention(conventionId, role, rejectionReason);
+            setIsSuccess(true);
+        } catch (e: any) {
+            alert(e.message || "Erreur lors du refus");
         } finally {
             setLoading(false);
         }
@@ -395,8 +425,8 @@ export function SignatureModal({
                 {/* Tabs */}
                 <div className="flex border-b border-gray-200">
                     <button
-                        onClick={() => setActiveTab('canvas')}
-                        className={`flex-1 py-3 text-sm font-medium flex items-center justify-center space-x-2 transition-colors ${activeTab === 'canvas' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'
+                        onClick={() => { setView('sign'); setActiveTab('canvas'); }}
+                        className={`flex-1 py-3 text-sm font-medium flex items-center justify-center space-x-2 transition-colors ${view === 'sign' && activeTab === 'canvas' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'
                             }`}
                     >
                         <PenTool className="w-4 h-4" />
@@ -404,19 +434,69 @@ export function SignatureModal({
                     </button>
                     {!hideOtp && (
                         <button
-                            onClick={() => setActiveTab('otp')}
-                            className={`flex-1 py-3 text-sm font-medium flex items-center justify-center space-x-2 transition-colors ${activeTab === 'otp' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'
+                            onClick={() => { setView('sign'); setActiveTab('otp'); }}
+                            className={`flex-1 py-3 text-sm font-medium flex items-center justify-center space-x-2 transition-colors ${view === 'sign' && activeTab === 'otp' ? 'text-blue-600 border-b-2 border-blue-600 bg-blue-50/50' : 'text-gray-500 hover:bg-gray-50'
                                 }`}
                         >
                             <Mail className="w-4 h-4" />
                             <span>Code OTP</span>
                         </button>
                     )}
+                    <button
+                        onClick={() => setView('reject')}
+                        className={`flex-1 py-3 text-sm font-medium flex items-center justify-center space-x-2 transition-colors ${view === 'reject' ? 'text-red-600 border-b-2 border-red-600 bg-red-50/50' : 'text-gray-500 hover:bg-gray-50'
+                            }`}
+                    >
+                        <AlertTriangle className="w-4 h-4" />
+                        <span>Refuser</span>
+                    </button>
                 </div>
 
                 {/* Content */}
                 <div className="p-6 flex-1 overflow-y-auto">
-                    {activeTab === 'canvas' ? (
+                    {view === 'reject' ? (
+                        <div className="space-y-6">
+                            <div className="bg-red-50 p-4 rounded-xl border border-red-100 flex items-start space-x-3">
+                                <AlertTriangle className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
+                                <div>
+                                    <h4 className="text-base font-bold text-red-900">Refus de la convention</h4>
+                                    <p className="text-sm text-red-700 mt-1">
+                                        En refusant cette convention, elle sera définitivement annulée. 
+                                        L'élève et les responsables seront notifiés par email.
+                                    </p>
+                                </div>
+                            </div>
+
+                            <div className="space-y-2">
+                                <label className="block text-sm font-bold text-gray-700">Motif du refus (obligatoire)</label>
+                                <textarea
+                                    value={rejectionReason}
+                                    onChange={(e) => setRejectionReason(e.target.value)}
+                                    placeholder="Ex: Erreur dans les dates de stage, mission non conforme, etc."
+                                    className="w-full h-32 border-gray-300 rounded-xl focus:ring-red-500 focus:border-red-500 text-sm"
+                                    required
+                                />
+                                <p className="text-xs text-gray-400">Ce motif sera transmis aux autres signataires pour correction.</p>
+                            </div>
+
+                            <div className="flex space-x-3 pt-2">
+                                <button
+                                    onClick={() => setView('sign')}
+                                    className="flex-1 py-3 border border-gray-200 text-gray-600 font-bold rounded-xl hover:bg-gray-50 transition-colors"
+                                >
+                                    Annuler
+                                </button>
+                                <button
+                                    onClick={handleRejectSubmit}
+                                    disabled={loading || !rejectionReason.trim()}
+                                    className="flex-[2] py-3 bg-red-600 hover:bg-red-700 disabled:bg-red-300 text-white font-bold rounded-xl shadow-md transition-colors flex items-center justify-center space-x-2"
+                                >
+                                    {loading ? <Loader2 className="w-5 h-5 animate-spin" /> : <X className="w-5 h-5" />}
+                                    <span>{loading ? 'Traitement...' : 'Confirmer le refus'}</span>
+                                </button>
+                            </div>
+                        </div>
+                    ) : activeTab === 'canvas' ? (
                         <div className="space-y-4">
                             <p className="text-sm text-gray-600">Tracez votre signature dans le cadre ci-dessous :</p>
                             <div className="border-2 border-dashed border-gray-300 rounded-lg bg-gray-50 touch-none">
@@ -455,6 +535,14 @@ export function SignatureModal({
                                 {loading ? <Loader2 className="w-4 h-4 animate-spin" /> : <PenTool className="w-4 h-4" />}
                                 <span>{loading ? 'Validation en cours...' : 'Signer et Valider'}</span>
                             </button>
+                            
+                            {/* NEW: Secondary Reject Button */}
+                            <button
+                                onClick={() => setView('reject')}
+                                className="w-full py-2 text-sm text-red-500 hover:text-red-700 font-medium transition-colors"
+                            >
+                                Refuser cette convention
+                            </button>
                         </div>
                     ) : (
                         <div className="space-y-6">
@@ -476,6 +564,14 @@ export function SignatureModal({
                                         className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 disabled:bg-blue-400 text-white font-bold rounded-lg shadow-sm transition-colors flex justify-center"
                                     >
                                         {loading ? <Loader2 className="animate-spin" /> : "Envoyer le code"}
+                                    </button>
+
+                                    {/* NEW: Secondary Reject Button in OTP initial */}
+                                    <button
+                                        onClick={() => setView('reject')}
+                                        className="w-full py-2 text-sm text-red-500 hover:text-red-700 font-medium transition-colors"
+                                    >
+                                        Refuser cette convention
                                     </button>
                                 </div>
                             ) : (
@@ -521,6 +617,14 @@ export function SignatureModal({
                                     </button>
                                     <button onClick={() => setOtpSent(false)} className="w-full text-sm text-gray-500 hover:text-gray-900">
                                         Renvoyer le code
+                                    </button>
+
+                                    {/* NEW: Secondary Reject Button in OTP verification */}
+                                    <button
+                                        onClick={() => setView('reject')}
+                                        className="w-full py-2 text-sm text-red-500 hover:text-red-700 font-medium transition-colors"
+                                    >
+                                        Refuser cette convention
                                     </button>
                                 </div>
                             )}

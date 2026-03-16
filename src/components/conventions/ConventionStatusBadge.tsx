@@ -14,7 +14,8 @@ export type WorkflowStatus =
     | 'COMPLETED'
     | 'REJECTED'
     | 'ANNULEE'
-    | 'CANCELLED';
+    | 'CANCELLED'
+    | 'EVALUATED';
 
 const statusConfig: Record<WorkflowStatus, { label: string; className: string }> = {
     DRAFT: { label: 'Brouillon', className: 'bg-gray-100 text-gray-800 border-gray-200' },
@@ -25,6 +26,7 @@ const statusConfig: Record<WorkflowStatus, { label: string; className: string }>
     SIGNED_TUTOR: { label: 'Signée par le Tuteur', className: 'bg-purple-100 text-purple-800 border-purple-200' },
     VALIDATED_HEAD: { label: 'Validée par le Chef d\'Établissement', className: 'bg-green-100 text-green-800 border-green-200' },
     COMPLETED: { label: 'Complétée', className: 'bg-green-500 text-white border-green-600' },
+    EVALUATED: { label: 'Évaluée', className: 'bg-green-600 text-white border-green-700' },
     REJECTED: { label: 'Rejetée', className: 'bg-red-100 text-red-800 border-red-200' },
     ANNULEE: { label: 'Annulée', className: 'bg-red-100 text-red-800 border-red-200' },
     CANCELLED: { label: 'Annulée', className: 'bg-red-100 text-red-800 border-red-200' },
@@ -47,7 +49,8 @@ export const ConventionStatusBadge = ({ status, signatures, isOutOfPeriod }: { s
 
     return (
         <div className="flex flex-col items-end gap-1">
-            <Badge variant="outline" className={`px-2 py-1 ${effectiveClass}`}>
+            <Badge variant="outline" className={`px-2 py-1 flex items-center gap-1.5 ${effectiveClass}`}>
+                {status === 'REJECTED' && <AlertTriangle className="w-3.5 h-3.5" />}
                 {effectiveLabel}
             </Badge>
             {isOutOfPeriod && (

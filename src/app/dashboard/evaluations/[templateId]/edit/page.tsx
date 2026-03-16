@@ -2,11 +2,10 @@
 
 import { useEffect, useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { doc, getDoc } from '@/lib/firebase';
-import { db } from '@/lib/firebase';
 import { EvaluationGridBuilder } from '@/components/evaluations/EvaluationGridBuilder';
 import { ArrowLeft, Loader2 } from 'lucide-react';
 import Link from 'next/link';
+import { toast } from 'sonner';
 
 export default function EditEvaluationPage() {
     const params = useParams();
@@ -20,15 +19,21 @@ export default function EditEvaluationPage() {
         if (templateId) {
             const fetchTemplate = async () => {
                 try {
-                    const docRef = doc(db, 'evaluation_templates', templateId);
-                    const docSnap = await getDoc(docRef);
-                    if (docSnap.exists()) {
-                        setInitialData(docSnap.data());
+                    const res = await fetch(`/api/templates/${templateId}`);
+                    if (!res.ok) {
+                        toast.error("Template introuvable");
+                        router.push('/dashboard/evaluations');
+                        return;
+                    }
+                    const data = await res.json();
+                    if (data.template) {
+                        setInitialData(data.template);
                     } else {
                         router.push('/dashboard/evaluations');
                     }
                 } catch (error) {
                     console.error("Error fetching template:", error);
+                    toast.error("Erreur lors du chargement du template");
                 } finally {
                     setIsLoading(false);
                 }
