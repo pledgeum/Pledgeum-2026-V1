@@ -75,15 +75,39 @@ export async function POST(req: Request) {
         ]);
 
         // 4. Send Email
+        const roleTranslations: Record<string, string> = {
+            business_manager: "Responsable Bureau des Entreprises",
+            ddfpt: "Directeur Délégué aux Formations (DDFPT)",
+            teacher: "Enseignant(e)",
+            school_head: "Chef d'établissement",
+            establishment_admin: "Administrateur de l'établissement",
+            assistant_manager: "Gestionnaire assistant",
+            stewardship_secretary: "Secrétaire d'intendance",
+            at_ddfpt: "Assistant(e) DDFPT",
+            cpe: "CPE",
+            school_life: "Vie scolaire",
+            ESTABLISHMENT_ADMIN: "Administrateur de l'établissement"
+        };
+        const displayRole = roleTranslations[role as keyof typeof roleTranslations] || role;
+
         const emailSent = await sendEmail({
             to: email,
             subject: "Invitation à rejoindre Pledgeum",
-            text: `Bonjour ${firstName},\n\n` +
-                `Vous avez été invité à rejoindre l'espace d'administration Pledgeum en tant que ${role}.\n\n` +
-                `Voici vos identifiants temporaires :\n` +
-                `Email : ${email}\n` +
-                `Mot de passe : ${tempPassword}\n\n` +
-                `Veuillez vous connecter et modifier ce mot de passe dès que possible.`
+            text: `Bonjour,
+
+Bienvenue sur la plateforme Pledgeum !
+
+Vous avez été invité(e) à rejoindre l'espace d'administration de votre établissement en tant que ${displayRole}.
+
+Voici vos identifiants temporaires :
+Lien de connexion : https://www.pledgeum.fr/
+Email : ${email}
+Mot de passe : ${tempPassword}
+
+Veuillez vous connecter via le lien ci-dessus et modifier ce mot de passe dès que possible pour des raisons de sécurité.
+
+Cordialement,
+L'équipe Pledgeum`
         });
 
         return NextResponse.json({ success: true, emailSent });

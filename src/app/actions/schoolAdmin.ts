@@ -115,22 +115,20 @@ export async function sendWelcomeEmail(schoolId: string, email: string, schoolNa
 
         // 4. Send Email
         const subject = "Bienvenue sur Pledgeum - Vos identifiants de connexion";
-        const message = `
-Bonjour,
+        const message = `Madame, Monsieur le chef d'établissement,
 
-L'établissement "${schoolName}" a été autorisé sur la plateforme Pledgeum.
+Nous vous souhaitons la bienvenue sur la plateforme Pledgeum qui vous permettra d'optimiser la gestion des stages en milieu professionnel de vos élèves et étudiants ainsi que de suivre leurs parcours à la sortie de votre établissement.
 
-Voici vos identifiants pour vous connecter et finaliser la configuration de votre établissement :
+Vous trouverez ci-après vos identifiants afin de vous connecter et finaliser la configuration de celui-ci : "${schoolName}" :
 
-Lien : https://pledgeum.fr/login
+Lien : https://www.pledgeum.fr/
 Email : ${email}
 Mot de passe provisoire : ${tempPassword}
 
-Veuillez changer ce mot de passe dès votre première connexion.
+Vous serez invité à changer ce mot de passe dès votre première connexion.
 
 Cordialement,
-L'équipe Pledgeum
-        `;
+L'équipe Pledgeum`;
 
         const emailSent = await sendEmail({ to: email, subject, text: message });
 
