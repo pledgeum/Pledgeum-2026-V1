@@ -8,7 +8,7 @@ import { useSchoolStore } from '@/store/school';
 import { useUserStore } from '@/store/user';
 import { useState, useEffect } from 'react';
 import { searchSchools, SchoolResult } from '@/lib/educationApi';
-import { Search, MapPin, Loader2 } from 'lucide-react';
+import { Search, MapPin, Loader2, Wand2, AlertCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 // Extract relevant fields for this step

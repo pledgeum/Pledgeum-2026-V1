@@ -838,7 +838,7 @@ function StageSecondePdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                 </View>
 
                 <Text style={[styles.text, { fontSize: 6, color: '#666', marginBottom: 10, textAlign: 'justify' }]}>
-                    Vu le code du travail, et notamment son article L. 4153-1 ; le code de l'éducation, et notamment ses articles L. 124-1, L. 134-9, L. 313-1, L. 331-4, L. 331-5, L. 332-3, L. 335-2, L. 411-3, L. 421-7, L. 911-4, D. 331-1 à D. 331-9, D. 333-3-1 ; le code civil, et notamment ses articles 1240 à 1242 ; la circulaire n°96-248 du 25-10-1996 relative à la surveillance des élèves ; la circulaire du 10-2-2021 relative au projet d’accueil individualisé pour raison de santé ; la circulaire du 16 juillet 2024 relative à l’organisation des sorties et voyages scolaires dans les écoles, les collèges et les lycées publics ; la circulaire du 21 novembre 2025 relative aux séquences d’observation, visite d’information et stages pour les élèves de collège et de lycée général et technologique ; la délibération du conseil d’administration en date du {data.ecole_ca_date || '...'} de l’établissement ;
+                    Vu le code du travail, et notamment son article L. 4153-1 ; le code de l'éducation, et notamment ses articles L. 124-1, L. 134-9, L. 313-1, L. 331-4, L. 331-5, L. 332-3, L. 335-2, L. 411-3, L. 421-7, L. 911-4, D. 331-1 à D. 331-9, D. 333-3-1 ; le code civil, et notamment ses articles 1240 à 1242 ; la circulaire n°96-248 du 25-10-1996 relative à la surveillance des élèves ; la circulaire du 10-2-2021 relative au projet d’accueil individualisé pour raison de santé ; la circulaire du 16 juillet 2024 relative à l’organisation des sorties et voyages scolaires dans les écoles, les collèges et les lycées publics ; la circulaire du 21 novembre 2025 relative aux séquences d’observation, visite d’information et stages pour les élèves de collège et de lycée général et technologique ; la délibération du conseil d’administration en date du {(data as any).ecole_ca_date || '...'} de l’établissement ;
                 </Text>
 
                 <View style={{ marginBottom: 10 }}>
@@ -952,7 +952,7 @@ function StageSecondePdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                             <Text style={[styles.tableCell, { width: '40%', borderRightWidth: 0 }]}>Après-midi</Text>
                         </View>
                         {['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map((day) => {
-                            const slots = data.stage_horaires?.[day];
+                            const slots = (data as any).stage_horaires?.[day];
                             if (!slots) return null;
                             return (
                                 <View key={day} style={styles.tableRow}>

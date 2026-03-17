@@ -1,0 +1,28 @@
+
+> convention-pfmp@0.1.0 build
+> next build
+
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+   ▲ Next.js 16.0.10 (Turbopack)
+   - Environments: .env.local
+   - Experiments (use with caution):
+     · serverActions
+
+ ⚠ The "middleware" file convention is deprecated. Please use "proxy" instead. Learn more: https://nextjs.org/docs/messages/middleware-to-proxy
+   Creating an optimized production build ...
+[baseline-browser-mapping] The data in this module is over two months old.  To ensure accurate Baseline data, please update: `npm i baseline-browser-mapping@latest -D`
+ ✓ Compiled successfully in 45s
+   Running TypeScript ...
+Failed to compile.
+
+./src/components/pdf/ConventionPdf.tsx:841:866
+Type error: Property 'ecole_ca_date' does not exist on type 'Partial<Convention>'.
+
+[0m [90m 839 |[39m
+ [90m 840 |[39m                 [33m<[39m[33mText[39m style[33m=[39m{[styles[33m.[39mtext[33m,[39m { fontSize[33m:[39m [35m6[39m[33m,[39m color[33m:[39m [32m'#666'[39m[33m,[39m marginBottom[33m:[39m [35m10[39m[33m,[39m textAlign[33m:[39m [32m'justify'[39m }]}[33m>[39m
+[31m[1m>[22m[39m[90m 841 |[39m                     [33mVu[39m le code du travail[33m,[39m et notamment son article [33mL[39m[33m.[39m [35m4153[39m[33m-[39m[35m1[39m [33m;[39m le code de l[32m'éducation, et notamment ses articles L. 124-1, L. 134-9, L. 313-1, L. 331-4, L. 331-5, L. 332-3, L. 335-2, L. 411-3, L. 421-7, L. 911-4, D. 331-1 à D. 331-9, D. 333-3-1 ; le code civil, et notamment ses articles 1240 à 1242 ; la circulaire n°96-248 du 25-10-1996 relative à la surveillance des élèves ; la circulaire du 10-2-2021 relative au projet d’accueil individualisé pour raison de santé ; la circulaire du 16 juillet 2024 relative à l’organisation des sorties et voyages scolaires dans les écoles, les collèges et les lycées publics ; la circulaire du 21 novembre 2025 relative aux séquences d’observation, visite d’information et stages pour les élèves de collège et de lycée général et technologique ; la délibération du conseil d’administration en date du {data.ecole_ca_date || '[39m[33m...[39m[32m'} de l’établissement ;[39m
+ [90m     |[39m                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                                  [31m[1m^[22m[39m
+ [90m 842 |[39m                 [33m<[39m[33m/[39m[33mText[39m[33m>[39m
+ [90m 843 |[39m
+ [90m 844 |[39m                 [33m<[39m[33mView[39m style[33m=[39m{{ marginBottom[33m:[39m [35m10[39m }}[33m>[39m[0m
+Next.js build worker exited with code: 1 and signal: null
