@@ -70,6 +70,7 @@ export async function GET(request: Request) {
                 c.establishment_uai as "establishmentUai",
                 c.establishment_uai as "schoolId",
                 c.class_id as "classId",
+                c.type as "type",
                 c.pdf_hash as "pdfHash",
                 c.rejection_reason as "rejectionReason",
                 c.token_company as "tokenCompany",
@@ -412,9 +413,10 @@ export async function POST(req: Request) {
                     is_out_of_period,
                     class_id,
                     duration_hours,
-                    company_siret
-                ) VALUES ($1, $2, $3, NOW(), NOW(), $4, $5, $6, $7, $8, $9, $10, $11)
-                RETURNING id, student_uid, status, metadata, date_start, date_end, establishment_uai, class_id, duration_hours, company_siret, created_at
+                    company_siret,
+                    type
+                ) VALUES ($1, $2, $3, NOW(), NOW(), $4, $5, $6, $7, $8, $9, $10, $11, $12)
+                RETURNING id, student_uid, status, metadata, date_start, date_end, establishment_uai, class_id, duration_hours, company_siret, created_at, type
             `;
 
             const result = await client.query(query, [
@@ -428,7 +430,8 @@ export async function POST(req: Request) {
                 data.is_out_of_period || false,
                 classId || (typeof data.eleve_classe === 'string' && data.eleve_classe.startsWith('cls_') ? data.eleve_classe : null),
                 data.stage_duree_heures || 0,
-                cleanSiret || null
+                cleanSiret || null,
+                data.type || 'PFMP_STANDARD'
             ]);
 
             // --- AUTO-ALIMENTATION DES PARTENAIRES ---

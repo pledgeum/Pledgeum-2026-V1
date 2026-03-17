@@ -240,29 +240,133 @@ export function Step1School() {
                 }, [allowedConventionTypes, form.watch('type')]);
 
 
+    const [allowedTypes, setAllowedTypes] = useState<{ id: string, label: string }[]>([]);
+    const [isFetchingTypes, setIsFetchingTypes] = useState(false);
+
+    // Fetch allowed types based on UAI and ClassID
+    useEffect(() => {
+        const uai = userUai || (profileData as any).uai || (profileData as any).schoolId;
+        const classId = (profileData as any).classId || (profileData as any).classe;
+
+        if (role === 'student' && uai && classId) {
+            const fetchAllowedTypes = async () => {
+                setIsFetchingTypes(true);
+                try {
+                    const res = await fetch(`/api/student/conventions/allowed-types?uai=${uai}&classId=${classId}`);
+                    if (res.ok) {
+                        const data = await res.json();
+                        setAllowedTypes(data.allowedTypes || []);
+                        
+                        // Auto-select if only one type
+                        if (data.allowedTypes?.length === 1) {
+                            form.setValue('type', data.allowedTypes[0].id as any);
+                        }
+                    }
+                } catch (error) {
+                    console.error("Error fetching allowed types:", error);
+                } finally {
+                    setIsFetchingTypes(false);
+                }
+            };
+            fetchAllowedTypes();
+        }
+    }, [role, userUai, profileData, form]);
+
                 return (
                     <div className="grid grid-cols-1 gap-6 md:grid-cols-2">
                         {/* Convention Type Configuration */}
-                        <div className="md:col-span-2 bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-2">
-                            <label className="block text-sm font-bold text-indigo-900 mb-2">Type de Convention</label>
-                            <select
-                                {...form.register('type')}
-                                className="block w-full rounded-md border-gray-400 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 bg-white text-gray-900 disabled:opacity-100 disabled:text-gray-900"
-                            >
-                                <option value="PFMP_STANDARD" disabled={allowedConventionTypes && !allowedConventionTypes.includes('PFMP_STANDARD')}>
-                                    PFMP Lycée Professionnel (Standard) {allowedConventionTypes && !allowedConventionTypes.includes('PFMP_STANDARD') && '(Non activé)'}
-                                </option>
-                                <option value="STAGE_2NDE" disabled={allowedConventionTypes && !allowedConventionTypes.includes('STAGE_2NDE')}>
-                                    Stage de Seconde {allowedConventionTypes && !allowedConventionTypes.includes('STAGE_2NDE') && '(En cours de développement)'}
-                                </option>
-                                <option value="ERASMUS_MOBILITY" disabled={allowedConventionTypes && !allowedConventionTypes.includes('ERASMUS_MOBILITY')}>
-                                    Mobilité Erasmus+ {allowedConventionTypes && !allowedConventionTypes.includes('ERASMUS_MOBILITY') && '(En cours de développement)'}
-                                </option>
-                            </select>
-                            <p className="text-xs text-indigo-600 mt-1">
-                                Le choix du type détermine le format légal de la convention générée. Les options grisées sont en cours de développement ou désactivées par votre établissement.
-                            </p>
-                        </div>
+                        {role === 'student' ? (
+                            // Student View: Dynamic selection based on allowed types
+                            allowedTypes.length > 1 ? (
+                                <div className="md:col-span-2 bg-indigo-50 p-6 rounded-2xl border border-indigo-100 mb-4 animate-in fade-in slide-in-from-top-4 duration-500">
+                                    <h4 className="flex items-center text-indigo-900 font-bold mb-3 text-lg">
+                                        <Wand2 className="w-5 h-5 mr-2 text-indigo-600" />
+                                        Quel type de stage effectuez-vous ?
+                                    </h4>
+                                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                                        {allowedTypes.map((type) => (
+                                            <label 
+                                                key={type.id}
+                                                className={cn(
+                                                    "relative flex items-center p-4 cursor-pointer rounded-xl border-2 transition-all duration-200",
+                                                    form.watch('type') === type.id 
+                                                        ? "border-indigo-600 bg-white shadow-md ring-2 ring-indigo-100" 
+                                                        : "border-gray-200 bg-gray-50/50 hover:border-indigo-300 hover:bg-white"
+                                                )}
+                                            >
+                                                <input
+                                                    type="radio"
+                                                    {...form.register('type')}
+                                                    value={type.id}
+                                                    className="sr-only"
+                                                />
+                                                <div className="flex flex-col">
+                                                    <span className={cn(
+                                                        "font-bold text-sm",
+                                                        form.watch('type') === type.id ? "text-indigo-900" : "text-gray-700"
+                                                    )}>
+                                                        {type.label}
+                                                    </span>
+                                                    <span className="text-xs text-gray-500 mt-0.5">
+                                                        Modèle de convention officiel
+                                                    </span>
+                                                </div>
+                                                {form.watch('type') === type.id && (
+                                                    <div className="ml-auto">
+                                                        <div className="h-5 w-5 rounded-full bg-indigo-600 flex items-center justify-center">
+                                                            <div className="h-2 w-2 rounded-full bg-white" />
+                                                        </div>
+                                                    </div>
+                                                )}
+                                            </label>
+                                        ))}
+                                    </div>
+                                    <p className="text-xs text-indigo-600 mt-4 flex items-center">
+                                        <AlertCircle className="w-3.5 h-3.5 mr-1.5" />
+                                        Le choix du type détermine le texte juridique de votre convention.
+                                    </p>
+                                </div>
+                            ) : (
+                                // Single type or fetching: Informative alert
+                                <div className="md:col-span-2 bg-gray-50 p-4 rounded-xl border border-gray-200 mb-2">
+                                    <div className="flex items-center justify-between">
+                                        <div>
+                                            <p className="text-xs font-semibold text-gray-500 uppercase tracking-wider mb-1">Type de Convention</p>
+                                            <p className="text-sm font-bold text-gray-900">
+                                                {isFetchingTypes ? "Chargement..." : (allowedTypes[0]?.label || "PFMP Lycée Professionnel (Standard)")}
+                                            </p>
+                                        </div>
+                                        {!isFetchingTypes && (
+                                            <div className="px-2.5 py-1 bg-green-100 text-green-700 text-[10px] font-bold rounded-full border border-green-200 uppercase">
+                                                Auto-configuré
+                                            </div>
+                                        )}
+                                    </div>
+                                </div>
+                            )
+                        ) : (
+                            // Admin / Teacher View: Full selection with development status
+                            <div className="md:col-span-2 bg-indigo-50 p-4 rounded-xl border border-indigo-100 mb-2">
+                                <label className="block text-sm font-bold text-indigo-900 mb-2">Type de Convention</label>
+                                <select
+                                    {...form.register('type')}
+                                    className="block w-full rounded-md border-gray-400 shadow-sm focus:border-blue-500 focus:ring-2 focus:ring-blue-200 sm:text-sm p-2 bg-white text-gray-900 disabled:opacity-100 disabled:text-gray-900"
+                                >
+                                    <option value="PFMP_STANDARD" disabled={allowedConventionTypes && !allowedConventionTypes.includes('PFMP_STANDARD')}>
+                                        PFMP Lycée Professionnel (Standard) {allowedConventionTypes && !allowedConventionTypes.includes('PFMP_STANDARD') && '(Non activé)'}
+                                    </option>
+                                    <option value="STAGE_2NDE" disabled={allowedConventionTypes && !allowedConventionTypes.includes('STAGE_2NDE')}>
+                                        Stage de Seconde {allowedConventionTypes && !allowedConventionTypes.includes('STAGE_2NDE') && '(En cours de développement)'}
+                                    </option>
+                                    <option value="ERASMUS_MOBILITY" disabled={allowedConventionTypes && !allowedConventionTypes.includes('ERASMUS_MOBILITY')}>
+                                        Mobilité Erasmus+ {allowedConventionTypes && !allowedConventionTypes.includes('ERASMUS_MOBILITY') && '(En cours de développement)'}
+                                    </option>
+                                </select>
+                                <p className="text-xs text-indigo-600 mt-1">
+                                    Le choix du type détermine le format légal de la convention générée. Les options grisées sont en cours de développement ou désactivées par votre établissement.
+                                </p>
+                            </div>
+                        )}
 
                         {/* Search School - Check if NOT locked (so not student and not debug account) */}
                         {!isSchoolLocked && (

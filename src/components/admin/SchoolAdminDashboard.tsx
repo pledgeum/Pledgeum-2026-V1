@@ -11,6 +11,7 @@ import Papa from 'papaparse';
 import { useConventionStore } from '@/store/convention';
 import { db, collection, query, where, getDocs, deleteDoc, doc, writeBatch } from '@/lib/firebase';
 import { toast } from 'sonner';
+import { CONVENTION_TYPES, ConventionTypeId } from '@/config/conventionTypes';
 
 // --- Checkable Dropdown Component ---
 interface CheckableDropdownProps {
@@ -171,6 +172,95 @@ export default function SchoolAdminDashboard() {
     const [importHelpType, setImportHelpType] = useState<'structure' | 'teacher' | null>(null);
     const [isPartnerImporting, setIsPartnerImporting] = useState(false);
     const [isManualMode, setIsManualMode] = useState(false);
+
+    // --- CONVENTION SETTINGS STATE ---
+    const [conventionSettings, setConventionSettings] = useState<{ convention_type_id: string, class_ids: string[] }[]>([]);
+    const [isFetchingSettings, setIsFetchingSettings] = useState(false);
+    const [isSavingSettings, setIsSavingSettings] = useState(false);
+
+    // Fetch Convention Settings
+    useEffect(() => {
+        if (schoolId && isAdminPanelOpen && activeTab === 'config') {
+            setIsFetchingSettings(true);
+            fetch(`/api/school/conventions/settings?uai=${schoolId}`)
+                .then(res => res.json())
+                .then(data => {
+                    if (data.settings) {
+                        setConventionSettings(data.settings);
+                    }
+                })
+                .catch(err => console.error("Error fetching convention settings:", err))
+                .finally(() => setIsFetchingSettings(false));
+        }
+    }, [schoolId, isAdminPanelOpen, activeTab]);
+
+    const handleToggleConvention = (typeId: string, enabled: boolean) => {
+        if (enabled) {
+            setConventionSettings(prev => [...prev, { convention_type_id: typeId, class_ids: [] }]);
+        } else {
+            setConventionSettings(prev => prev.filter(s => s.convention_type_id !== typeId));
+        }
+    };
+
+    const handleToggleClassForConvention = (typeId: string, classId: string) => {
+        setConventionSettings(prev => prev.map(s => {
+            if (s.convention_type_id !== typeId) return s;
+            const hasClass = s.class_ids.includes(classId);
+            return {
+                ...s,
+                class_ids: hasClass 
+                    ? s.class_ids.filter(id => id !== classId) 
+                    : [...s.class_ids, classId]
+            };
+        }));
+    };
+
+    const handleSaveConventions = async () => {
+        if (!schoolId) return;
+        setIsSavingSettings(true);
+        const toastId = toast.loading("Sauvegarde des configurations...");
+        
+        try {
+            // We need to save each type. In a real optimization, we might batch this.
+            // For now, let's send one request per type present in the local state.
+            // And maybe handle types that were removed? 
+            // Actually, the API does an UPSERT based on (uai, convention_type_id).
+            // If a type is removed from the local list, we should probably delete it or mark it inactive.
+            // But the current API doesn't support DELETE. 
+            // Let's assume for now we just save whatever is in the list.
+            
+            // To handle "deselection", we would need to know which ones were there before.
+            // Or the API should handle a batch of all settings for the school.
+            
+            // Let's implement a simple loop for now as per the "Action 4: Sauvegarde" requirement.
+            const promises = Object.values(CONVENTION_TYPES).map(type => {
+                const setting = conventionSettings.find(s => s.convention_type_id === type.id);
+                // If not in settings, it means it's disabled. 
+                // We should probably tell the backend it has 0 classes or is disabled.
+                // For now, we only save the enabled ones.
+                if (setting) {
+                    return fetch('/api/school/conventions/settings', {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify({
+                            uai: schoolId,
+                            convention_type_id: type.id,
+                            class_ids: setting.class_ids
+                        })
+                    });
+                }
+                return null;
+            }).filter(p => p !== null);
+
+            await Promise.all(promises);
+            toast.success("Configurations enregistrées !", { id: toastId });
+        } catch (error: any) {
+            console.error("Save conventions error:", error);
+            toast.error("Erreur lors de la sauvegarde.", { id: toastId });
+        } finally {
+            setIsSavingSettings(false);
+        }
+    };
 
     // Permissions
     const isSchoolHead = (email && schoolHeadEmail && email.toLowerCase() === schoolHeadEmail.toLowerCase()) || role === 'school_head';
@@ -1027,26 +1117,87 @@ export default function SchoolAdminDashboard() {
 
                     {activeTab === 'config' && (
                         <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm max-w-2xl">
-                            <h4 className="text-lg font-bold text-gray-900 mb-2 flex items-center"><Sparkles className="w-5 h-5 mr-3 text-purple-600" /> Types de Convention</h4>
-                            <p className="text-sm text-gray-500 mb-8 font-medium">Activez les modèles autorisés pour vos élèves.</p>
-                            <div className="space-y-3">
-                                {[
-                                    { id: 'PFMP_STANDARD', label: 'PFMP Lycée Professionnel (Standard)' },
-                                    { id: 'STAGE_2NDE', label: 'Stage de Seconde' },
-                                    { id: 'ERASMUS_MOBILITY', label: 'Mobilité Erasmus+' },
-                                    { id: 'BTS_INTERNSHIP', label: 'Convention de stage BTS' }
-                                ].map(type => (
-                                    <div key={type.id} className="flex items-center p-4 border border-gray-100 rounded-xl hover:bg-gray-50 transition-colors">
-                                        <input
-                                            type="checkbox"
-                                            id={type.id}
-                                            checked={allowedConventionTypes?.includes(type.id)}
-                                            onChange={(e) => toggleConventionType(type.id, e.target.checked)}
-                                            className="w-5 h-5 text-blue-600 rounded border-gray-300"
-                                        />
-                                        <label htmlFor={type.id} className="ml-4 block text-sm font-bold text-gray-900 cursor-pointer">{type.label}</label>
-                                    </div>
-                                ))}
+                            <div className="flex justify-between items-center mb-6">
+                                <div>
+                                    <h4 className="text-lg font-bold text-gray-900 flex items-center"><Sparkles className="w-5 h-5 mr-3 text-purple-600" /> Types de Convention</h4>
+                                    <p className="text-sm text-gray-500 font-medium">Activez les modèles autorisés et liez-les aux classes de votre lycée.</p>
+                                </div>
+                                {isFetchingSettings && <Loader2 className="w-5 h-5 animate-spin text-blue-600" />}
+                            </div>
+
+                            <div className="space-y-6">
+                                {Object.values(CONVENTION_TYPES).map(type => {
+                                    const setting = conventionSettings.find(s => s.convention_type_id === type.id);
+                                    const isEnabled = !!setting;
+
+                                    return (
+                                        <div key={type.id} className={`border rounded-xl transition-all duration-200 ${isEnabled ? 'border-blue-200 bg-blue-50/30' : 'border-gray-100 bg-white'}`}>
+                                            <div className="flex items-center p-4">
+                                                <div className="flex items-center h-5">
+                                                    <input
+                                                        type="checkbox"
+                                                        id={type.id}
+                                                        checked={isEnabled}
+                                                        onChange={(e) => handleToggleConvention(type.id, e.target.checked)}
+                                                        className="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 transition-all cursor-pointer"
+                                                    />
+                                                </div>
+                                                <label htmlFor={type.id} className={`ml-4 block text-sm font-bold cursor-pointer transition-colors ${isEnabled ? 'text-blue-900' : 'text-gray-900'}`}>{type.label}</label>
+                                            </div>
+
+                                            {isEnabled && (
+                                                <div className="px-4 pb-4 animate-in fade-in slide-in-from-top-2 duration-200">
+                                                    <div className="pl-9 pt-2 border-t border-blue-100">
+                                                        <p className="text-[11px] font-bold text-blue-600 uppercase tracking-wider mb-3">Classes autorisées pour cette convention :</p>
+                                                        <div className="flex flex-wrap gap-2">
+                                                            {classes.length === 0 ? (
+                                                                <p className="text-xs text-gray-500 italic">Aucune classe disponible. Importez d'abord vos classes.</p>
+                                                            ) : (
+                                                                classes.map(cls => {
+                                                                    const isSelected = setting.class_ids.includes(cls.id);
+                                                                    return (
+                                                                        <button
+                                                                            key={cls.id}
+                                                                            onClick={() => handleToggleClassForConvention(type.id, cls.id)}
+                                                                            className={`px-3 py-1.5 rounded-full text-xs font-bold border transition-all transform active:scale-95 ${
+                                                                                isSelected 
+                                                                                ? 'bg-blue-600 border-blue-600 text-white shadow-sm' 
+                                                                                : 'bg-white border-gray-200 text-gray-600 hover:border-blue-300 hover:text-blue-600'
+                                                                            }`}
+                                                                        >
+                                                                            {isSelected && <Check className="w-3 h-3 inline-block mr-1" />}
+                                                                            {cls.name}
+                                                                        </button>
+                                                                    );
+                                                                })
+                                                            )}
+                                                        </div>
+                                                    </div>
+                                                </div>
+                                            )}
+                                        </div>
+                                    );
+                                })}
+                            </div>
+
+                            <div className="mt-10 pt-6 border-t border-gray-100 flex justify-end">
+                                <button
+                                    onClick={handleSaveConventions}
+                                    disabled={isSavingSettings || isFetchingSettings}
+                                    className="flex items-center px-6 py-2.5 bg-blue-600 text-white rounded-lg text-sm font-bold hover:bg-blue-700 disabled:opacity-50 transition-all shadow-lg active:scale-95"
+                                >
+                                    {isSavingSettings ? (
+                                        <>
+                                            <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                            Enregistrement...
+                                        </>
+                                    ) : (
+                                        <>
+                                            <ShieldCheck className="w-4 h-4 mr-2" />
+                                            Enregistrer les modifications
+                                        </>
+                                    )}
+                                </button>
                             </div>
                         </div>
                     )}

@@ -800,15 +800,249 @@ function ErasmusPlaceholderPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
     );
 }
 
+// --- STAGE DE SECONDE PDF TEMPLATE ---
+function StageSecondePdf({ data, qrCodeUrl, hashCode }: PdfProps) {
+    const formatDate = (d?: string) => d ? new Date(d).toLocaleDateString('fr-FR') : '...';
+    
+    const SignatureContent = ({ img, hash, date, code, signatureId }: { img?: string, hash?: string, date?: string, code?: string, signatureId?: string }) => {
+        if (!img) return null;
+        return (
+            <View>
+                <Image src={img} style={{ width: 100, height: 35, objectFit: 'contain' }} />
+                {hash && (
+                    <View style={localStyles.validBadge}>
+                        <Text>✅ SIGNÉ</Text>
+                    </View>
+                )}
+                {date && <Text style={{ fontSize: 5, color: '#059669', marginTop: 1 }}>Le {new Date(date).toLocaleString('fr-FR')}</Text>}
+                {(code || signatureId) && (
+                    <View style={[localStyles.authCodeBox, { marginTop: 1, paddingVertical: 1 }]}>
+                        <Text style={localStyles.authCodeText}>Certificat: {signatureId || code}</Text>
+                    </View>
+                )}
+                {hash && <Text style={localStyles.hashText}>Hash: {hash.substring(0, 24)}...</Text>}
+            </View>
+        );
+    };
+
+    return (
+        <Document>
+            <Page size="A4" style={styles.page}>
+                <View style={{ marginBottom: 15 }}>
+                    <Text style={[styles.header, { fontSize: 11, textAlign: 'center' }]}>
+                        CONVENTION RELATIVE À L'ORGANISATION DE LA SÉQUENCE D'OBSERVATION EN MILIEU PROFESSIONNEL
+                    </Text>
+                    <Text style={[styles.text, { fontSize: 7, textAlign: 'center', marginTop: 4 }]}>
+                        Pour les élèves de collège (quatrième et troisième) et de lycée (seconde générale et technologique)
+                    </Text>
+                </View>
+
+                <Text style={[styles.text, { fontSize: 6, color: '#666', marginBottom: 10, textAlign: 'justify' }]}>
+                    Vu le code du travail, et notamment son article L. 4153-1 ; le code de l'éducation, et notamment ses articles L. 124-1, L. 134-9, L. 313-1, L. 331-4, L. 331-5, L. 332-3, L. 335-2, L. 411-3, L. 421-7, L. 911-4, D. 331-1 à D. 331-9, D. 333-3-1 ; le code civil, et notamment ses articles 1240 à 1242 ; la circulaire n°96-248 du 25-10-1996 relative à la surveillance des élèves ; la circulaire du 10-2-2021 relative au projet d’accueil individualisé pour raison de santé ; la circulaire du 16 juillet 2024 relative à l’organisation des sorties et voyages scolaires dans les écoles, les collèges et les lycées publics ; la circulaire du 21 novembre 2025 relative aux séquences d’observation, visite d’information et stages pour les élèves de collège et de lycée général et technologique ; la délibération du conseil d’administration en date du {data.ecole_ca_date || '...'} de l’établissement ;
+                </Text>
+
+                <View style={{ marginBottom: 10 }}>
+                    <Text style={[styles.text, { fontFamily: pdfTheme.fonts.bold }]}>Entre :</Text>
+                    <Text style={styles.text}>
+                        l'entreprise ou l'organisme d'accueil : <Text style={{ fontFamily: pdfTheme.fonts.bold }}>{data.ent_nom || '...'}</Text>, représenté par <Text style={{ fontFamily: pdfTheme.fonts.bold }}>{data.ent_rep_nom || '...'}</Text>, en qualité de responsable de l'organisme d'accueil d'une part, et
+                    </Text>
+                    <Text style={styles.text}>
+                        l'établissement d'enseignement scolaire : <Text style={{ fontFamily: pdfTheme.fonts.bold }}>{data.ecole_nom || '...'}</Text>, représenté par <Text style={{ fontFamily: pdfTheme.fonts.bold }}>{data.ecole_chef_nom || '...'}</Text>, en qualité de chef ou cheffe d'établissement d'autre part,
+                    </Text>
+                </View>
+
+                <View style={{ marginBottom: 10 }}>
+                    <Text style={[styles.text, { fontFamily: pdfTheme.fonts.bold }]}>Concernant :</Text>
+                    <Text style={[styles.text, { fontSize: 10, fontFamily: pdfTheme.fonts.bold, color: pdfTheme.colors.primary }]}>
+                        {data.eleve_prenom} {data.eleve_nom}
+                    </Text>
+                </View>
+
+                <Text style={[styles.text, { marginTop: 5, marginBottom: 5 }]}>Il a été convenu ce qui suit :</Text>
+
+                <Text style={styles.sectionTitle}>Titre I : Dispositions générales</Text>
+                
+                <Text style={styles.articleTitle}>Article 1</Text>
+                <Text style={styles.text}>La présente convention a pour objet la mise en œuvre d'une séquence d'observation en milieu professionnel, au bénéfice des élèves scolarisés en classe de quatrième ou de troisième au collège ou en classe de seconde générale et technologique au lycée.</Text>
+
+                <Text style={styles.articleTitle}>Article 2</Text>
+                <Text style={styles.text}>Les objectifs et les modalités de la séquence d'observation sont consignés dans l'annexe pédagogique. Les modalités de prise en charge des frais afférents à cette séquence ainsi que les modalités d'assurances sont définies dans l'annexe financière.</Text>
+
+                <Text style={styles.articleTitle}>Article 3</Text>
+                <Text style={styles.text}>L'organisation de la séquence d'observation est déterminée d'un commun accord entre le ou la responsable de l'organisme d'accueil et le ou la cheffe d'établissement.</Text>
+
+                <Text style={styles.articleTitle}>Article 4</Text>
+                <Text style={styles.text}>Les élèves demeurent sous statut scolaire durant la période d'observation en milieu professionnel. Ils restent placés sous l'autorité et la responsabilité du chef ou de la cheffe d'établissement. Ils ne peuvent prétendre à aucune rémunération ou gratification de l'entreprise ou de l'organisme d'accueil.</Text>
+
+                <Text style={styles.articleTitle}>Article 5</Text>
+                <Text style={styles.text}>
+                    Durant la séquence d'observation, les élèves n'ont pas à concourir au travail dans l'entreprise ou l'organisme d'accueil.
+                    Au cours des séquences d'observation, les élèves peuvent effectuer des enquêtes en liaison avec les enseignements. Ils peuvent également participer à des activités de l'entreprise ou de l'organisme d’accueil, à des essais ou à des démonstrations en liaison avec les enseignements et les objectifs de formation de leur classe, sous le contrôle des personnels responsables de leur encadrement en milieu professionnel.
+                    Les élèves ne peuvent accéder aux machines, appareils ou produits dont l'usage est proscrit aux mineurs par les articles D. 4153-15 à D. 4153-37 du code du travail. Ils ne peuvent ni procéder à des manœuvres ou manipulations sur d'autres machines, produits ou appareils de production, ni effectuer des travaux légers autorisés aux mineurs par ce même code.
+                    Si l’état de santé de l’élève nécessite d’avoir une trousse d’urgence dans le cadre d’un Projet d’Accueil Individualisé (PAI), les représentants légaux s’assurent que l’élève concerné emporte la trousse pendant la durée de la séquence d’observation.
+                </Text>
+
+                <Text style={styles.articleTitle}>Article 6</Text>
+                <Text style={styles.text}>La souscription par l’élève majeur ou par les responsables légaux d’un élève mineur d’une assurance scolaire couvrant les dommages dont l’élève serait l’auteur (garantie responsabilité civile) ou qu’il pourrait subir (garantie dommages corporels) en milieu professionnel est vivement recommandée. En application des articles 1240 à 1242 du code civil, le chef ou la cheffe d’entreprise ou le ou la responsable de l’organisme d’accueil (hors services de l’Etat, qui est son propre assureur) prend les dispositions nécessaires pour garantir sa responsabilité civile chaque fois qu’elle peut être engagée.</Text>
+
+                <Text style={styles.articleTitle}>Article 7</Text>
+                <Text style={styles.text}>En cas d'accident survenant à l'élève, soit en milieu professionnel, soit au cours du trajet, le ou la responsable de l'organisme d’accueil alerte sans délai le chef ou la cheffe d’établissement d’enseignement de l’élève par tout moyen mis à sa disposition et lui adresse la déclaration d'accident dûment renseignée dans la même journée.</Text>
+
+                {qrCodeUrl && <QrCodeFooter url={qrCodeUrl} code={hashCode} />}
+            </Page>
+
+            <Page size="A4" style={styles.page}>
+                <Text style={styles.articleTitle}>Article 8</Text>
+                <Text style={styles.text}>
+                    Dans le cadre de l’obligation générale de l’employeur d’assurer la sécurité et de protéger la santé physique et mentale des travailleurs et des travailleuses, et conformément aux articles L. 1142-2-1, L.1153-1 et suivants du code du travail, et à la loi n°2018-703 du 3 août 2018 renforçant la lutte contre les violences sexistes et sexuelles, l’organisme d’accueil s’engage à préserver l’élève de toute forme d’agissement sexiste, de harcèlement ou de violence sexuelle. Il prend toutes les dispositions nécessaires en vue de prévenir les faits de harcèlement et toute forme de violence verbale ou physique à caractère discriminatoire.
+                    L’organisme d’accueil s’engage à fournir à l’élève, dès son arrivée, une information claire sur les politiques internes en matière de lutte contre les violences sexistes et sexuelles, ainsi que sur les procédures de signalement et de recours disponibles.
+                    Dans le cadre de la prévention des risques professionnels, l’organisme d’accueil veille à procéder à l’évaluation des risques professionnels auxquels l’élève est susceptible d’être exposé et à prendre toutes les mesures nécessaires pour assurer la sécurité et protéger l’élève. Il fournit à l’élève les équipements de protection individuelle nécessaires, veille au port effectif de ces équipements après l’avoir formé à leur utilisation. Il informe et forme l’élève aux risques liés au poste de travail et aux moyens pour les prévenir.
+                    En cas de non-respect des règles d’hygiène et de sécurité prévues par son règlement intérieur, l’organisme d’accueil peut suspendre et mettre fin au stage en concertation avec l’établissement d’enseignement. En cas de difficultés, l’élève peut s’adresser à plusieurs personnes ressources dans et hors de l’organisme d’accueil : personnel de l’établissement, tuteur de l’organisme d’accueil ou personne référente désignée par l’organisme d’accueil.
+                </Text>
+
+                <Text style={styles.articleTitle}>Article 9</Text>
+                <Text style={styles.text}>Le ou la cheffe d'établissement d'enseignement et le ou la responsable de l'organisme d'accueil de l'élève se tiendront mutuellement informés des difficultés qui pourraient naître de l'application de la présente convention et prendront, d'un commun accord et en liaison avec l'équipe pédagogique, les dispositions propres à les résoudre notamment en cas de manquement à la discipline. Les difficultés qui pourraient être rencontrées lors de toute période en milieu professionnel, et notamment toute absence d'un élève, seront aussitôt portées à la connaissance du chef ou de la cheffe d'établissement.</Text>
+
+                <Text style={styles.articleTitle}>Article 10</Text>
+                <Text style={styles.text}>
+                    La présente convention est signée pour la durée de la séquence d'observation en milieu professionnel, qui est fixée à :
+                    • cinq jours (consécutifs ou non) pour les élèves scolarisés au collège ;
+                    • une semaine (si deux organismes d’accueil différents) ou deux semaines consécutives durant la seconde quinzaine du mois de juin, pour les élèves scolarisés en seconde générale ou technologique.
+                </Text>
+
+                <View style={{ marginTop: 15 }}>
+                    <Text style={styles.sectionTitle}>Titre II : Dispositions particulières</Text>
+                    <Text style={[styles.articleTitle, { color: '#1d4ed8' }]}>Annexe pédagogique</Text>
+                    
+                    <View style={localStyles.table}>
+                        <View style={localStyles.tableRow}>
+                            <Text style={[localStyles.tableCell, { width: '40%', fontWeight: 'bold' }]}>Élève :</Text>
+                            <Text style={[localStyles.tableCell, { width: '60%' }]}>{data.eleve_prenom} {data.eleve_nom}</Text>
+                        </View>
+                        <View style={localStyles.tableRow}>
+                            <Text style={[localStyles.tableCell, { width: '40%', fontWeight: 'bold' }]}>Date de naissance :</Text>
+                            <Text style={[localStyles.tableCell, { width: '60%' }]}>{formatDate(data.eleve_date_naissance)}</Text>
+                        </View>
+                        <View style={localStyles.tableRow}>
+                            <Text style={[localStyles.tableCell, { width: '40%', fontWeight: 'bold' }]}>Classe :</Text>
+                            <Text style={[localStyles.tableCell, { width: '60%' }]}>{data.eleve_classe}</Text>
+                        </View>
+                        <View style={localStyles.tableRow}>
+                            <Text style={[localStyles.tableCell, { width: '40%', fontWeight: 'bold' }]}>PAI (raison de santé) :</Text>
+                            <Text style={[localStyles.tableCell, { width: '60%' }]}>{(data as any).pai_exist ? 'Oui' : 'Non'}</Text>
+                        </View>
+                        <View style={localStyles.tableRow}>
+                            <Text style={[localStyles.tableCell, { width: '40%', fontWeight: 'bold' }]}>Tuteur d'accueil :</Text>
+                            <Text style={[localStyles.tableCell, { width: '60%' }]}>{data.tuteur_nom} ({data.tuteur_fonction || 'Tuteur'})</Text>
+                        </View>
+                        <View style={localStyles.tableRow}>
+                            <Text style={[localStyles.tableCell, { width: '40%', fontWeight: 'bold' }]}>Dates de la séquence :</Text>
+                            <Text style={[localStyles.tableCell, { width: '60%' }]}>Du {formatDate(data.stage_date_debut)} au {formatDate(data.stage_date_fin)} inclusivement</Text>
+                        </View>
+                    </View>
+                </View>
+
+                {/* HORAIRES SUMMARY */}
+                <View style={{ marginTop: 10 }}>
+                    <Text style={[styles.text, { fontFamily: pdfTheme.fonts.bold, marginBottom: 5 }]}>Horaires journaliers de l'élève :</Text>
+                    <View style={styles.table}>
+                        <View style={[styles.tableRow, styles.tableHeader]}>
+                            <Text style={[styles.tableCell, { width: '20%' }]}>Jour</Text>
+                            <Text style={[styles.tableCell, { width: '40%' }]}>Matin</Text>
+                            <Text style={[styles.tableCell, { width: '40%', borderRightWidth: 0 }]}>Après-midi</Text>
+                        </View>
+                        {['Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'].map((day) => {
+                            const slots = data.stage_horaires?.[day];
+                            if (!slots) return null;
+                            return (
+                                <View key={day} style={styles.tableRow}>
+                                    <Text style={[styles.tableCell, { width: '20%' }]}>{day}</Text>
+                                    <Text style={[styles.tableCell, { width: '40%' }]}>
+                                        {slots.matin_debut && slots.matin_fin ? `${slots.matin_debut} - ${slots.matin_fin}` : '-'}
+                                    </Text>
+                                    <Text style={[styles.tableCell, { width: '40%', borderRightWidth: 0 }]}>
+                                        {slots.apres_midi_debut && slots.apres_midi_fin ? `${slots.apres_midi_debut} - ${slots.apres_midi_fin}` : '-'}
+                                    </Text>
+                                </View>
+                            );
+                        })}
+                    </View>
+                </View>
+
+                {qrCodeUrl && <QrCodeFooter url={qrCodeUrl} code={hashCode} />}
+            </Page>
+
+            <Page size="A4" style={styles.page}>
+                <Text style={styles.articleTitle}>Objectifs assignés</Text>
+                <Text style={styles.text}>La séquence d'observation en milieu professionnel a pour objectif de sensibiliser l’élève à l'environnement technologique, économique et professionnel, en liaison avec les programmes d'enseignement, notamment dans le cadre de son éducation à l'orientation.</Text>
+                
+                <Text style={styles.articleTitle}>Activités prévues</Text>
+                <View style={{ padding: 8, border: 1, borderColor: '#eee', minHeight: 60 }}>
+                    <Text style={styles.text}>{data.stage_activites || 'Observations des différents services de l\'organisme d\'accueil...'}</Text>
+                </View>
+
+                <Text style={styles.articleTitle}>Modalités d'évaluation</Text>
+                <Text style={styles.text}>La séquence d'observation est précédée d'un temps de préparation et suivie d'un temps d'exploitation ou de restitution qui permet d’en valoriser les acquis. Cette restitution peut prendre la forme d’un rapport de stage, ou, au lycée, d’un échange collectif en classe de première.</Text>
+
+                <View style={{ marginTop: 15 }}>
+                    <Text style={[styles.articleTitle, { color: '#1d4ed8' }]}>Annexe financière</Text>
+                    <Text style={[styles.articleTitle, { fontSize: 9 }]}>Hébergement</Text>
+                    <Text style={styles.text}>L’hébergement de l’élève en milieu professionnel n’entre pas dans le cadre de la présente convention.</Text>
+                    
+                    <Text style={[styles.articleTitle, { fontSize: 9 }]}>Restauration</Text>
+                    <Text style={styles.text}>L’élève peut accéder à l’espace restauration de l’organisme d’accueil dans les conditions fixées par le règlement intérieur. La participation financière demeure à la charge du représentant légal, sauf décision contraire de l'organisme d'accueil.</Text>
+                    
+                    <Text style={[styles.articleTitle, { fontSize: 9 }]}>Transport</Text>
+                    <Text style={styles.text}>Dès lors que l'activité implique un déplacement en début ou fin de temps scolaire, il est assimilé au trajet habituel. L’élève peut s’y rendre ou en revenir seul.</Text>
+                </View>
+
+                {/* SIGNATURES BLOCK */}
+                <View wrap={false} style={{ marginTop: 30 }}>
+                    <Text style={{ fontFamily: pdfTheme.fonts.bold, fontSize: 10, borderBottomWidth: 1, paddingBottom: 5, marginBottom: 10 }}>Signatures de la convention</Text>
+                    <View style={localStyles.signatureRow}>
+                        <View style={[localStyles.signatureBox, data.signatures?.head?.hash ? localStyles.signatureBoxValid : {}]}>
+                            <Text style={localStyles.signatureLabel}>Le/la chef d'établissement</Text>
+                            <SignatureContent {...data.signatures?.head} />
+                        </View>
+                        <View style={[localStyles.signatureBox, data.signatures?.company_head?.hash ? localStyles.signatureBoxValid : {}]}>
+                            <Text style={localStyles.signatureLabel}>Le/la responsable d'accueil</Text>
+                            <SignatureContent {...data.signatures?.company_head} />
+                        </View>
+                        <View style={[localStyles.signatureBox, data.signatures?.student?.hash ? localStyles.signatureBoxValid : {}]}>
+                            <Text style={localStyles.signatureLabel}>L’élève</Text>
+                            <SignatureContent {...data.signatures?.student} />
+                        </View>
+                        <View style={[localStyles.signatureBox, data.signatures?.parent?.hash ? localStyles.signatureBoxValid : {}]}>
+                            <Text style={localStyles.signatureLabel}>Le/les responsable(s) légaux</Text>
+                            <SignatureContent {...data.signatures?.parent} />
+                        </View>
+                    </View>
+                </View>
+
+                {qrCodeUrl && <QrCodeFooter url={qrCodeUrl} code={hashCode} />}
+            </Page>
+            
+            {/* Certificat d'Authenticité */}
+            {data.status === 'VALIDATED_HEAD' && (
+                <CertificatePage data={data} hashCode={hashCode} qrCodeUrl={qrCodeUrl} />
+            )}
+        </Document>
+    );
+}
+
 // --- MAIN FACTORY COMPONENT ---
 export function ConventionPdf(props: PdfProps) {
     const { data } = props;
 
     // Factory Logic
+    if (data.type === 'STAGE_2NDE') {
+        return <StageSecondePdf {...props} />;
+    }
+
     if (data.type === 'ERASMUS_MOBILITY') {
         return <ErasmusPlaceholderPdf {...props} />;
     }
 
-    // Default to Standard (PFMP_STANDARD or STAGE_2NDE)
+    // Default to Standard (PFMP_STANDARD or other)
     return <StandardConventionPdf {...props} />;
 }

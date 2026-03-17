@@ -74,9 +74,9 @@ export async function POST(req: Request) {
                     id, student_uid, establishment_uai, class_id, company_siret,
                     status, date_start, date_end, duration_hours,
                     tutor_email, tutor_name,
-                    metadata, updated_at
+                    metadata, type, updated_at
                 )
-                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, NOW())
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, NOW())
                 ON CONFLICT (id) DO UPDATE 
                 SET 
                     student_uid = EXCLUDED.student_uid,
@@ -87,6 +87,7 @@ export async function POST(req: Request) {
                     duration_hours = EXCLUDED.duration_hours,
                     tutor_email = EXCLUDED.tutor_email,
                     metadata = EXCLUDED.metadata,
+                    type = EXCLUDED.type,
                     updated_at = NOW()
             `, [
                 id,
@@ -103,7 +104,8 @@ export async function POST(req: Request) {
                 body.tuteur_email,
                 (body.tuteur_prenom ? body.tuteur_prenom + ' ' : '') + (body.tuteur_nom || ''),
 
-                JSON.stringify(body) // Metadata
+                JSON.stringify(body), // Metadata
+                body.type || 'PFMP_STANDARD'
             ]);
 
             await client.query('COMMIT');
