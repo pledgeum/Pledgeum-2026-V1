@@ -356,14 +356,14 @@ export default function LoginPage() {
                             </div>
                         </div>
 
-                        <div className="text-sm text-center mt-4">
+                        <div className="text-sm text-center mt-4 hidden">
                             <Link href="/signup" className="font-medium text-blue-600 hover:text-blue-500">
                                 Pas encore de compte ? S'inscrire
                             </Link>
                         </div>
 
                         {/* DEMO ACCESS BUTTON */}
-                        <div className="mt-8 pt-6 border-t border-gray-100">
+                        <div className="mt-8 pt-6 border-t border-gray-100 hidden">
                             <button
                                 type="button"
                                 onClick={handleDemoLogin}
