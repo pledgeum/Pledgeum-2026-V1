@@ -205,6 +205,7 @@ export function MissionOrderModal({ isOpen, onClose }: MissionOrderModalProps) {
                 signeeName={name || (name === 'TEST (Moi-même)' ? 'Admin Test' : "Chef d'Établissement")}
                 signeeEmail={useUserStore.getState().email === 'pledgeum@gmail.com' ? 'pledgeum@gmail.com' : "chef@ecole.fr"} // Dynamic for test
                 hideOtp={true} // Simple signature for bulk internally? Or full process? Let's hide OTP for bulk efficiency for now
+                role="school_head"
             />
         </div>
     );

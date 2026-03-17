@@ -19,7 +19,7 @@ const EXCLUDED_PATHS = [
 ];
 
 // List of roles that do NOT need a UAI attached to their profile
-const rolesExemptFromUai = ['parent', 'tutor', 'company_head', 'company_admin', 'company_head_tutor'];
+const rolesExemptFromUai = ['parent', 'tutor', 'company_head', 'company_admin', 'company_head_tutor', 'admin', 'SUPER_ADMIN'];
 
 export function ProfileGuard({ children }: { children: React.ReactNode }) {
     const { data: session, status } = useSession();

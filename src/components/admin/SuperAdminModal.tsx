@@ -146,7 +146,7 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                             <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-200">
 
                                 {/* URGENT: FLASHY SANDBOX BUTTON FOR PLEDGEUM */}
-                                {(userEmail === 'pledgeum@gmail.com' || userRole?.toString().toUpperCase() === 'SUPER_ADMIN') && (
+                                {(userEmail?.toLowerCase() === 'pledgeum@gmail.com' || userRole?.toString().toUpperCase() === 'SUPER_ADMIN') && (
                                     <button
                                         type="button"
                                         className="relative z-[9999] bg-orange-600 hover:bg-orange-700 text-white font-bold text-lg p-4 block w-full mb-6 rounded-lg shadow-2xl border-4 border-white animate-pulse"
@@ -170,10 +170,10 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                 snapConvs.forEach((d: any) => {
                                                     const data = d.data();
                                                     const isGhost =
-                                                        data.ecole_chef_email === pledgeumEmail ||
-                                                        data.prof_email === pledgeumEmail ||
-                                                        data.ent_rep_email === pledgeumEmail ||
-                                                        data.tuteur_email === pledgeumEmail;
+                                                        data.ecole_chef_email?.toLowerCase() === pledgeumEmail ||
+                                                        data.prof_email?.toLowerCase() === pledgeumEmail ||
+                                                        data.ent_rep_email?.toLowerCase() === pledgeumEmail ||
+                                                        data.tuteur_email?.toLowerCase() === pledgeumEmail;
 
                                                     if (isGhost) {
                                                         deletePromises.push(deleteDoc(doc(db, "conventions", d.id)));
@@ -430,13 +430,31 @@ export function SuperAdminModal({ isOpen, onClose }: SuperAdminModalProps) {
                                                                     // So calling `handleAuthorize` fully might fail on `initializeSchoolIdentity` (missing address).
                                                                     // So we should probably just call `authorizeSchool` from `useAdminStore` to update the status.
 
-                                                                    authorizeSchool({
-                                                                        id: school.id,
-                                                                        name: school.name,
-                                                                        city: school.city,
-                                                                        email: school.email,
-                                                                        status: 'ADHERENT'
-                                                                    });
+                                                                    if (confirm(`Passer ${school.name} en mode ADHÉRENT ?`)) {
+                                                                        // 1. Local update
+                                                                        authorizeSchool({
+                                                                            id: school.id,
+                                                                            name: school.name,
+                                                                            city: school.city,
+                                                                            email: school.email,
+                                                                            status: 'ADHERENT'
+                                                                        });
+
+                                                                        // 2. Persist (Firestore + Postgres)
+                                                                        try {
+                                                                            await initializeSchoolIdentity(school.id, {
+                                                                                name: school.name,
+                                                                                address: '', // Safe because of CASE logic in PG
+                                                                                city: school.city,
+                                                                                postalCode: '', 
+                                                                                email: school.email || '',
+                                                                                status: 'ADHERENT',
+                                                                                uai: school.id
+                                                                            });
+                                                                        } catch (err) {
+                                                                            console.error("Failed to persist upgrade:", err);
+                                                                        }
+                                                                    }
                                                                 }
                                                             }}
                                                             className="px-2 py-1 bg-green-50 text-green-700 text-xs font-bold rounded hover:bg-green-100 border border-green-200 transition-colors mr-2"

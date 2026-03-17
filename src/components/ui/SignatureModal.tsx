@@ -10,7 +10,8 @@ import { parseISO, format } from 'date-fns';
 interface SignatureModalProps {
     isOpen: boolean;
     onClose: () => void;
-    onSign: (method: 'canvas' | 'otp', signatureImage?: string, extraAuditLog?: any, dualSign?: boolean) => Promise<any> | void;
+    onSign: (method: 'canvas' | 'otp', signatureImage?: string, extraAuditLog?: any, dualSign?: boolean, newCompanyHeadEmail?: string) => Promise<any> | void;
+
     title?: string;
     signeeName: string;
     signeeEmail: string;
@@ -46,6 +47,9 @@ export function SignatureModal({
     const [view, setView] = useState<'sign' | 'reject'>('sign');
     const [rejectionReason, setRejectionReason] = useState('');
     const [emailErrorDetails, setEmailErrorDetails] = useState<string | null>(null);
+    const [newCompanyHeadEmail, setNewCompanyHeadEmail] = useState('');
+    const [emailValidationError, setEmailValidationError] = useState<string | null>(null);
+
 
     const sigCanvas = useRef<any>({});
     const { isDemoMode, openEmailModal } = useDemoStore();
@@ -81,12 +85,20 @@ export function SignatureModal({
             setOtpCode('');
             setOtpSent(false);
             setActiveTab('canvas');
-            setIsDualSignChecked(false);
-            setIsSuccess(false); // Reset success state
-            setView('sign');
             setRejectionReason('');
+            setNewCompanyHeadEmail('');
+            setEmailValidationError(null);
+
+            // Logic for pre-checking dual signature if tutor is also company head
+            const isTutorHead = convention?.metadata?.is_tutor_company_head === true;
+            if (role === 'tutor' && isTutorHead) {
+                setIsDualSignChecked(true);
+            } else {
+                setIsDualSignChecked(false);
+            }
         }
-    }, [isOpen]);
+    }, [isOpen, convention, role]);
+
 
     if (!isOpen) return null;
 
@@ -95,50 +107,73 @@ export function SignatureModal({
         const isRejected = view === 'reject';
         return (
             <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 backdrop-blur-sm p-4">
-                <div className="bg-white rounded-xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col items-center p-6 text-center space-y-4 animate-in fade-in zoom-in-95">
-                    <div className={isRejected ? "bg-red-100 p-4 rounded-full" : "bg-green-100 p-4 rounded-full"}>
+                <div className="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden flex flex-col items-center p-8 text-center space-y-6 animate-in fade-in zoom-in-95">
+                    <div className={isRejected ? "bg-red-50 p-5 rounded-full" : "bg-green-50 p-5 rounded-full"}>
                         {isRejected ? (
-                            <X className="w-12 h-12 text-red-600" />
+                            <X className="w-14 h-14 text-red-500" />
                         ) : (
-                            <CheckCircle className="w-12 h-12 text-green-600" />
+                            <CheckCircle className="w-14 h-14 text-green-500" />
                         )}
                     </div>
-                    <h3 className="text-2xl font-bold text-gray-900">
-                        {isRejected ? "Convention refusée" : "Convention signée avec succès ! ✅"}
-                    </h3>
-                    <p className="text-gray-600 text-lg">
-                        {isRejected 
-                            ? "Le refus a bien été enregistré. Les responsables ont été notifiés." 
-                            : "La convention a bien été signée."
-                        }
-                        {!isRejected && emailErrorDetails && (
-                            <span className="block mt-2 text-orange-600 font-bold text-base">
-                                Attention : L'email de confirmation n'a pas pu être envoyé.
-                            </span>
-                        )}
-                    </p>
+                    
+                    <div className="space-y-2">
+                        <h3 className="text-2xl font-bold text-slate-900 leading-tight">
+                            {isRejected ? "Convention refusée" : "Convention signée ! ✅"}
+                        </h3>
+                        <p className="text-slate-600 font-medium">
+                            {isRejected 
+                                ? "Le refus a bien été enregistré. Les signataires ont été notifiés." 
+                                : "Un e-mail de confirmation a été envoyé aux parties suivantes :"
+                            }
+                        </p>
+                    </div>
 
-                    {emailErrorDetails ? (
-                        <div className="bg-orange-50 px-4 py-3 rounded-lg border border-orange-200 text-left w-full">
-                            <div className="flex items-start">
-                                <AlertTriangle className="w-5 h-5 text-orange-600 mr-2 mt-0.5 shrink-0" />
-                                <div>
-                                    <h4 className="text-sm font-bold text-orange-800">Échec de l'envoi d'email</h4>
-                                    <p className="text-xs text-orange-700 mt-1 font-mono break-all">
-                                        {emailErrorDetails}
-                                    </p>
+                    {!isRejected && (
+                        <div className="w-full space-y-3">
+                            {(conventions.find(c => c.id === conventionId)?.metadata?.lastRecipients || []).map((item: any, idx: number) => (
+                                <div key={idx} className="flex flex-col items-start gap-1">
+                                    <span className="text-[10px] text-slate-500 font-bold uppercase tracking-wider ml-1">
+                                        {item.role || "Destinataire"}
+                                    </span>
+                                    <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl group transition-colors hover:bg-slate-100 w-full">
+                                        <div className="p-1.5 bg-white rounded-lg shadow-sm border border-slate-200">
+                                            <Mail className="w-4 h-4 text-slate-400 group-hover:text-blue-500 transition-colors" />
+                                        </div>
+                                        <span className="text-sm font-medium text-slate-700 truncate font-mono tracking-tight">
+                                            {(item.email || item).toLowerCase()}
+                                        </span>
+                                    </div>
                                 </div>
-                            </div>
+                            ))}
+                            {/* Fallback if list is empty */}
+                            {(!conventions.find(c => c.id === conventionId)?.metadata?.lastRecipients?.length) && (
+                                <div className="flex items-center gap-3 px-4 py-2.5 bg-slate-50 border border-slate-100 rounded-xl w-full">
+                                    <div className="p-1.5 bg-white rounded-lg shadow-sm">
+                                        <Mail className="w-4 h-4 text-slate-400" />
+                                    </div>
+                                    <span className="text-sm font-medium text-slate-700 truncate font-mono">
+                                        {signeeEmail.toLowerCase()}
+                                    </span>
+                                </div>
+                            )}
                         </div>
-                    ) : (
-                        <div className={convention?.rep_legal_email ? "bg-green-50 px-6 py-3 rounded-lg border border-green-200 font-mono text-base font-bold text-green-900 break-all w-full" : "bg-red-50 px-6 py-3 rounded-lg border border-red-200 font-mono text-base font-bold text-red-900 break-all w-full"}>
-                            {convention?.rep_legal_email ? `Email envoyé à : ${convention.rep_legal_email}` : "ERREUR : Email parent manquant !"}
+                    )}
+
+                    {!isRejected && emailErrorDetails && (
+                        <div className="bg-amber-50 px-4 py-3 rounded-xl border border-amber-200 text-left w-full flex gap-3">
+                            <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" />
+                            <div className="space-y-1">
+                                <h4 className="text-sm font-bold text-amber-900">Information d'envoi</h4>
+                                <p className="text-xs text-amber-800 leading-relaxed">
+                                    Certaines notifications peuvent être retardées : {emailErrorDetails}
+                                </p>
+                            </div>
                         </div>
                     )}
 
                     <button
                         onClick={onClose}
-                        className="w-full py-3 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-md transition-colors mt-4"
+                        className="w-full py-3.5 bg-blue-600 hover:bg-blue-700 text-white font-bold rounded-xl shadow-lg shadow-blue-200 transition-all active:scale-[0.98] mt-4"
                     >
                         OK, c'est noté
                     </button>
@@ -151,17 +186,24 @@ export function SignatureModal({
         sigCanvas.current.clear();
     };
 
-    const handleSignatureSave = async (signature: string) => {
+    const handleSignatureSave = async (signature: string, newEmail?: string) => {
         // Save justification if needed/present (BEFORE signing)
         if (justification && convention && justification !== convention.derogationJustification) {
             await updateConvention(conventionId, { derogationJustification: justification });
         }
 
-        // We pass the isDualSignChecked state to the onSign callback
-        return await onSign('canvas', signature, undefined, isDualSignChecked);
+        // We pass the isDualSignChecked state and the new email if delegation occurs
+        return await onSign('canvas', signature, undefined, isDualSignChecked, newEmail);
+    };
+
+
+    const validateEmail = (email: string) => {
+        const re = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+        return re.test(email);
     };
 
     const handleCanvasSubmit = async () => {
+
         if (sigCanvas.current.isEmpty()) {
             alert("Veuillez signer avant de valider.");
             return;
@@ -170,11 +212,26 @@ export function SignatureModal({
             alert("Une justification est requise pour valider ces dates hors période officielle.");
             return;
         }
+
+        // Business Logic: If Tutor delegates legal representative role, email is mandatory
+        if (role === 'tutor' && convention?.metadata?.is_tutor_company_head === true && !isDualSignChecked) {
+            if (!newCompanyHeadEmail) {
+                setEmailValidationError("L'e-mail du représentant légal est obligatoire en cas de délégation.");
+                return;
+            }
+            if (!validateEmail(newCompanyHeadEmail)) {
+                setEmailValidationError("L'e-mail saisi n'est pas valide.");
+                return;
+            }
+        }
+
         setLoading(true);
+        setEmailValidationError(null);
         try {
             const dataUrl = sigCanvas.current.getTrimmedCanvas().toDataURL('image/png');
-            const result = await handleSignatureSave(dataUrl);
+            const result = await handleSignatureSave(dataUrl, newCompanyHeadEmail);
             console.log('[MODAL] Transitioning to Success Step', result); // [DEBUG]
+
 
             // Check for Warnings (Email Failures) from API
             if (result && result.warning === 'EMAIL_FAILED') {
@@ -252,13 +309,14 @@ export function SignatureModal({
         }
     };
 
-    const handleOtpOnSign = async (dataUrl: string, auditLog: any) => {
+    const handleOtpOnSign = async (dataUrl: string, auditLog: any, newEmail?: string) => {
         // Save justification if needed (OTP flow)
         if (justification && convention && justification !== convention.derogationJustification) {
             await updateConvention(conventionId, { derogationJustification: justification });
         }
-        return await onSign('otp', dataUrl, auditLog, isDualSignChecked);
+        return await onSign('otp', dataUrl, auditLog, isDualSignChecked, newEmail);
     };
+
 
     const handleOtpSubmit = async () => {
         if (otpCode.length < 4) {
@@ -269,7 +327,20 @@ export function SignatureModal({
             alert("Une justification est requise pour valider ces dates hors période officielle.");
             return;
         }
+        // Business Logic: If Tutor delegates legal representative role, email is mandatory
+        if (role === 'tutor' && convention?.metadata?.is_tutor_company_head === true && !isDualSignChecked) {
+            if (!newCompanyHeadEmail) {
+                setEmailValidationError("L'e-mail du représentant légal est obligatoire en cas de délégation.");
+                return;
+            }
+            if (!validateEmail(newCompanyHeadEmail)) {
+                setEmailValidationError("L'e-mail saisi n'est pas valide.");
+                return;
+            }
+        }
+
         setLoading(true);
+        setEmailValidationError(null);
 
         if (isDemoMode) {
             // Fake Verification
@@ -306,7 +377,8 @@ export function SignatureModal({
                         email: signeeEmail
                     };
 
-                    await handleOtpOnSign(dataUrl, fakeAuditLog);
+                    await handleOtpOnSign(dataUrl, fakeAuditLog, newCompanyHeadEmail);
+
                     setIsSuccess(true); // Switch to success view
                 } else {
                     alert("Code incorrect (Le code de démo est 1234)");
@@ -323,59 +395,31 @@ export function SignatureModal({
                     ? `/api/conventions/${conventionId}/attestation/verify-otp`
                     : '/api/otp/verify';
 
-            const res = await fetch(apiPath, {
+            const res = await fetch(`/api/conventions/${conventionId}/sign/otp-verify`, {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                },
-                body: JSON.stringify({ email: signeeEmail, code: otpCode, signerName: signeeName })
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: signeeEmail, code: otpCode, conventionId })
             });
 
-            if (res.ok) {
-                // Generate a "Digital Signature" image
-                const canvas = document.createElement('canvas');
-                canvas.width = 400;
-                canvas.height = 150;
-                const ctx = canvas.getContext('2d');
-                if (ctx) {
-                    ctx.fillStyle = '#f0f9ff';
-                    ctx.fillRect(0, 0, 400, 150);
-                    ctx.strokeStyle = '#0284c7';
-                    ctx.lineWidth = 2;
-                    ctx.strokeRect(5, 5, 390, 140);
-
-                    ctx.font = 'bold 20px Arial';
-                    ctx.fillStyle = '#0369a1';
-                    ctx.fillText('Signature Numérique Certifiée', 30, 40);
-
-                    ctx.font = '16px Arial';
-                    ctx.fillStyle = '#334155';
-                    ctx.fillText(`Signé par OTP : ${signeeName}`, 30, 80);
-                    ctx.fillText(`Date : ${new Date().toLocaleDateString()}`, 30, 110);
-
-                    ctx.font = 'italic 12px Arial';
-                    ctx.fillStyle = '#64748b';
-                    ctx.fillText('Authentifié par Plateforme PFMP', 30, 135);
-                }
-                const dataUrl = canvas.toDataURL('image/png');
-
-                // Pass the audit log from the API response
-                const { auditLog } = await res.json();
-                const result = await handleOtpOnSign(dataUrl, auditLog);
-
-                // Check for Warnings (Email Failures) from API
-                if (result && result.warning === 'EMAIL_FAILED') {
-                    setEmailErrorDetails(result.debugError || "Erreur d'envoi d'email");
-                } else {
-                    setEmailErrorDetails(null);
-                }
-
-                setIsSuccess(true); // Switch to success view
-            } else {
-                alert("Code incorrect ou expiré.");
+            if (!res.ok) {
+                const data = await res.json().catch(() => ({}));
+                throw new Error(data.error || "Code invalide");
             }
-        } catch (error) {
-            alert("Erreur de vérification.");
+
+            const { dataUrl, auditLog } = await res.json();
+            const result = await handleOtpOnSign(dataUrl, auditLog, newCompanyHeadEmail);
+            console.log('[MODAL_OTP] Transitioning to Success Step', result); // [DEBUG]
+
+            // Check for Warnings (Email Failures) from API
+            if (result && result.warning === 'EMAIL_FAILED') {
+                setEmailErrorDetails(result.debugError || "Erreur d'envoi d'email");
+            } else {
+                setEmailErrorDetails(null);
+            }
+
+            setIsSuccess(true); // Switch to success view
+        } catch (error: any) {
+            alert(error.message || "Erreur de vérification.");
         } finally {
             setLoading(false);
         }
@@ -513,19 +557,52 @@ export function SignatureModal({
 
                             {/* Dual Sign Checkbox for Canvas */}
                             {canSignDual && (
-                                <div className="flex items-start space-x-2 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                                    <input
-                                        type="checkbox"
-                                        id="dualSignCanvas"
-                                        checked={isDualSignChecked}
-                                        onChange={(e) => setIsDualSignChecked(e.target.checked)}
-                                        className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-0.5"
-                                    />
-                                    <label htmlFor="dualSignCanvas" className="text-sm font-medium text-blue-900 cursor-pointer select-none text-justify">
-                                        {dualRoleLabel}
-                                    </label>
+                                <div className="space-y-3">
+                                    <div className="flex items-start space-x-2 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                        <input
+                                            type="checkbox"
+                                            id="dualSignCanvas"
+                                            checked={isDualSignChecked}
+                                            onChange={(e) => setIsDualSignChecked(e.target.checked)}
+                                            className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-0.5"
+                                        />
+                                        <label htmlFor="dualSignCanvas" className="text-sm font-medium text-blue-900 cursor-pointer select-none text-justify">
+                                            {dualRoleLabel}
+                                        </label>
+                                    </div>
+
+                                    {/* Delegation Email Field */}
+                                    {role === 'tutor' && convention?.metadata?.is_tutor_company_head === true && !isDualSignChecked && (
+                                        <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300 ml-1 border-l-2 border-blue-200 pl-3 py-1">
+                                            <label className="text-xs font-bold text-gray-700 flex items-center">
+                                                <Mail className="w-3 h-3 mr-2 text-blue-500" />
+                                                E-MAIL DU REPRÉSENTANT LÉGAL
+                                            </label>
+                                            <input
+                                                type="email"
+                                                placeholder="exemple@entreprise.fr"
+                                                value={newCompanyHeadEmail}
+                                                onChange={(e) => {
+                                                    setNewCompanyHeadEmail(e.target.value);
+                                                    setEmailValidationError(null);
+                                                }}
+                                                className={`w-full p-2 text-sm border-2 rounded-lg focus:ring-2 outline-none transition-all ${emailValidationError ? 'border-red-300 bg-red-50 focus:ring-red-200' : 'border-gray-200 focus:ring-blue-100 focus:border-blue-400'}`}
+                                            />
+                                            {emailValidationError ? (
+                                                <p className="text-[10px] text-red-600 font-medium flex items-center">
+                                                    <AlertTriangle className="w-3 h-3 mr-1" />
+                                                    {emailValidationError}
+                                                </p>
+                                            ) : (
+                                                <p className="text-[10px] text-gray-500 italic">
+                                                    Une invitation sera envoyée à cette adresse.
+                                                </p>
+                                            )}
+                                        </div>
+                                    )}
                                 </div>
                             )}
+
 
                             <button
                                 onClick={handleCanvasSubmit}
@@ -594,17 +671,49 @@ export function SignatureModal({
 
                                     {/* Dual Sign Checkbox for OTP */}
                                     {canSignDual && (
-                                        <div className="flex items-start space-x-2 bg-blue-50 p-3 rounded-lg border border-blue-100">
-                                            <input
-                                                type="checkbox"
-                                                id="dualSignOtp"
-                                                checked={isDualSignChecked}
-                                                onChange={(e) => setIsDualSignChecked(e.target.checked)}
-                                                className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-0.5"
-                                            />
-                                            <label htmlFor="dualSignOtp" className="text-sm font-medium text-blue-900 cursor-pointer select-none text-justify">
-                                                {dualRoleLabel}
-                                            </label>
+                                        <div className="space-y-3">
+                                            <div className="flex items-start space-x-2 bg-blue-50 p-3 rounded-lg border border-blue-100">
+                                                <input
+                                                    type="checkbox"
+                                                    id="dualSignOtp"
+                                                    checked={isDualSignChecked}
+                                                    onChange={(e) => setIsDualSignChecked(e.target.checked)}
+                                                    className="h-4 w-4 text-blue-600 focus:ring-blue-500 border-gray-300 rounded mt-0.5"
+                                                />
+                                                <label htmlFor="dualSignOtp" className="text-sm font-medium text-blue-900 cursor-pointer select-none text-justify">
+                                                    {dualRoleLabel}
+                                                </label>
+                                            </div>
+
+                                            {/* Delegation Email Field */}
+                                            {role === 'tutor' && convention?.metadata?.is_tutor_company_head === true && !isDualSignChecked && (
+                                                <div className="space-y-2 animate-in fade-in slide-in-from-top-2 duration-300 ml-1 border-l-2 border-blue-200 pl-3 py-1 text-left">
+                                                    <label className="text-xs font-bold text-gray-700 flex items-center">
+                                                        <Mail className="w-3 h-3 mr-2 text-blue-500" />
+                                                        E-MAIL DU REPRÉSENTANT LÉGAL
+                                                    </label>
+                                                    <input
+                                                        type="email"
+                                                        placeholder="exemple@entreprise.fr"
+                                                        value={newCompanyHeadEmail}
+                                                        onChange={(e) => {
+                                                            setNewCompanyHeadEmail(e.target.value);
+                                                            setEmailValidationError(null);
+                                                        }}
+                                                        className={`w-full p-2 text-sm border-2 rounded-lg focus:ring-2 outline-none transition-all ${emailValidationError ? 'border-red-300 bg-red-50 focus:ring-red-200' : 'border-gray-200 focus:ring-blue-100 focus:border-blue-400'}`}
+                                                    />
+                                                    {emailValidationError ? (
+                                                        <p className="text-[10px] text-red-600 font-medium flex items-center">
+                                                            <AlertTriangle className="w-3 h-3 mr-1" />
+                                                            {emailValidationError}
+                                                        </p>
+                                                    ) : (
+                                                        <p className="text-[10px] text-gray-500 italic">
+                                                            Une invitation sera envoyée à cette adresse.
+                                                        </p>
+                                                    )}
+                                                </div>
+                                            )}
                                         </div>
                                     )}
 

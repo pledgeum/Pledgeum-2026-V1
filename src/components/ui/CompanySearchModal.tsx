@@ -141,8 +141,8 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
                 bounds.extend({ lat: marker.lat, lng: marker.lon });
             });
 
-            // Add Results
-            results.forEach(result => {
+            // Add Results (only those with valid coordinates)
+            results.filter(r => r.lat !== 0 && r.lon !== 0).forEach(result => {
                 bounds.extend({ lat: result.lat, lng: result.lon });
             });
 
@@ -327,8 +327,6 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
                     if (companyCoords) {
                         displayCompany.lat = companyCoords.lat;
                         displayCompany.lon = companyCoords.lon;
-                    } else {
-                        continue; // Cannot place on map
                     }
                 }
 
@@ -509,7 +507,9 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
                                 results.map((company, idx) => (
                                     <div key={idx} className="bg-white border border-gray-200 rounded-lg p-3 hover:shadow-md transition-all cursor-pointer group"
                                         onClick={() => {
-                                            setMapCenter({ lat: company.lat, lng: company.lon });
+                                            if (company.lat !== 0 && company.lon !== 0) {
+                                                setMapCenter({ lat: company.lat, lng: company.lon });
+                                            }
                                             setSelectedMarker(company);
                                         }}
                                     >
@@ -528,6 +528,12 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
                                         </div>
                                         <p className="text-xs text-gray-500 mt-1 line-clamp-1">{company.address}</p>
                                         <p className="text-[10px] text-gray-400 mt-0.5">SIRET : {company.siret}</p>
+                                        {(company.lat === 0 || company.lon === 0) && (
+                                            <p className="text-[10px] text-amber-600 font-medium mt-1 flex items-center">
+                                                <MapPin className="w-3 h-3 mr-1" />
+                                                Position non disponible sur la carte
+                                            </p>
+                                        )}
                                         {company.activity && <p className="text-[10px] text-gray-400 truncate mt-0.5">{company.activity}</p>}
 
                                         <div className="mt-2 flex flex-wrap gap-1">
@@ -580,8 +586,8 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
                                     />
                                 ))}
 
-                                {/* Company Markers */}
-                                {results.map((company) => (
+                                {/* Company Markers (only with valid coordinates) */}
+                                {results.filter(c => c.lat !== 0 && c.lon !== 0).map((company) => (
                                     <MarkerF
                                         key={company.id}
                                         position={{ lat: company.lat, lng: company.lon }}
@@ -591,7 +597,7 @@ export function CompanySearchModal({ isOpen, onClose, studentAddress, schoolAddr
                                 ))}
 
                                 {/* Info Window */}
-                                {selectedMarker && (
+                                {selectedMarker && selectedMarker.lat !== 0 && selectedMarker.lon !== 0 && (
                                     <InfoWindowF
                                         position={{ lat: selectedMarker.lat, lng: selectedMarker.lon }}
                                         onCloseClick={() => setSelectedMarker(null)}

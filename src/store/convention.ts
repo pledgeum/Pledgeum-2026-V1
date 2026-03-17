@@ -126,7 +126,8 @@ interface ConventionState {
     isLoading?: boolean;
     addConvention: (data: ConventionData, studentId: string) => void;
     updateStatus: (id: string, newStatus: ConventionStatus) => void;
-    signConvention: (id: string, role: string, signatureImage?: string, code?: string, extraAuditLog?: AuditLog, dualSign?: boolean) => Promise<any>;
+    signConvention: (id: string, role: string, signatureImage?: string, code?: string, extraAuditLog?: AuditLog, dualSign?: boolean, newCompanyHeadEmail?: string) => Promise<any>;
+
     addFeedback: (id: string, author: string, message: string) => void;
     assignTrackingTeacher: (conventionId: string, trackingTeacherEmail: string, distanceKm?: number) => Promise<void>;
     getConventionsByRole: (role: string, userEmail: string, currentUserId?: string) => Convention[];
@@ -429,7 +430,8 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
 
     // Logique métier de transition d'état lors d'une signature
     // Logique métier de transition d'état lors d'une signature
-    signConvention: async (id, role, signatureImage, providedCode, extraAuditLog, dualSign = false) => {
+    signConvention: async (id, role, signatureImage, providedCode, extraAuditLog, dualSign = false, newCompanyHeadEmail) => {
+
         const { conventions } = get();
         const foundConvention = conventions.find(c => c.id === id);
         if (!foundConvention) return;
@@ -448,8 +450,10 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                     role,
                     signatureImage,
                     code,
-                    dualSign
+                    dualSign,
+                    newCompanyHeadEmail
                 })
+
             });
 
             if (!response.ok) {
@@ -457,29 +461,26 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 throw new Error(err.error || 'Failed to sign convention via API');
             }
 
-            const { data: updatedData } = await response.json();
+            const responseData = await response.json();
+            const updatedData = responseData.data;
+            const recipients = responseData.recipients || [];
+            const newStatus = updatedData.status; // [FIX] Restore for notification logic below
 
             // Optimistically update local state or use returned data
-            // We'll merge returned metadata with local convention to keep UI snappy
-            // Note: The API returns the raw DB row. We might need to map it if the store expects specific camelCase.
-            // But for `signatures` and `status`, it should be consistent if we updated metadata correctly.
-
             const newMetadata = updatedData.metadata || {};
-            const newSignatures = newMetadata.signatures || convention.signatures;
-            const newStatus = updatedData.status; // This might be snake_case in PG? No, usually text.
-
             const now = new Date().toISOString();
 
             set((state) => ({
                 conventions: state.conventions.map(c =>
                     c.id === id ? {
                         ...c,
-                        status: newStatus as ConventionStatus, // Cast to ensure type safety
-                        signatures: newMetadata.signatures || c.signatures, // Use nested signatures from metadata
+                        status: updatedData.status as ConventionStatus,
+                        signatures: newMetadata.signatures || c.signatures,
                         metadata: {
                             ...(c.metadata || {}),
-                            signatures: newMetadata.signatures || c.signatures, // Update nested metadata so it doesn't poison components doing full merges
-                            ...(updatedData.metadata?.certificateHash ? { certificateHash: updatedData.metadata.certificateHash } : {})
+                            signatures: newMetadata.signatures || c.signatures,
+                            lastRecipients: responseData.recipients || [], // [NEW] Persist structured objects
+                            ...(newMetadata.certificateHash ? { certificateHash: newMetadata.certificateHash } : {})
                         },
                         updatedAt: now,
                         auditLogs: [
@@ -488,7 +489,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                             {
                                 date: now,
                                 action: 'SIGNED',
-                                actorEmail: role, // Simplified logging
+                                actorEmail: role,
                                 details: `Signature par ${role} (API)`
                             }
                         ]
@@ -496,7 +497,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                 )
             }));
 
-            return updatedData; // Return full data for UI handling (warnings)
+            return responseData;
 
             // Notifications are currently handled in the logic below this block in the original file.
             // We should PRESERVE the notification logic or move it to the API. 
@@ -916,7 +917,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
             // Update local state
             const { conventions } = get();
             const updatedConventions = conventions.map(c =>
-                c.id === id ? { ...c, status: 'REJECTED' } : c
+                c.id === id ? { ...c, status: 'REJECTED' as ConventionStatus } : c
             );
             set({ conventions: updatedConventions });
         } catch (error) {

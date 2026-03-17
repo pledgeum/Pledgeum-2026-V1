@@ -1,7 +1,9 @@
+export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import pool from '@/lib/pg';
 import { auth } from '@/auth';
+import { validateAccess } from '@/lib/server-security';
 
 export async function GET(
     req: Request,
@@ -125,29 +127,7 @@ export async function GET(
             const convention = res.rows[0];
 
             // 3. Authorization Check
-            let isAuthorized = false;
-
-            const normalizedUserEmail = session.user.email.toLowerCase().trim();
-
-            if (userRole === 'admin' || userRole === 'SUPER_ADMIN') {
-                isAuthorized = true;
-            } else if (userRole === 'school_head' || userRole === 'ddfpt' || userRole === 'at_ddfpt' || userRole === 'business_manager') {
-                isAuthorized = convention.establishmentUai === userUai;
-            } else if (userRole === 'teacher' || userRole === 'teacher_tracker') {
-                const teacherEmail = (convention.teacherEmail || convention.metadata?.prof_email)?.toLowerCase().trim();
-                const trackingEmail = (convention.tracking_teacher_email || convention.metadata?.prof_suivi_email)?.toLowerCase().trim();
-                isAuthorized = (normalizedUserEmail === teacherEmail) || (normalizedUserEmail === trackingEmail);
-            } else if (userRole === 'student') {
-                isAuthorized = (convention.studentId === userId) || (convention.studentId === session.user.email);
-            } else if (userRole === 'parent') {
-                isAuthorized = convention.metadata?.rep_legal_email?.toLowerCase() === normalizedUserEmail;
-            } else if (userRole === 'tutor' || userRole === 'company_head' || userRole === 'company_head_tutor') {
-                const tutorEmail = (convention.tutorEmail || convention.metadata?.tuteur_email)?.toLowerCase().trim();
-                const repEmail = (convention.metadata?.ent_rep_email)?.toLowerCase().trim();
-                isAuthorized = (normalizedUserEmail === tutorEmail) || (normalizedUserEmail === repEmail);
-            }
-
-            if (!isAuthorized) {
+            if (!validateAccess(session, convention)) {
                 return NextResponse.json({ error: 'Unauthorized access to this convention' }, { status: 403 });
             }
 
@@ -213,85 +193,88 @@ export async function PUT(
             return NextResponse.json({ success: true, message: 'No updates provided' });
         }
 
-        // Map frontend camelCase to DB snake_case
-        const fieldMap: Record<string, string> = {
-            dateStart: 'date_start',
-            dateEnd: 'date_end',
-            studentId: 'student_uid',
-            companySiret: 'company_siret',
-            tutorName: 'tutor_name',
-            tutorEmail: 'tutor_email',
-            tutorPhone: 'tutor_phone',
-            tutorFunction: 'tutor_function',
-            mentorName: 'mentor_name',
-            mentorEmail: 'mentor_email',
-            mentorPhone: 'mentor_phone',
-            mentorFunction: 'mentor_function',
-            stageTitle: 'stage_title',
-            missionObjectives: 'mission_objectives',
-            mainActivities: 'main_activities',
-            skillsDeveloped: 'skills_developed',
-            weeklyHours: 'weekly_hours',
-            dailySchedule: 'daily_schedule',
-            workConditions: 'work_conditions',
-            healthSafety: 'health_safety',
-            companyName: 'ent_nom',
-            companyAddress: 'ent_adresse',
-            companyZip: 'ent_code_postal',
-            companyCity: 'ent_ville',
-            companyEmail: 'ent_email',
-            companyPhone: 'ent_phone',
-            representativeName: 'ent_rep_nom',
-            representativeEmail: 'ent_rep_email',
-            representativeFunction: 'ent_rep_fonction',
-            studentPhone: 'eleve_telephone',
-            studentAddress: 'eleve_adresse',
-            studentZip: 'eleve_code_postal',
-            studentCity: 'eleve_ville',
-            studentClass: 'eleve_classe',
-            studentBirthDate: 'eleve_date_naissance',
-            studentSecu: 'eleve_secu',
-            legalRepName: 'rep_legal_nom',
-            legalRepEmail: 'rep_legal_email',
-            legalRepPhone: 'rep_legal_phone',
-            legalRepAddress: 'rep_legal_adresse',
-            legalRepZip: 'rep_legal_code_postal',
-            legalRepCity: 'rep_legal_ville',
-            establishmentUai: 'establishment_uai',
-            headName: 'ecole_chef_nom',
-            headEmail: 'ecole_chef_email',
-            teacherName: 'prof_nom',
-            teacherEmail: 'prof_email',
-            assuranceName: 'assurance_nom',
-            assurancePolicy: 'assurance_police',
-            is_out_of_period: 'is_out_of_period'
-        };
-
-        // Fields that are stored in metadata JSONB instead of columns
-        // We will put UNMAPPED fields into metadata
-        const dbUpdates: any = {};
-        const metadataUpdates: any = {};
-        let hasMetadataUpdates = false;
-
-        // Fetch current metadata first if we need to merge
-        // Optimization: build queries dynamically
-
-        for (const [key, value] of Object.entries(updates)) {
-            if (fieldMap[key]) {
-                dbUpdates[fieldMap[key]] = value;
-            } else if (key === 'metadata') {
-                // If explicit metadata passed, merge it
-                // Logic to handle metadata deep merge is complex, assume partial update for now
-                // or just store what is passed if it's not a collision
-            } else {
-                // Unknown field -> Put in metadata
-                metadataUpdates[key] = value;
-                hasMetadataUpdates = true;
-            }
-        }
-
         const client = await pool.connect();
         try {
+            // 0. Security Check: Fetch convention first to verify access
+            const convRes = await client.query('SELECT * FROM conventions WHERE id = $1', [conventionId]);
+            if (convRes.rowCount === 0) {
+                return NextResponse.json({ error: 'Convention not found' }, { status: 404 });
+            }
+            const convention = convRes.rows[0];
+
+            if (!validateAccess(session, convention)) {
+                return NextResponse.json({ error: 'You do not have permission to modify this convention' }, { status: 403 });
+            }
+
+            // Map frontend camelCase to DB snake_case
+            const fieldMap: Record<string, string> = {
+                dateStart: 'date_start',
+                dateEnd: 'date_end',
+                studentId: 'student_uid',
+                companySiret: 'company_siret',
+                tutorName: 'tutor_name',
+                tutorEmail: 'tutor_email',
+                tutorPhone: 'tutor_phone',
+                tutorFunction: 'tutor_function',
+                mentorName: 'mentor_name',
+                mentorEmail: 'mentor_email',
+                mentorPhone: 'mentor_phone',
+                mentorFunction: 'mentor_function',
+                stageTitle: 'stage_title',
+                missionObjectives: 'mission_objectives',
+                mainActivities: 'main_activities',
+                skillsDeveloped: 'skills_developed',
+                weeklyHours: 'weekly_hours',
+                dailySchedule: 'daily_schedule',
+                workConditions: 'work_conditions',
+                healthSafety: 'health_safety',
+                companyName: 'ent_nom',
+                companyAddress: 'ent_adresse',
+                companyZip: 'ent_code_postal',
+                companyCity: 'ent_ville',
+                companyEmail: 'ent_email',
+                companyPhone: 'ent_phone',
+                representativeName: 'ent_rep_nom',
+                representativeEmail: 'ent_rep_email',
+                representativeFunction: 'ent_rep_fonction',
+                studentPhone: 'eleve_telephone',
+                studentAddress: 'eleve_adresse',
+                studentZip: 'eleve_code_postal',
+                studentCity: 'eleve_ville',
+                studentClass: 'eleve_classe',
+                studentBirthDate: 'eleve_date_naissance',
+                studentSecu: 'eleve_secu',
+                legalRepName: 'rep_legal_nom',
+                legalRepEmail: 'rep_legal_email',
+                legalRepPhone: 'rep_legal_phone',
+                legalRepAddress: 'rep_legal_adresse',
+                legalRepZip: 'rep_legal_code_postal',
+                legalRepCity: 'rep_legal_ville',
+                establishmentUai: 'establishment_uai',
+                headName: 'ecole_chef_nom',
+                headEmail: 'ecole_chef_email',
+                teacherName: 'prof_nom',
+                teacherEmail: 'prof_email',
+                assuranceName: 'assurance_nom',
+                assurancePolicy: 'assurance_police',
+                is_out_of_period: 'is_out_of_period'
+            };
+
+            const dbUpdates: any = {};
+            const metadataUpdates: any = {};
+            let hasMetadataUpdates = false;
+
+            for (const [key, value] of Object.entries(updates)) {
+                if (fieldMap[key]) {
+                    dbUpdates[fieldMap[key]] = value;
+                } else if (key === 'metadata') {
+                    // Skip or handle explicit metadata if needed
+                } else {
+                    metadataUpdates[key] = value;
+                    hasMetadataUpdates = true;
+                }
+            }
+
             await client.query('BEGIN');
 
             const setClauses: string[] = [];
@@ -304,9 +287,7 @@ export async function PUT(
                 pIdx++;
             }
 
-            // Handle metadata merge
             if (hasMetadataUpdates) {
-                // We use COALESCE(metadata, '{}') || $param
                 setClauses.push(`metadata = COALESCE(metadata, '{}'::jsonb) || $${pIdx}::jsonb`);
                 values.push(JSON.stringify(metadataUpdates));
                 pIdx++;
@@ -314,18 +295,11 @@ export async function PUT(
 
             setClauses.push(`updated_at = NOW()`);
 
-            // If no fields to update, return early (e.g. only unknown fields that we decided not to store?) 
-            // We always have metadataUpdates if unmapped fields exist.
-
-            if (setClauses.length === 1) { // Only updated_at
-                // Nothing to do really, but update timestamp
-            }
-
             const query = `
                 UPDATE conventions 
                 SET ${setClauses.join(', ')}
                 WHERE id = $${pIdx}
-                RETURNING *
+                RETURNING id, student_uid, status, metadata, date_start, date_end, establishment_uai, created_at, updated_at
             `;
             values.push(conventionId);
 
@@ -337,11 +311,10 @@ export async function PUT(
             }
 
             await client.query('COMMIT');
-
             return NextResponse.json({ success: true, data: res.rows[0] });
 
         } catch (error: any) {
-            await client.query('ROLLBACK');
+            if (client) await client.query('ROLLBACK');
             console.error('[API_UPDATE_CONVENTION] Error:', error);
             return NextResponse.json({ error: 'Database error', details: error.message }, { status: 500 });
         } finally {
@@ -349,6 +322,7 @@ export async function PUT(
         }
 
     } catch (error: any) {
+        console.error('[API_PUT_CONVENTION] Internal Error:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     }
 }

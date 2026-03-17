@@ -1,3 +1,5 @@
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import pool from '@/lib/pg';
 
@@ -92,7 +94,7 @@ export async function PUT(
 
     try {
         const body = await request.json();
-        const { schoolName, schoolAddress, schoolPhone, schoolHeadEmail } = body;
+        const { schoolName, schoolAddress, schoolPhone, schoolHeadEmail, subscriptionStatus } = body;
 
         const client = await pool.connect();
         try {
@@ -118,6 +120,10 @@ export async function PUT(
                 updates.push(`admin_email = $${paramIndex++}`);
                 values.push(schoolHeadEmail);
             }
+            if (subscriptionStatus !== undefined) {
+                updates.push(`subscription_status = $${paramIndex++}`);
+                values.push(subscriptionStatus);
+            }
 
             if (updates.length === 0) {
                 return NextResponse.json({ message: 'No changes detected' });
@@ -127,7 +133,7 @@ export async function PUT(
                 UPDATE establishments 
                 SET ${updates.join(', ')} 
                 WHERE uai = $1
-                RETURNING uai, name, address, telephone, admin_email
+                RETURNING uai, name, address, telephone, admin_email, subscription_status
             `;
 
             const result = await client.query(query, values);

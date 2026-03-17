@@ -2,6 +2,7 @@
 
 import { adminAuth, adminFirestore } from '@/lib/firebase-admin';
 import { sendEmail } from '@/lib/email';
+import pool from '@/lib/pg';
 
 export async function initializeSchoolIdentity(schoolId: string, data: {
     name: string;
@@ -29,6 +30,41 @@ export async function initializeSchoolIdentity(schoolId: string, data: {
             isAuthorized: true,
             schoolStatus: data.status // 'validated' from prompt maps to 'ADHERENT' here
         }, { merge: true });
+
+        // 2. Persist to PostgreSQL (NEW)
+        try {
+            const client = await pool.connect();
+            try {
+                const upsertQuery = `
+                    INSERT INTO establishments (uai, name, address, city, postal_code, telephone, admin_email, subscription_status)
+                    VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
+                    ON CONFLICT (uai) DO UPDATE 
+                    SET 
+                        name = EXCLUDED.name,
+                        address = CASE WHEN EXCLUDED.address <> '' THEN EXCLUDED.address ELSE establishments.address END,
+                        city = CASE WHEN EXCLUDED.city <> '' THEN EXCLUDED.city ELSE establishments.city END,
+                        postal_code = CASE WHEN EXCLUDED.postal_code <> '' THEN EXCLUDED.postal_code ELSE establishments.postal_code END,
+                        telephone = CASE WHEN EXCLUDED.telephone <> '' THEN EXCLUDED.telephone ELSE establishments.telephone END,
+                        admin_email = CASE WHEN EXCLUDED.admin_email IS NOT NULL AND EXCLUDED.admin_email <> '' THEN EXCLUDED.admin_email ELSE establishments.admin_email END,
+                        subscription_status = EXCLUDED.subscription_status,
+                        updated_at = NOW();
+                `;
+                await client.query(upsertQuery, [
+                    data.uai || schoolId,
+                    data.name,
+                    data.address,
+                    data.city,
+                    data.postalCode,
+                    data.phone || '',
+                    data.adminEmail || data.email,
+                    data.status
+                ]);
+            } finally {
+                client.release();
+            }
+        } catch (pgError) {
+            console.error("[Initialize School] PG Sync Error (Non-blocking):", pgError);
+        }
 
         console.log(`[Initialize School] Success for ${schoolId}`);
         return { success: true };

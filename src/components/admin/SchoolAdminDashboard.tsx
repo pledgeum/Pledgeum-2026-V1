@@ -616,32 +616,38 @@ export default function SchoolAdminDashboard() {
             ) : (
                 // BLOC CHEF D'ETABLISSEMENT (Standard) or others
                 <div className="mb-6">
-                    <h1 className="text-2xl font-bold text-gray-900">Espace Chef d'Établissement</h1>
+                    <h1 className="text-2xl font-bold text-gray-900">
+                        {role === 'SUPER_ADMIN' ? 'Espace Super-Administrateur' : "Espace Chef d'Établissement"}
+                    </h1>
                     <p className="text-sm text-gray-500 mt-1">
-                        Gérez votre établissement, vos classes et vos partenaires.
+                        {role === 'SUPER_ADMIN' 
+                            ? 'Gérez la plateforme globale et les accès des établissements.' 
+                            : 'Gérez votre établissement, vos classes et vos partenaires.'}
                     </p>
                 </div>
             )}
 
-            <div className="flex justify-start">
-                <button
-                    onClick={() => setIsAdminPanelOpen(!isAdminPanelOpen)}
-                    className="flex items-center px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm bg-white"
-                >
-                    {isAdminPanelOpen ? (
-                        <>
-                            <ChevronUp className="w-4 h-4 mr-2" />
-                            Fermer l'administration
-                        </>
-                    ) : (
-                        <>
-                            <span className="mr-2">⚙️</span>
-                            Administrer l'établissement
-                            <ChevronDown className="w-4 h-4 ml-2" />
-                        </>
-                    )}
-                </button>
-            </div>
+            {role !== 'SUPER_ADMIN' && (
+                <div className="flex justify-start">
+                    <button
+                        onClick={() => setIsAdminPanelOpen(!isAdminPanelOpen)}
+                        className="flex items-center px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm bg-white"
+                    >
+                        {isAdminPanelOpen ? (
+                            <>
+                                <ChevronUp className="w-4 h-4 mr-2" />
+                                Fermer l'administration
+                            </>
+                        ) : (
+                            <>
+                                <span className="mr-2">⚙️</span>
+                                Administrer l'établissement
+                                <ChevronDown className="w-4 h-4 ml-2" />
+                            </>
+                        )}
+                    </button>
+                </div>
+            )}
 
             {isAdminPanelOpen && (
                 <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">

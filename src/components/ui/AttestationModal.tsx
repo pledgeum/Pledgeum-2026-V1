@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { X, Calendar, Clock, Download, CheckCircle, Trash2, Plus, ArrowLeft, Calculator, FileDown, Lock as LockIcon } from 'lucide-react';
+import QRCode from 'qrcode';
 import { Convention, Absence } from '@/store/convention';
 import { useConventionStore } from '@/store/convention';
 import { useUserStore, UserRole } from '@/store/user';
@@ -538,6 +539,7 @@ export function AttestationModal({ isOpen, onClose, convention, currentUserEmail
                     signeeEmail={currentUserEmail}
                     conventionId={convention.id}
                     documentType="attestation"
+                    role={currentUserRole}
                 />
             </div>
         </div>

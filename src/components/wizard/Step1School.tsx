@@ -21,9 +21,9 @@ const stepSchema = conventionSchema.pick({
     ecole_chef_email: true,
     prof_nom: true,
     prof_email: true,
-    ecole_lat: z.number().optional(),
-    ecole_lng: z.number().optional(),
-    schoolId: z.string().optional(),
+    ecole_lat: true,
+    ecole_lng: true,
+    schoolId: true,
 });
 
 
@@ -60,7 +60,7 @@ export function Step1School() {
         form.setValue('ecole_adresse', `${school.adresse}, ${school.cp} ${school.ville}`);
         if (school.lat) form.setValue('ecole_lat', school.lat);
         if (school.lng) form.setValue('ecole_lng', school.lng);
-        if (school.uai) form.setValue('schoolId', school.uai);
+        if (school.id) form.setValue('schoolId', school.id);
         setSchoolQuery(school.nom); // Update search box to match
         setShowResults(false);
     };
@@ -233,12 +233,10 @@ export function Step1School() {
                     const currentType = form.getValues('type');
                     // Check if current type is valid relative to allowed list
                     // If allowed list is not empty and current type is not in it (or not set)
-                    if (allowedConventionTypes && allowedConventionTypes.length > 0) {
                         if (!currentType || !allowedConventionTypes.includes(currentType)) {
                             // Default to the first allowed type
-                            form.setValue('type', allowedConventionTypes[0] as "PFMP_STANDARD" | "STAGE_2NDE" | "ERASMUS_MOBILITY");
+                            form.setValue('type', allowedConventionTypes[0] as any);
                         }
-                    }
                 }, [allowedConventionTypes, form.watch('type')]);
 
 

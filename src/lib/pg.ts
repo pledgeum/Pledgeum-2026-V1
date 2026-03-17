@@ -1,7 +1,5 @@
 import { Pool, PoolConfig } from 'pg';
 
-let pool: Pool;
-
 // Define connection configuration
 let connectionConfig: PoolConfig;
 
@@ -23,14 +21,14 @@ if (process.env.DATABASE_URL) {
     throw new Error('Please define DATABASE_URL or POSTGRES_HOST environment variable');
 }
 
-if (process.env.NODE_ENV === 'production') {
-    pool = new Pool(connectionConfig);
-} else {
-    // Determine if we are in a serverless context or persistent dev server
-    if (!(global as any).postgresPool) {
-        (global as any).postgresPool = new Pool(connectionConfig);
-    }
-    pool = (global as any).postgresPool;
+// Global singleton pattern to prevent multiple pools in development (HMR) 
+// and potentially reuse across serverless function warm starts on Vercel.
+const globalForPg = global as unknown as { postgresPool: Pool };
+
+export const pool = globalForPg.postgresPool || new Pool(connectionConfig);
+
+if (process.env.NODE_ENV !== 'production') {
+    globalForPg.postgresPool = pool;
 }
 
 export default pool;

@@ -95,6 +95,7 @@ export const useUserStore = create<UserState>((set, get) => ({
             return false;
         }
 
+        console.log(`[UserStore] Fetching profile for UID: ${uid}...`);
         set({ isLoadingProfile: true });
 
         try {

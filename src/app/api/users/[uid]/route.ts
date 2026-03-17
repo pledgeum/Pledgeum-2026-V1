@@ -1,11 +1,25 @@
+export const dynamic = 'force-dynamic';
+
 import { NextResponse } from 'next/server';
 import pool from '@/lib/pg';
+import { auth } from '@/auth';
 
 export async function GET(
     request: Request,
     { params }: { params: Promise<{ uid: string }> } // Fix 1: Type params as Promise
 ) {
     const { uid } = await params; // Fix 1: Await params
+
+    const session = await auth();
+    if (!session || !session.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Authorization: User can only access their own profile unless they are an admin/DDFPT
+    const isAdmin = session.user.role === 'admin' || session.user.role === 'SUPER_ADMIN' || session.user.role === 'ddfpt' || session.user.role === 'school_head';
+    if (session.user.id !== uid && !isAdmin) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
 
     if (!uid || uid === 'undefined') {
         return NextResponse.json({ error: 'Missing UID' }, { status: 400 });
@@ -43,14 +57,14 @@ export async function GET(
         // 2. Fetch Establishment Context (For School Head)
         // 2. Fetch Establishment Context (For School Head)
         if (user.role === 'school_head') {
-            const estQuery = `SELECT * FROM establishments WHERE admin_email = $1`;
+            const estQuery = `SELECT uai, name, address, city, postal_code, type FROM establishments WHERE admin_email = $1`;
             const estRes = await client.query(estQuery, [user.email]);
             if (estRes.rowCount && estRes.rowCount > 0) {
                 establishmentUai = estRes.rows[0].uai;
                 establishmentData = estRes.rows[0];
             }
         } else if (user.establishment_uai) {
-            const estQuery = `SELECT * FROM establishments WHERE uai = $1`;
+            const estQuery = `SELECT uai, name, address, city, postal_code, type FROM establishments WHERE uai = $1`;
             const estRes = await client.query(estQuery, [user.establishment_uai]);
             if (estRes.rowCount && estRes.rowCount > 0) {
                 establishmentData = estRes.rows[0];
@@ -136,6 +150,17 @@ export async function PUT(
 ) {
     const { uid } = await params; // Fix 1: Await params
 
+    const session = await auth();
+    if (!session || !session.user) {
+        return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
+    }
+
+    // Authorization: Only the user themselves or an admin can update the profile
+    const isAdmin = session.user.role === 'admin' || session.user.role === 'SUPER_ADMIN';
+    if (session.user.id !== uid && !isAdmin) {
+        return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
+    }
+
     if (!uid || uid === 'undefined') {
         return NextResponse.json({ error: 'Missing UID' }, { status: 400 });
     }
@@ -162,6 +187,7 @@ export async function PUT(
         const schoolAddress = profileData.schoolAddress || body.schoolAddress;
         const schoolCity = profileData.schoolCity || body.schoolCity;
         const schoolZip = profileData.schoolZip || body.schoolZip;
+        const schoolStatus = profileData.schoolStatus || body.schoolStatus || profileData.status || body.status || 'BETA';
 
         // Diploma & Legal Reps
         const diploma = profileData.diploma || body.diploma;
@@ -189,9 +215,9 @@ export async function PUT(
                 // Special Case: Sandbox
                 if (targetUai === '9999999Z') {
                     await client.query(`
-                        INSERT INTO establishments (uai, name, address, city, postal_code, type, telephone, admin_email)
-                        VALUES ('9999999Z', 'Lycée de Démonstration (Sandbox)', '12 Rue Ampère', 'Elbeuf', '76500', 'LP', '02 35 77 77 77', 'pledgeum@gmail.com')
-                        ON CONFLICT (uai) DO NOTHING;
+                        INSERT INTO establishments (uai, name, address, city, postal_code, type, telephone, admin_email, subscription_status)
+                        VALUES ('9999999Z', 'Lycée de Démonstration (Sandbox)', '12 Rue Ampère', 'Elbeuf', '76500', 'LP', '02 35 77 77 77', 'pledgeum@gmail.com', 'ADHERENT')
+                        ON CONFLICT (uai) DO UPDATE SET subscription_status = 'ADHERENT';
                     `);
                 } else {
                     // Start of UPSERT for real schools
@@ -206,13 +232,14 @@ export async function PUT(
 
                         // We use a smart Upsert that tries to set admin_email if it's new
                         const upsertQuery = `
-                            INSERT INTO establishments (uai, name, address, city, postal_code, type, admin_email)
-                            VALUES ($1, $2, $3, $4, $5, 'EPLE', $6)
+                            INSERT INTO establishments (uai, name, address, city, postal_code, type, admin_email, subscription_status)
+                            VALUES ($1, $2, $3, $4, $5, 'EPLE', $6, $7)
                             ON CONFLICT (uai) DO UPDATE 
                             SET name = EXCLUDED.name,
-                                address = EXCLUDED.address,
-                                city = EXCLUDED.city,
-                                postal_code = EXCLUDED.postal_code,
+                                address = CASE WHEN EXCLUDED.address <> '' THEN EXCLUDED.address ELSE establishments.address END,
+                                city = CASE WHEN EXCLUDED.city <> '' THEN EXCLUDED.city ELSE establishments.city END,
+                                postal_code = CASE WHEN EXCLUDED.postal_code <> '' THEN EXCLUDED.postal_code ELSE establishments.postal_code END,
+                                subscription_status = EXCLUDED.subscription_status,
                                 updated_at = NOW();
                         `;
                         // Note: We do NOT update admin_email on conflict to prevent overwriting existing admins
@@ -223,7 +250,8 @@ export async function PUT(
                             schoolAddress || '',
                             schoolCity || '',
                             schoolZip || '',
-                            adminEmailToSet
+                            adminEmailToSet,
+                            schoolStatus
                         ]);
                     } else {
                         console.warn(`[API_USER_UPDATE] Target UAI ${targetUai} present but no School Name provided. Skipping Upsert. This might fail if UAI doesn't exist.`);
@@ -286,7 +314,10 @@ export async function PUT(
                     prox_commune_lon = COALESCE($14, prox_commune_lon),
                     updated_at = NOW()
                 WHERE uid = $15
-                RETURNING *
+                RETURNING uid, email, role, first_name, last_name, phone, address, 
+                          establishment_uai, job_function, zip_code, city, 
+                          diploma_prepared, legal_representatives, prox_commune, 
+                          prox_commune_zip, updated_at
             `;
 
             const proxCommune = profileData.proxCommune || body.proxCommune;

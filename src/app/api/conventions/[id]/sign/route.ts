@@ -38,15 +38,30 @@ function getSignerIdentity(role: string, convention: any) {
 }
 
 // 📝 Étape 2 : Template Universel de Confirmation
-function getSignatureConfirmationHtml(recipientName: string, studentName: string) {
+function getSignatureConfirmationHtml(
+    recipientName: string, 
+    studentName: string, 
+    signerIdentity: string,
+    companyName?: string,
+    companyCity?: string,
+    period?: string
+) {
+    const context = (companyName && companyCity && period) 
+        ? `<p style="background: #f8fafc; padding: 15px; border-radius: 8px; border: 1px solid #e2e8f0; color: #475569; font-size: 0.95em;">
+             La convention de stage au sein de <strong>${companyName}</strong> à <strong>${companyCity}</strong>, 
+             pour la période du <strong>${period}</strong>, a été signée par <strong>${signerIdentity}</strong>.
+           </p>`
+        : `<p>La convention de stage de <strong>${studentName}</strong> vient de recevoir une nouvelle signature de la part de <strong>${signerIdentity}</strong>.</p>`;
+
     return `
-        <div style="font-family: sans-serif; line-height: 1.6; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 8px;">
-            <h2 style="color: #2563eb;">Confirmation de signature électronique</h2>
-            <p>Bonjour ${recipientName},</p>
-            <p>Votre signature électronique pour la convention de stage de <strong>${studentName}</strong> a bien été enregistrée avec succès.</p>
+        <div style="font-family: sans-serif; line-height: 1.6; color: #1e293b; max-width: 600px; margin: 0 auto; border: 1px solid #e2e8f0; padding: 30px; border-radius: 12px; background: white;">
+            <h2 style="color: #2563eb; margin-top: 0; font-size: 1.5em; letter-spacing: -0.02em;">Signature enregistrée ✅</h2>
+            <p style="font-size: 1.1em;">Bonjour ${recipientName},</p>
+            ${context}
+            <p>Votre signature électronique a bien été enregistrée avec succès.</p>
             <p>Vous pouvez consulter l'état d'avancement du document et le télécharger une fois toutes les signatures réunies depuis votre espace Pledgeum.</p>
-            <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee; font-size: 0.9em; color: #666;">
-                <p>Cordialement,<br/>L'équipe Pledgeum</p>
+            <div style="margin-top: 30px; padding-top: 25px; border-top: 1px solid #f1f5f9; font-size: 0.9em; color: #64748b;">
+                <p><strong>L'équipe Pledgeum</strong><br/>Service de Gestion des PFMP</p>
             </div>
         </div>
     `;
@@ -118,7 +133,8 @@ export async function POST(
 
         const { id: conventionId } = await params;
         const body = await req.json();
-        const { role, signatureImage, code: providedCode, dualSign } = body;
+        const { role, signatureImage, code: providedCode, dualSign, newCompanyHeadEmail } = body;
+
 
         // Auto-generate code if missing (Robustness for UI that doesn't send it)
         const code = providedCode || Math.random().toString(36).substring(2, 10).toUpperCase();
@@ -126,6 +142,15 @@ export async function POST(
         if (!role) {
             return NextResponse.json({ error: 'Role is required' }, { status: 400 });
         }
+
+        // --- 0.5 REGEX VALIDATION for delegation email ---
+        if (role === 'tutor' && !dualSign && newCompanyHeadEmail) {
+            const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+            if (!emailRegex.test(newCompanyHeadEmail)) {
+                return NextResponse.json({ error: "L'adresse email du représentant légal est invalide." }, { status: 400 });
+            }
+        }
+
 
         // --- 1. Fetch Current Convention Data ---
         const convRes = await pool.query('SELECT metadata, status, student_uid FROM conventions WHERE id = $1', [conventionId]);
@@ -139,6 +164,48 @@ export async function POST(
         if (convention.status === 'REJECTED') {
             const rejectedBy = metadata.rejectedByLabel || "un signataire";
             return NextResponse.json({ error: `Cette convention a été refusée par ${rejectedBy} et ne peut plus être signée.` }, { status: 400 });
+        }
+
+        // --- 1.5 IDENTITY VERIFICATION (Zero-Trust) ---
+        if (!session.user.email) {
+            return NextResponse.json({ error: "Email de session manquant." }, { status: 401 });
+        }
+        const userEmail = session.user.email.toLowerCase().trim();
+        const sessionRole = session.user.role;
+        
+        // Map of allowed roles based on email match
+        const allowedSignatories: Record<string, string> = {
+            [metadata.eleve_email?.toLowerCase().trim()]: 'student',
+            [metadata.rep_legal_email?.toLowerCase().trim()]: 'parent',
+            [metadata.prof_email?.toLowerCase().trim()]: 'teacher',
+            [metadata.prof_suivi_email?.toLowerCase().trim()]: 'teacher',
+            [metadata.tuteur_email?.toLowerCase().trim()]: 'tutor',
+            [metadata.ent_rep_email?.toLowerCase().trim()]: 'company_head',
+            [metadata.signatories?.principal?.email?.toLowerCase().trim()]: 'school_head'
+        };
+
+        let resolvedRole = allowedSignatories[userEmail];
+
+        // Authorization for Establishment Admins/Heads who might not be the explicit signatory but have the right to sign
+        const schoolAdminRoles = ['school_head', 'ddfpt', 'at_ddfpt', 'business_manager', 'assistant_manager', 'stewardship_secretary', 'ESTABLISHMENT_ADMIN'];
+        if (!resolvedRole && (schoolAdminRoles.includes(sessionRole) || sessionRole === 'admin' || sessionRole === 'SUPER_ADMIN')) {
+            if (['school_head', 'ddfpt', 'teacher'].includes(role)) {
+                resolvedRole = role; // Trust the requested role ONLY because the session role is high-privilege
+            }
+        }
+
+        if (!resolvedRole) {
+            return NextResponse.json({ error: "Votre email ne correspond à aucun signataire autorisé pour cette convention." }, { status: 403 });
+        }
+
+        // Cross-check resolvedRole with requested role to prevent mismatch (except for dual signatures)
+        if (role !== resolvedRole) {
+            const isCompanySwap = (resolvedRole === 'company_head' && role === 'tutor') || (resolvedRole === 'tutor' && role === 'company_head');
+            const isDualRole = role === 'company_head_tutor' && (resolvedRole === 'tutor' || resolvedRole === 'company_head');
+            
+            if (!isCompanySwap && !isDualRole && !schoolAdminRoles.includes(sessionRole)) {
+                return NextResponse.json({ error: `Tentative d'usurpation de rôle détectée.` }, { status: 403 });
+            }
         }
 
         // --- 2. Secure Age Calculation ---
@@ -207,6 +274,8 @@ export async function POST(
         let metadataUpdates: any = {};
         let auditLog: any = null;
         let emailWarning: { type: string, detail: string } | null = null;
+        const notificationTasks: Promise<any>[] = [];
+
 
         // Helper to map role to fields
         // Note: We are merging into the JSONB 'metadata' column for these fields as per Hybrid Schema.
@@ -468,7 +537,50 @@ export async function POST(
                     details: dualSign ? 'Signature cumulée (Entreprise & Tuteur)' : `Signature ${role}`,
                     ip: ip
                 };
+
+                // --- 🎯 NEW: Dynamic Delegation Logic (Tutor -> Split) ---
+                if (role === 'tutor' && !dualSign && newCompanyHeadEmail) {
+                    const cleanEmail = newCompanyHeadEmail.toLowerCase().trim();
+                    
+                    // 1. Update metadata in the object we're about to save
+                    metadataUpdates.is_tutor_company_head = false;
+                    metadataUpdates.ent_rep_email = cleanEmail;
+
+                    // 2. Perform out-of-band SQL update for the dedicated column to ensure sync
+                    // We do this inside a try/catch to not block the main flow if it's already updated by metadata merge
+                    try {
+                        await pool.query(
+                            'UPDATE conventions SET ent_rep_email = $1 WHERE id = $2',
+                            [cleanEmail, conventionId]
+                        );
+                    } catch (sqlErr) {
+                        console.error("[DELEGATION] Failed to update SQL column directly:", sqlErr);
+                    }
+
+                    // 3. Trigger Invitation Email for the NEW Company Head
+                    const studentName = getRecipientInfo('student', convention).studentName || "l'élève";
+                    const tutorName = getRecipientInfo('tutor', convention).name || "Votre tuteur";
+                    
+                    notificationTasks.push((async () => {
+                        try {
+                            const inviteResult = await sendEmail({
+                                to: cleanEmail,
+                                subject: `Action requise : Signature de la convention de ${studentName} (Délégation)`,
+                                text: `Bonjour,\n\n` +
+                                    `${tutorName} a signé la convention de stage de ${studentName} en tant que tuteur.\n` +
+                                    `Cependant, celui-ci a indiqué que vous êtes le représentant légal habilité à signer pour l'entreprise.\n\n` +
+                                    `Votre signature est maintenant requise pour finaliser le document.\n` +
+                                    `Connectez-vous à votre espace Pledgeum : ${process.env.NEXT_PUBLIC_APP_URL || 'https://www.pledgeum.fr'}/login\n\n` +
+                                    `Cordialement,\nL'équipe Pledgeum`
+                            });
+                            if (!inviteResult.success) console.error("[DELEGATION] Email failed:", inviteResult.error);
+                        } catch (e) {
+                            console.error("[DELEGATION] Export error:", e);
+                        }
+                    })());
+                }
                 break;
+
             case 'school_head':
             case 'ddfpt':
             case 'at_ddfpt':
@@ -607,7 +719,6 @@ export async function POST(
             const studentName = getField('eleve_nom') ? `${getField('eleve_prenom')} ${getField('eleve_nom')}` : "l'élève";
             const appUrl = process.env.NEXT_PUBLIC_APP_URL || 'https://www.pledgeum.fr';
 
-            const notificationTasks: Promise<any>[] = [];
 
             // 1. NOTIFICATIONS ENTREPRISE (Triggered by Teacher/School Head)
             const isTeacherValidated = (statusToApply === 'VALIDATED_TEACHER' || currentWeight >= 3);
@@ -635,44 +746,59 @@ export async function POST(
                 }
             }
 
-            // 2. Signature Confirmation Email (UNIVERSAL for current signer)
+            // 🎯 NEW: Broadcast Notification to All Parties
             const recipient = getRecipientInfo(role, updatedConvention);
-            if (recipient && recipient.email) {
-                console.log(`[Universal Email] Sending confirmation to ${role}: ${recipient.email}`);
+            const signerIdentity = getSignerIdentity(role, updatedConvention);
+            const companyName = metadata.ent_nom || metadata.company_name;
+            const companyCity = metadata.ent_ville || metadata.company_city;
+            const period = (metadata.stage_date_debut && metadata.stage_date_fin) 
+                ? `${new Date(metadata.stage_date_debut).toLocaleDateString('fr-FR')} au ${new Date(metadata.stage_date_fin).toLocaleDateString('fr-FR')}`
+                : undefined;
+
+            const structuredRecipients: { role: string; email: string }[] = [];
+            
+            if (recipient?.email) {
+                structuredRecipients.push({ 
+                    role: "Signataire actuel", 
+                    email: recipient.email.toLowerCase().trim() 
+                });
+            }
+            if (studentEmail && !structuredRecipients.some(r => r.email === studentEmail.toLowerCase())) {
+                structuredRecipients.push({ 
+                    role: "Élève", 
+                    email: studentEmail.toLowerCase().trim() 
+                });
+            }
+            if (parentEmail && !structuredRecipients.some(r => r.email === parentEmail.toLowerCase())) {
+                structuredRecipients.push({ 
+                    role: "Représentant légal", 
+                    email: parentEmail.toLowerCase().trim() 
+                });
+            }
+
+            for (const item of structuredRecipients) {
                 notificationTasks.push((async () => {
                     try {
+                        const isCurrentSigner = item.role === "Signataire actuel";
                         await sendEmail({
-                            to: recipient.email,
-                            subject: `Confirmation de signature - ${recipient.studentName}`,
-                            text: `Bonjour, Votre signature électronique pour la convention de stage de ${recipient.studentName} a bien été enregistrée avec succès. Vous pouvez consulter l'état d'avancement du document depuis votre espace.`,
-                            html: getSignatureConfirmationHtml(recipient.name || "Signataire", recipient.studentName)
+                            to: item.email,
+                            subject: isCurrentSigner 
+                                ? `Confirmation de signature - ${recipient?.studentName}`
+                                : `Suivi signature - Convention de ${recipient?.studentName}`,
+                            text: `Le stage chez ${companyName} (${companyCity}) du ${period} a reçu une nouvelle signature.`,
+                            html: getSignatureConfirmationHtml(
+                                isCurrentSigner ? (recipient?.name || "Signataire") : "Madame, Monsieur",
+                                recipient?.studentName || "l'élève",
+                                signerIdentity,
+                                companyName,
+                                companyCity,
+                                period
+                            )
                         } as any);
                     } catch (emailErr) {
-                        console.error("[Universal Email] SIGNER confirmation failed:", emailErr);
+                        console.error(`[Broadcast Email] Failed for ${item.email}:`, emailErr);
                     }
                 })());
-            }
-
-            // 3. Notify Student on any third-party signature
-            if (role !== 'student' && studentEmail) {
-                const signerIdentity = getSignerIdentity(role, updatedConvention);
-                const subject = `Nouvelle signature sur votre convention - ${studentName}`;
-                const message = `Bonjour ${getField('eleve_prenom') || 'élève'},\n\n${signerIdentity} a apposé sa signature sur votre convention de stage. Vous pouvez suivre l'état d'avancement ici : ${appUrl}/dashboard`;
-                
-                notificationTasks.push(sendNotification(studentEmail, subject, message).catch(e => console.error("[Notif] Student notification failed", e)));
-                
-                if (updatedConvention.student_uid) {
-                    notificationTasks.push(createInAppNotification(updatedConvention.student_uid, subject, message).catch(e => console.error("[Notif] Student In-App failed", e)));
-                }
-            }
-
-            // 4. Notify Parent on any third-party signature (if minor)
-            if (role !== 'parent' && getField('est_mineur') && parentEmail) {
-                const signerIdentity = getSignerIdentity(role, updatedConvention);
-                const subject = `Suivi convention - Nouvelle signature pour ${studentName}`;
-                const message = `Bonjour,\n\nLa convention de stage de ${studentName} vient de recevoir une nouvelle signature de la part de : ${signerIdentity}.\nProchaine étape : voir le tableau de bord sur ${appUrl}/dashboard`;
-                
-                notificationTasks.push(sendEmail({ to: parentEmail, subject, text: message }).catch(e => console.error("[Notif] Parent notification failed", e)));
             }
 
             // Execute all notifications without blocking the response
@@ -684,6 +810,7 @@ export async function POST(
             return NextResponse.json({
                 success: true,
                 data: updatedConvention,
+                recipients: structuredRecipients, // Return structured objects
                 warning: emailWarning?.type,
                 debugError: emailWarning?.detail
             });

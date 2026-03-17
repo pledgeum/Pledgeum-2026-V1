@@ -278,6 +278,7 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
                                 signeeName={`${data.eleve_prenom} ${data.eleve_nom}`}
                                 signeeEmail={data.eleve_email || ''}
                                 conventionId={`temp_${Date.now()}`} // Temporary ID for OTP association
+                                role="student"
                             />
 
                             {/* Floating Footer using Portal or Fixed Position */}

@@ -28,7 +28,7 @@ import { useSession, signOut } from "next-auth/react";
 import { useRouter } from 'next/navigation';
 import dynamic from 'next/dynamic';
 import { SignatureVerificationModal } from '@/components/ui/SignatureVerificationModal';
-import { useMissionOrderStore, isOdmPendingForHead } from '@/store/missionOrder';
+import { useMissionOrderStore, isOdmPendingForHead, MissionOrder } from '@/store/missionOrder';
 
 
 import { useAdminStore } from '@/store/admin';
@@ -69,12 +69,12 @@ const GLOBAL_HIDRATED_CLASSES = new Set<string>();
 
 // Helper for Admin Roles
 const isSchoolAdminRole = (r: UserRole) => {
-  return r === 'school_head' || r === 'ddfpt' || r === 'business_manager' || r === 'assistant_manager' || r === 'stewardship_secretary' || r === 'cpe' || r === 'school_life' || r === 'at_ddfpt' || r === 'ESTABLISHMENT_ADMIN';
+  return r === 'school_head' || r === 'ddfpt' || r === 'business_manager' || r === 'assistant_manager' || r === 'stewardship_secretary' || r === 'cpe' || r === 'school_life' || r === 'at_ddfpt' || r === 'ESTABLISHMENT_ADMIN' || r === 'SUPER_ADMIN';
 };
 
 // Helper for High Level Admin (Management Access)
 const isHighLevelAdmin = (r: UserRole | string) => {
-  return r === 'ESTABLISHMENT_ADMIN' || r === 'school_head' || r === 'ddfpt' || r === 'DDFPT';
+  return r === 'ESTABLISHMENT_ADMIN' || r === 'school_head' || r === 'ddfpt' || r === 'DDFPT' || r === 'SUPER_ADMIN';
 };
 
 // Helper for Filter Access (includes Admin Roles + Teachers + AT DDFPT)
@@ -419,7 +419,8 @@ export default function Home() {
     at_ddfpt: 'Assistant(e) Technique DDFPT',
     cpe: 'CPE',
     school_life: 'Vie Scolaire',
-    ESTABLISHMENT_ADMIN: 'Administrateur d\'Établissement'
+    ESTABLISHMENT_ADMIN: 'Administrateur d\'Établissement',
+    SUPER_ADMIN: 'Super Administrateur'
   };
 
 
@@ -529,7 +530,7 @@ export default function Home() {
               <Trash2 className="w-4 h-4" />
             </button>
             {/* Feedback for Staff and Super Admin */}
-            {(role === 'teacher' || isSchoolAdminRole(role) || user?.email === 'pledgeum@gmail.com') && (
+            {(role === 'teacher' || isSchoolAdminRole(role) || user?.email?.toLowerCase() === 'pledgeum@gmail.com') && (
               <button
                 onClick={() => setIsFeedbackModalOpen(true)}
                 className="flex items-center text-gray-500 hover:text-blue-600 transition-colors mr-2 p-2 hover:bg-blue-50 rounded-full"
@@ -540,7 +541,7 @@ export default function Home() {
             )}
 
             {/* Mission Orders - Admin OR Test Account Validation Access */}
-            {(isSchoolAdminRole(role) || (user.email === 'pledgeum@gmail.com' && role === 'teacher_tracker')) && (
+            {(isSchoolAdminRole(role) || (user?.email?.toLowerCase() === 'pledgeum@gmail.com' && role === 'teacher_tracker')) && (
               <button
                 onClick={() => setIsMissionOrderModalOpen(true)}
                 className="flex items-center text-gray-500 hover:text-green-600 transition-colors text-xs font-bold mr-4"
@@ -561,7 +562,7 @@ export default function Home() {
             {(role === 'school_head' || role === 'ddfpt' || role === 'at_ddfpt' || role === 'business_manager' || role === 'ESTABLISHMENT_ADMIN') && (
               <div className="flex items-center gap-2">
                 {/* Alumni Button - Conditioned on authorization */}
-                {(isSchoolAuthorized(profileData?.ecole_nom || getConventionsByRole('school_head', user.email || '', (user.id || ''))[0]?.ecole_nom || '') || user.email === 'pledgeum@gmail.com') && (
+                {(isSchoolAuthorized(profileData?.ecole_nom || getConventionsByRole('school_head', user.email || '', (user.id || ''))[0]?.ecole_nom || '') || user?.email?.toLowerCase() === 'pledgeum@gmail.com') && (
                   <button
                     onClick={() => setIsAlumniModalOpen(true)}
                     className="hidden md:flex items-center text-gray-500 hover:text-indigo-600 transition-colors text-xs font-bold mr-4"
@@ -588,7 +589,7 @@ export default function Home() {
             )}
 
             {/* SUPER ADMIN ROLE BOOSTER & ACCESS */}
-            {user.email === 'pledgeum@gmail.com' && (
+            {(role === 'SUPER_ADMIN' || user?.email?.toLowerCase() === 'pledgeum@gmail.com') && (
               <div className="flex items-center space-x-2">
                 <button
                   onClick={() => setIsSuperAdminModalOpen(true)}
@@ -1640,7 +1641,7 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
         const actionable = isActionable(conv, role);
 
         // Find assigned evaluation for this convention's class
-        const assignedTemplate = evaluationTemplates.find(t => t.assignedClassIds?.includes(conv.classId));
+        const assignedTemplate = evaluationTemplates.find(t => t.assignedClassIds?.includes(conv.class_id || ''));
 
         // Check if user is authorized to FILL the evaluation
         const canFillEvaluation = assignedTemplate && (

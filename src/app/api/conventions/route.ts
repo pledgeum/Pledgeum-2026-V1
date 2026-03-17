@@ -1,3 +1,4 @@
+export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
 import pool from '@/lib/pg';
@@ -413,7 +414,7 @@ export async function POST(req: Request) {
                     duration_hours,
                     company_siret
                 ) VALUES ($1, $2, $3, NOW(), NOW(), $4, $5, $6, $7, $8, $9, $10, $11)
-                RETURNING *
+                RETURNING id, student_uid, status, metadata, date_start, date_end, establishment_uai, class_id, duration_hours, company_siret, created_at
             `;
 
             const result = await client.query(query, [
@@ -448,7 +449,10 @@ export async function POST(req: Request) {
                         postalCode = gouvInfo.postalCode;
                         if (gouvInfo.address) finalAddress = gouvInfo.address;
                         if (gouvInfo.name) finalName = gouvInfo.name;
-                    } else if (data.ent_adresse) {
+                    }
+
+                    // FALLBACK: If we still don't have valid GPS, use the address-based geocoding
+                    if ((!lat || !lng) && data.ent_adresse) {
                         const coords = await getCoordinates(data.ent_adresse);
                         if (coords) {
                             lat = coords.lat;

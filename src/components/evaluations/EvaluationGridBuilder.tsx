@@ -77,15 +77,15 @@ export const EvaluationGridBuilder = ({ initialData, templateId, mode = 'create'
         setRows([...rows, newRow]);
     };
 
-    const removeRow = (id: number) => {
+    const removeRow = (id: string | number) => {
         setRows(rows.filter(row => row.id !== id));
     };
 
-    const updateRowType = (id: number, type: RowType) => {
+    const updateRowType = (id: string | number, type: RowType) => {
         setRows(rows.map(row => row.id === id ? { ...row, type } : row));
     };
 
-    const updateCell = (rowId: number, colIndex: number, value: string) => {
+    const updateCell = (rowId: string | number, colIndex: number, value: string) => {
         setRows(rows.map(row => {
             if (row.id === rowId) {
                 const newCells = [...row.cells];
