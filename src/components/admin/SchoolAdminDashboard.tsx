@@ -12,6 +12,7 @@ import { useConventionStore } from '@/store/convention';
 import { db, collection, query, where, getDocs, deleteDoc, doc, writeBatch } from '@/lib/firebase';
 import { toast } from 'sonner';
 import { CONVENTION_TYPES, ConventionTypeId } from '@/config/conventionTypes';
+import InternshipProgressChart from '@/components/dashboard/analytics/InternshipProgressChart';
 
 // --- Checkable Dropdown Component ---
 interface CheckableDropdownProps {
@@ -714,6 +715,13 @@ export default function SchoolAdminDashboard() {
                             ? 'Gérez la plateforme globale et les accès des établissements.' 
                             : 'Gérez votre établissement, vos classes et vos partenaires.'}
                     </p>
+                </div>
+            )}
+
+            {/* Pilotage de l'avancement des stages (Direction) */}
+            {['school_head', 'ddfpt', 'at_ddfpt', 'business_manager', 'assistant_manager', 'stewardship_secretary', 'ESTABLISHMENT_ADMIN', 'SUPER_ADMIN'].includes(role) && (
+                <div className="mb-8">
+                    <InternshipProgressChart uai={schoolId || ''} />
                 </div>
             )}
 
