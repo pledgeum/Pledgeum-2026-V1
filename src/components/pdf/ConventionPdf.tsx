@@ -977,7 +977,7 @@ function StageSecondePdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                 <Text style={styles.text}>La séquence d'observation en milieu professionnel a pour objectif de sensibiliser l’élève à l'environnement technologique, économique et professionnel, en liaison avec les programmes d'enseignement, notamment dans le cadre de son éducation à l'orientation.</Text>
                 
                 <Text style={styles.articleTitle}>Activités prévues</Text>
-                <View style={{ padding: 8, border: 1, borderColor: '#eee', minHeight: 60 }}>
+                <View style={{ padding: 8, borderWidth: 1, borderColor: '#eee', minHeight: 60 }}>
                     <Text style={styles.text}>{data.stage_activites || 'Observations des différents services de l\'organisme d\'accueil...'}</Text>
                 </View>
 
