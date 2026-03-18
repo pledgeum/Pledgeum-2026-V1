@@ -63,6 +63,8 @@ const ClassDocumentModal = dynamic(() => import('@/components/ui/ClassDocumentMo
 const StudentDocumentModal = dynamic(() => import('@/components/ui/StudentDocumentModal').then(m => m.StudentDocumentModal), { ssr: false });
 const EmailCorrectionModal = dynamic(() => import('@/components/ui/EmailCorrectionModal').then(m => m.EmailCorrectionModal), { ssr: false });
 const TrackingAssignmentModal = dynamic(() => import('@/components/ui/TrackingAssignmentModal'), { ssr: false });
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
+import { Files as FilesIcon } from 'lucide-react';
 
 // 🛡️ HARD GUARD: Verrou persistant pour l'hydratation des classes (survit aux remounts)
 const GLOBAL_HIDRATED_CLASSES = new Set<string>();
@@ -940,9 +942,15 @@ export default function Home() {
                 )}
               </div>
             )}
-            <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-              <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={(user.id || '')} isRgpdModalOpen={isRgpdModalOpen} setIsRgpdModalOpen={setIsRgpdModalOpen} onModalChange={setIsChildModalOpen} />
-            </div>
+            <CollapsibleSection
+              title="Liste des Conventions"
+              storageKey="dashboard_pref_conventions_list"
+              icon={<FilesIcon className="w-5 h-5" />}
+            >
+              <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+                <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={(user.id || '')} isRgpdModalOpen={isRgpdModalOpen} setIsRgpdModalOpen={setIsRgpdModalOpen} onModalChange={setIsChildModalOpen} />
+              </div>
+            </CollapsibleSection>
           </div>
         )}
         {isProfileModalOpen && (

@@ -13,6 +13,8 @@ import { db, collection, query, where, getDocs, deleteDoc, doc, writeBatch } fro
 import { toast } from 'sonner';
 import { CONVENTION_TYPES, ConventionTypeId } from '@/config/conventionTypes';
 import InternshipProgressChart from '@/components/dashboard/analytics/InternshipProgressChart';
+import { CollapsibleSection } from '@/components/ui/CollapsibleSection';
+import { Files, BarChart3, Settings as SettingsIcon } from 'lucide-react';
 
 // --- Checkable Dropdown Component ---
 interface CheckableDropdownProps {
@@ -720,35 +722,23 @@ export default function SchoolAdminDashboard() {
 
             {/* Pilotage de l'avancement des stages (Direction) */}
             {['school_head', 'ddfpt', 'at_ddfpt', 'business_manager', 'assistant_manager', 'stewardship_secretary', 'ESTABLISHMENT_ADMIN', 'SUPER_ADMIN'].includes(role) && (
-                <div className="mb-8">
+                <CollapsibleSection
+                    title="Suivi de l'Avancement des Stages"
+                    storageKey="dashboard_pref_progress_chart"
+                    icon={<BarChart3 className="w-5 h-5" />}
+                >
                     <InternshipProgressChart uai={schoolId || ''} />
-                </div>
+                </CollapsibleSection>
             )}
 
             {role !== 'SUPER_ADMIN' && (
-                <div className="flex justify-start">
-                    <button
-                        onClick={() => setIsAdminPanelOpen(!isAdminPanelOpen)}
-                        className="flex items-center px-4 py-2 border-2 border-gray-300 rounded-lg text-sm font-bold text-gray-700 hover:bg-gray-50 hover:border-blue-500 hover:text-blue-600 transition-all shadow-sm bg-white"
-                    >
-                        {isAdminPanelOpen ? (
-                            <>
-                                <ChevronUp className="w-4 h-4 mr-2" />
-                                Fermer l'administration
-                            </>
-                        ) : (
-                            <>
-                                <span className="mr-2">⚙️</span>
-                                Administrer l'établissement
-                                <ChevronDown className="w-4 h-4 ml-2" />
-                            </>
-                        )}
-                    </button>
-                </div>
-            )}
-
-            {isAdminPanelOpen && (
-                <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden animate-in fade-in slide-in-from-top-4 duration-300">
+                <CollapsibleSection
+                    title="Administrer l'établissement"
+                    storageKey="dashboard_pref_admin_panel"
+                    icon={<SettingsIcon className="w-5 h-5" />}
+                    defaultOpen={false}
+                >
+                    <div className="bg-white rounded-xl shadow-sm border border-gray-200 overflow-hidden">
                     <div className="bg-gray-50 border-b border-gray-200">
                         <nav className="flex overflow-x-auto scrollbar-hide">
                             {[
@@ -1331,7 +1321,8 @@ export default function SchoolAdminDashboard() {
                     )}
                 </div>
             </div>
-        )}
+        </CollapsibleSection>
+    )}
 
             {/* Support Modals */}
             {importReviewData && (
