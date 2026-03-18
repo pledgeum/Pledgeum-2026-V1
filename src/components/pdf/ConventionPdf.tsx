@@ -1035,7 +1035,7 @@ export function ConventionPdf(props: PdfProps) {
     const { data } = props;
 
     // Factory Logic
-    if (data.type === 'STAGE_2NDE') {
+    if (data.type === 'STAGE_SECONDE') {
         return <StageSecondePdf {...props} />;
     }
 

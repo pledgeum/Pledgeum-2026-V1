@@ -2,7 +2,7 @@ import { z } from 'zod';
 
 export const conventionSchema = z.object({
     // Configuration Type & Langue
-    type: z.enum(['PFMP_STANDARD', 'STAGE_2NDE', 'ERASMUS_MOBILITY']).default('PFMP_STANDARD'),
+    type: z.enum(['PFMP_STANDARD', 'STAGE_SECONDE', 'ERASMUS_MOBILITY']).default('PFMP_STANDARD'),
     language: z.enum(['fr', 'en', 'es', 'de']).default('fr'),
 
     // Étape 1 : Établissement

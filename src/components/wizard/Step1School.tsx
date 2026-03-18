@@ -314,6 +314,12 @@ export function Step1School() {
                                         <AlertCircle className="w-3.5 h-3.5 mr-1.5" />
                                         Le choix du type détermine le texte juridique de votre convention.
                                     </p>
+                                    {form.formState.errors.type && (
+                                        <p className="text-xs text-red-600 mt-2 font-bold flex items-center animate-pulse">
+                                            <AlertCircle className="w-3.5 h-3.5 mr-1.5" />
+                                            {form.formState.errors.type.message || "Veuillez sélectionner un type de convention"}
+                                        </p>
+                                    )}
                                 </div>
                             ) : (
                                 // Single type or fetching: Informative alert
@@ -344,8 +350,8 @@ export function Step1School() {
                                     <option value="PFMP_STANDARD" disabled={allowedConventionTypes && !allowedConventionTypes.includes('PFMP_STANDARD')}>
                                         PFMP Lycée Professionnel (Standard) {allowedConventionTypes && !allowedConventionTypes.includes('PFMP_STANDARD') && '(Non activé)'}
                                     </option>
-                                    <option value="STAGE_2NDE" disabled={allowedConventionTypes && !allowedConventionTypes.includes('STAGE_2NDE')}>
-                                        Stage de Seconde {allowedConventionTypes && !allowedConventionTypes.includes('STAGE_2NDE') && '(En cours de développement)'}
+                                    <option value="STAGE_SECONDE" disabled={allowedConventionTypes && !allowedConventionTypes.includes('STAGE_SECONDE')}>
+                                        Stage de Seconde {allowedConventionTypes && !allowedConventionTypes.includes('STAGE_SECONDE') && '(En cours de développement)'}
                                     </option>
                                     <option value="ERASMUS_MOBILITY" disabled={allowedConventionTypes && !allowedConventionTypes.includes('ERASMUS_MOBILITY')}>
                                         Mobilité Erasmus+ {allowedConventionTypes && !allowedConventionTypes.includes('ERASMUS_MOBILITY') && '(En cours de développement)'}

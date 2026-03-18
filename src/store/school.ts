@@ -480,7 +480,7 @@ export const useSchoolStore = create<SchoolState>()(
 
             delegatedAdminId: null,
 
-            allowedConventionTypes: ['PFMP_STANDARD', 'STAGE_2NDE', 'ERASMUS_MOBILITY'],
+            allowedConventionTypes: ['PFMP_STANDARD', 'STAGE_SECONDE', 'ERASMUS_MOBILITY'],
 
             updateSchoolIdentity: (data) => {
                 set((state) => ({ ...state, ...data }));

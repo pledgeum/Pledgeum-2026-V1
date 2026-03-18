@@ -2200,12 +2200,12 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                 <div className="space-y-4">
                                     {[
                                         { id: 'PFMP_STANDARD', label: 'PFMP Lycée Professionnel (Standard)' },
-                                        { id: 'STAGE_2NDE', label: 'Stage de Seconde' },
+                                        { id: 'STAGE_SECONDE', label: 'Stage de Seconde' },
                                         { id: 'ERASMUS_MOBILITY', label: 'Mobilité Erasmus+' },
                                         { id: 'BTS_INTERNSHIP', label: 'Convention de stage BTS' }
                                     ].map((type) => {
                                         const isAllowed = useSchoolStore.getState().allowedConventionTypes?.includes(type.id);
-                                        const isDev = type.id === 'STAGE_2NDE' || type.id === 'ERASMUS_MOBILITY' || type.id === 'BTS_INTERNSHIP';
+                                        const isDev = type.id === 'STAGE_SECONDE' || type.id === 'ERASMUS_MOBILITY' || type.id === 'BTS_INTERNSHIP';
 
                                         return (
                                             <div
