@@ -45,8 +45,8 @@ export function TosModal({ isOpen = false, onClose }: TosModalProps) {
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-end sm:items-center justify-center bg-black/95 backdrop-blur-sm sm:p-4">
-            <div className="bg-white rounded-t-2xl sm:rounded-xl shadow-2xl w-full sm:max-w-2xl overflow-hidden border border-gray-200 max-h-[90vh] sm:h-auto flex flex-col">
+        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-[95vw] max-w-lg md:w-full overflow-hidden border border-gray-200 max-h-[90vh] md:max-h-[85vh] flex flex-col">
                 {/* Header */}
                 <div className="bg-blue-600 px-8 py-6 flex justify-between items-start">
                     <div className="flex items-center space-x-4">
@@ -69,8 +69,8 @@ export function TosModal({ isOpen = false, onClose }: TosModalProps) {
                     )}
                 </div>
 
-                {/* Content */}
-                <div className="p-8 space-y-6">
+                {/* Body - Scrollable Content */}
+                <div className="flex-1 overflow-y-auto p-6 md:p-8 space-y-6">
                     <div className="bg-gray-50 border-l-4 border-blue-600 p-4 rounded-r-lg">
                         <p className="text-gray-800 font-medium">
                             La protection de vos données personnelles et le respect de votre vie privée sont au cœur de nos engagements.
@@ -88,45 +88,45 @@ export function TosModal({ isOpen = false, onClose }: TosModalProps) {
                             href="https://www.cnil.fr/fr/comprendre-le-rgpd/les-six-grands-principes-du-rgpd"
                             target="_blank"
                             rel="noopener noreferrer"
-                            className="flex items-center p-4 bg-blue-50 rounded-lg text-blue-700 hover:bg-blue-100 transition-colors group"
+                            className="flex items-center p-4 bg-blue-50 rounded-lg text-blue-700 hover:bg-blue-100 transition-colors group mb-4"
                         >
                             <BookOpen className="w-5 h-5 mr-3 flex-shrink-0" />
                             <span className="font-bold underline decoration-blue-400 group-hover:decoration-blue-700">Lire les 6 grands principes du RGPD sur le site de la CNIL</span>
                             <ArrowRight className="w-4 h-4 ml-auto opacity-0 group-hover:opacity-100 transition-opacity" />
                         </a>
                     </div>
+                </div>
 
-                    {/* Actions */}
-                    <div className="pt-4 flex flex-col items-center space-y-3">
-                        {isBlocking ? (
-                            <button
-                                onClick={handleAccept}
-                                disabled={isLoading}
-                                className="w-full bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold py-4 rounded-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
-                            >
-                                {isLoading ? (
-                                    <span>Traitement en cours...</span>
-                                ) : (
-                                    <>
-                                        <span>J'ai lu et j'accepte les conditions</span>
-                                        <ArrowRight className="w-5 h-5" />
-                                    </>
-                                )}
-                            </button>
-                        ) : (
-                            <button
-                                onClick={onClose}
-                                className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 text-lg font-bold py-3 rounded-lg transition-all flex items-center justify-center"
-                            >
-                                Fermer
-                            </button>
-                        )}
-                        {isBlocking && (
-                            <p className="text-xs text-gray-400 text-center">
-                                En cliquant sur le bouton ci-dessus, vous reconnaissez avoir pris connaissance de nos conditions d'utilisation et de notre politique de confidentialité.
-                            </p>
-                        )}
-                    </div>
+                {/* Footer - Fixed Actions */}
+                <div className="mt-auto border-t p-6 bg-white flex flex-col items-center space-y-3">
+                    {isBlocking ? (
+                        <button
+                            onClick={handleAccept}
+                            disabled={isLoading}
+                            className="w-full bg-blue-600 hover:bg-blue-700 text-white text-lg font-bold min-h-[44px] py-4 rounded-lg shadow-lg hover:shadow-xl transition-all flex items-center justify-center space-x-2 disabled:opacity-50 disabled:cursor-not-allowed"
+                        >
+                            {isLoading ? (
+                                <span>Traitement en cours...</span>
+                            ) : (
+                                <>
+                                    <span>J'ai lu et j'accepte les conditions</span>
+                                    <ArrowRight className="w-5 h-5" />
+                                </>
+                            )}
+                        </button>
+                    ) : (
+                        <button
+                            onClick={onClose}
+                            className="w-full bg-gray-100 hover:bg-gray-200 text-gray-800 text-lg font-bold min-h-[44px] py-3 rounded-lg transition-all flex items-center justify-center"
+                        >
+                            Fermer
+                        </button>
+                    )}
+                    {isBlocking && (
+                        <p className="text-xs text-gray-400 text-center px-4">
+                            En cliquant sur le bouton ci-dessus, vous reconnaissez avoir pris connaissance de nos conditions d'utilisation et de notre politique de confidentialité.
+                        </p>
+                    )}
                 </div>
             </div>
         </div>
