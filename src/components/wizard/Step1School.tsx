@@ -228,17 +228,6 @@ export function Step1School() {
                     !((lockedMainTeacher.email || '').startsWith('teacher-')) &&
                     !((lockedMainTeacher.email || '').includes('@pledgeum.temp'));
 
-                // Auto-reset convention type if current value is not allowed
-                useEffect(() => {
-                    const currentType = form.getValues('type');
-                    // Check if current type is valid relative to allowed list
-                    // If allowed list is not empty and current type is not in it (or not set)
-                        if (!currentType || !allowedConventionTypes.includes(currentType)) {
-                            // Default to the first allowed type
-                            form.setValue('type', allowedConventionTypes[0] as any);
-                        }
-                }, [allowedConventionTypes, form.watch('type')]);
-
 
     const [allowedTypes, setAllowedTypes] = useState<{ id: string, label: string }[]>([]);
     const [isFetchingTypes, setIsFetchingTypes] = useState(false);
