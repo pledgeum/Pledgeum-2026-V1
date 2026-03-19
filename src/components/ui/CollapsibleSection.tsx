@@ -18,24 +18,40 @@ export function CollapsibleSection({
   defaultOpen = true,
   children
 }: CollapsibleSectionProps) {
+  // 🛡️ SSR Safe initialization: Only use props during first render
   const [isOpen, setIsOpen] = useState<boolean>(defaultOpen);
-  const [isInitialized, setIsInitialized] = useState(false);
+  const [isMounted, setIsMounted] = useState(false);
 
-  // Initialize state from localStorage
+  // 🛟 Post-mount hydration: Sync from LocalStorage only once mounted on client
   useEffect(() => {
-    const stored = localStorage.getItem(storageKey);
-    if (stored !== null) {
-      setIsOpen(stored === 'true');
+    setIsMounted(true);
+    
+    try {
+      const stored = window.localStorage.getItem(storageKey);
+      if (stored !== null) {
+        setIsOpen(stored === 'true');
+      }
+    } catch (error) {
+      // Fail-safe: Safari in private mode or blocked storage
+      console.warn(`[CollapsibleSection] Failed to read from localStorage for key: ${storageKey}`, error);
     }
-    setIsInitialized(true);
   }, [storageKey]);
 
-  // Sync state to localStorage
+  // 💾 State persistence: Sync to LocalStorage on changes
   useEffect(() => {
-    if (isInitialized) {
-      localStorage.setItem(storageKey, String(isOpen));
+    // Only persist if mounted to avoid server-side errors
+    if (!isMounted) return;
+
+    try {
+      window.localStorage.setItem(storageKey, String(isOpen));
+    } catch (error) {
+      console.warn(`[CollapsibleSection] Failed to write to localStorage for key: ${storageKey}`, error);
     }
-  }, [isOpen, storageKey, isInitialized]);
+  }, [isOpen, storageKey, isMounted]);
+
+  // 🛡️ Guard against hydration mismatch: Don't render interactive parts before mount
+  // (optional, but helps keep the UI stable)
+  // if (!isMounted) return null; // We could return a skeleton or the defaultOpen state
 
   return (
     <div className="w-full mb-6">
@@ -58,6 +74,11 @@ export function CollapsibleSection({
         />
       </button>
 
+      {/* 
+        On certain browsers, if we don't wait for mount, 
+        the server-rendered HTML might differ from the client-rendered HTML 
+        if localStorage has a value.
+      */}
       {isOpen && (
         <div className="mt-4 animate-in fade-in slide-in-from-top-2 duration-300">
           {children}
