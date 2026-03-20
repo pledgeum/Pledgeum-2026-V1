@@ -154,6 +154,8 @@ export default function EvaluationFillingPage() {
                 role === 'school_head' ||
                 role === 'ddfpt' ||
                 role === 'at_ddfpt' ||
+                role === 'ESTABLISHMENT_ADMIN' ||
+                role === 'SUPER_ADMIN' ||
                 (role === 'student' && userEmail === conventionData.studentId) ||
                 userIsTeacher || userIsTutor;
 

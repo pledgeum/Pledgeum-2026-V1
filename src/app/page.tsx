@@ -953,12 +953,12 @@ export default function Home() {
                 {['teacher', 'admin', 'school_admin', 'ddfpt', 'at_ddfpt', 'business_manager'].includes(effectiveRole) && (
                   <button
                     onClick={() => setIsTrackingMatrixOpen(true)}
-                    className="flex flex-col items-center justify-center p-6 bg-indigo-600 border border-indigo-700 rounded-2xl shadow-lg hover:bg-indigo-700 hover:shadow-indigo-200 transition-all group h-full transition-all"
+                    className="flex flex-col items-center justify-center p-6 bg-white border border-gray-100 rounded-2xl shadow-sm hover:border-indigo-200 hover:shadow-indigo-50 transition-all group h-full"
                   >
-                    <div className="p-3 bg-white/20 rounded-full text-white mb-3 shadow-sm">
+                    <div className="p-3 bg-indigo-50 rounded-full text-indigo-600 group-hover:bg-indigo-100 mb-3 transition-colors">
                       <MapPin className="w-6 h-6" />
                     </div>
-                    <span className="text-sm font-bold text-white text-center leading-tight">Gérer les visites</span>
+                    <span className="text-sm font-bold text-gray-800 text-center leading-tight">Gérer les visites</span>
                   </button>
                 )}
 
@@ -1253,23 +1253,21 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
     fetchTemplates();
   }, [role]);
 
-  // 🆕 Phase 1 : Hydratation du vivier d'enseignants pour les classes affichées
+  // ⚡ Phase 1 : Hydratation BULK du vivier d'enseignants pour tout l'établissement
+  const uai = useUserStore(state => state.uai || state.schoolId);
+  const hasBulkHydratedRef = useRef<string | null>(null);
+  
   useEffect(() => {
     // Seuls les rôles "école" ou admin ont besoin d'assigner des enseignants
     const staffRoles: UserRole[] = ['teacher', 'teacher_tracker', 'ddfpt', 'school_head', 'at_ddfpt', 'business_manager', 'ESTABLISHMENT_ADMIN'];
     if (!staffRoles.includes(role)) return;
 
-    if (classes.length > 0) {
-      classes.forEach(cls => {
-        // Verrou Global (Hard Guard) + Vérification locale
-        if (!GLOBAL_HIDRATED_CLASSES.has(cls.id) && (!cls.teachersList || cls.teachersList.length === 0)) {
-          console.log(`[Dashboard] Déclenchement UNIQUE (Global Guard) fetchClassTeachers pour : ${cls.name}`);
-          GLOBAL_HIDRATED_CLASSES.add(cls.id);
-          fetchClassTeachers(cls.id);
-        }
-      });
+    if (uai && hasBulkHydratedRef.current !== uai && classes.length > 0) {
+      console.log(`[Dashboard] Déclenchement BULK UNIQUE fetchEstablishmentTeachersAssignments pour UAI : ${uai}`);
+      hasBulkHydratedRef.current = uai;
+      useSchoolStore.getState().fetchEstablishmentTeachersAssignments(uai);
     }
-  }, [classes.length, role, fetchClassTeachers]);
+  }, [uai, classes.length, role]);
 
 
 

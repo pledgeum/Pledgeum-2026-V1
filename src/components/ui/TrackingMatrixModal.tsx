@@ -29,6 +29,8 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
     renderCount.current += 1;
 
     const [selectedClassId, setSelectedClassId] = useState<string>(classId || '');
+    const hasInitializedRef = React.useRef(false);
+
     const [distances, setDistances] = useState<Record<string, number>>({}); // Key: "studentId-teacherId" -> distance
     const [isLoadingDistances, setIsLoadingDistances] = useState(false);
     const [assigningState, setAssigningState] = useState<string | null>(null); // "studentId-teacherId" being assigned
@@ -41,20 +43,22 @@ export const TrackingMatrixModal: React.FC<Props> = ({ isOpen, onClose, currentT
         c => c.eleve_classe === selectedClass?.name && ['VALIDATED_HEAD', 'SIGNED_TUTOR', 'SIGNED_COMPANY', 'VALIDATED_TEACHER', 'SIGNED_PARENT', 'SUBMITTED'].includes(c.status)
     ), [conventions, selectedClass?.name]);
 
-
     useEffect(() => {
-        if (!isOpen) return;
-        if (classId && authorizedClasses.some(c => c.id === classId)) {
-            if (selectedClassId !== classId) {
-                setSelectedClassId(classId);
-            }
-        } else if (authorizedClasses.length > 0 && !authorizedClasses.some(c => c.id === selectedClassId)) {
-            const firstId = authorizedClasses[0].id;
-            if (selectedClassId !== firstId) {
-                setSelectedClassId(firstId);
-            }
+        if (!isOpen) {
+            hasInitializedRef.current = false;
+            return;
         }
-    }, [authorizedClasses, selectedClassId, classId, isOpen]);
+
+        // Initialize from prop only ONCE per opening
+        if (!hasInitializedRef.current && authorizedClasses.length > 0) {
+            const initialId = (classId && authorizedClasses.some(c => c.id === classId))
+                ? classId
+                : authorizedClasses[0].id;
+
+            setSelectedClassId(initialId);
+            hasInitializedRef.current = true;
+        }
+    }, [isOpen, authorizedClasses, classId]);
 
     // Fetch teachers specifically for this class if missing (Store only fetches them on demand in Admin)
     useEffect(() => {

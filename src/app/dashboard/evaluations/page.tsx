@@ -27,7 +27,8 @@ export default function EvaluationsListPage() {
         }
 
         if (user && role) {
-            if (role !== 'teacher' && role !== 'at_ddfpt') {
+            const allowedRoles = ['teacher', 'at_ddfpt', 'ddfpt', 'ESTABLISHMENT_ADMIN', 'SUPER_ADMIN'];
+            if (!allowedRoles.includes(role)) {
                 router.push('/');
                 toast.error("Accès non autorisé.");
                 return;

@@ -186,6 +186,7 @@ interface SchoolState {
     fetchCollaborators: (schoolId: string) => Promise<void>; // New action
     fetchClassStudents: (classId: string) => Promise<void>;
     fetchClassTeachers: (classId: string) => Promise<void>;
+    fetchEstablishmentTeachersAssignments: (uai: string) => Promise<void>;
 }
 
 
@@ -339,6 +340,25 @@ export const useSchoolStore = create<SchoolState>()(
                     }));
                 } catch (e) {
                     console.error("[SCHOOL_STORE] Fetch Class Teachers Error:", e);
+                }
+            },
+
+            fetchEstablishmentTeachersAssignments: async (uai: string) => {
+                if (!uai) return;
+                try {
+                    const res = await fetch(`/api/school/teachers/bulk-assignments?uai=${uai}`);
+                    if (!res.ok) throw new Error("Failed to fetch bulk assignments");
+                    const { assignments } = await res.json();
+
+                    set(state => ({
+                        classes: state.classes.map(c => ({
+                            ...c,
+                            teachersList: assignments[c.id] || []
+                        }))
+                    }));
+                    console.log(`[SCHOOL_STORE] Bulk loaded assignments for ${Object.keys(assignments).length} classes.`);
+                } catch (e) {
+                    console.error("[SCHOOL_STORE] Bulk Assignments Error:", e);
                 }
             },
 

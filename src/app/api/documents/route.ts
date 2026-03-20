@@ -27,7 +27,8 @@ export async function GET(req: NextRequest) {
         const whereClauses: string[] = [];
 
         // Role-based filtering
-        if (role === 'admin' || role === 'school_head' || role === 'ddfpt' || role === 'at_ddfpt' || role === 'business_manager') {
+        const adminRoles = ['admin', 'school_head', 'ddfpt', 'at_ddfpt', 'business_manager', 'ESTABLISHMENT_ADMIN', 'SUPER_ADMIN'];
+        if (adminRoles.includes(role)) {
             whereClauses.push(`cd.school_id = $${params.length + 1}`);
             params.push(establishment_uai);
         } else if (role === 'teacher' || role === 'main_teacher') {
@@ -81,7 +82,7 @@ export async function POST(req: NextRequest) {
     const user = session.user as any;
     const { role, establishment_uai, id: userId } = user;
 
-    const allowedRoles = ['admin', 'teacher', 'main_teacher'];
+    const allowedRoles = ['admin', 'teacher', 'main_teacher', 'ddfpt', 'at_ddfpt', 'school_head', 'ESTABLISHMENT_ADMIN', 'SUPER_ADMIN'];
     if (!allowedRoles.includes(role)) {
         return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
     }

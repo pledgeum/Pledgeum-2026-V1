@@ -21,7 +21,7 @@ export function ClassDocumentModal({ isOpen, onClose }: ClassDocumentModalProps)
     const { role: userRole, profileData, name } = useUserStore();
 
     // Access control check
-    const allowedRoles = ['admin', 'teacher', 'main_teacher'];
+    const allowedRoles = ['teacher', 'main_teacher', 'ddfpt', 'at_ddfpt', 'school_head', 'ESTABLISHMENT_ADMIN', 'SUPER_ADMIN'];
     const currentRole = (user as any)?.role || userRole;
 
     const [activeTab, setActiveTab] = useState<'upload' | 'library'>('upload');
