@@ -395,7 +395,7 @@ export function SignatureModal({
                     ? `/api/conventions/${conventionId}/attestation/verify-otp`
                     : '/api/otp/verify';
 
-            const res = await fetch(`/api/conventions/${conventionId}/sign/otp-verify`, {
+            const res = await fetch(apiPath, {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({ email: signeeEmail, code: otpCode, conventionId })
