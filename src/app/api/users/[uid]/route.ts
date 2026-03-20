@@ -25,12 +25,13 @@ export async function GET(
         return NextResponse.json({ error: 'Missing UID' }, { status: 400 });
     }
 
+    let client;
     if (!pool) {
         return NextResponse.json({ error: 'Database configuration missing' }, { status: 500 });
     }
 
-    const client = await pool.connect();
     try {
+        client = await pool.connect();
         // 1. Fetch User (Base) with Class Name (Left Join)
         const query = `
             SELECT 
@@ -54,7 +55,6 @@ export async function GET(
         let establishmentUai = null;
         let establishmentData = null;
 
-        // 2. Fetch Establishment Context (For School Head)
         // 2. Fetch Establishment Context (For School Head)
         if (user.role === 'school_head') {
             const estQuery = `SELECT uai, name, address, city, postal_code, type FROM establishments WHERE admin_email = $1`;
@@ -84,14 +84,14 @@ export async function GET(
             function: user.job_function || (establishmentData ? 'Proviseur' : ''),
 
             // Student Specific
-            birthDate: user.birth_date ? new Date(user.birth_date).toISOString() : null, // Fix: Add birthDate
-            zipCode: user.zip_code || null,   // Fix: Add zipCode
-            city: user.city || null,          // Fix: Add city
-            class: user.class_name || null, // Fix: Add Class Name
-            classId: user.class_id || null, // Fix: Add Class ID
-            diploma: user.diploma_prepared || null, // Fix: Add Diploma
-            legalRepresentatives: user.legal_representatives || [], // Fix: Add Legal Reps
-            proxCommune: user.prox_commune || null, // Add prox_commune
+            birthDate: user.birth_date ? new Date(user.birth_date).toISOString() : null,
+            zipCode: user.zip_code || null,
+            city: user.city || null,
+            class: user.class_name || null,
+            classId: user.class_id || null,
+            diploma: user.diploma_prepared || null,
+            legalRepresentatives: user.legal_representatives || [],
+            proxCommune: user.prox_commune || null,
             proxCommuneZip: user.prox_commune_zip || null,
             proxCommuneLat: user.prox_commune_lat || null,
             proxCommuneLon: user.prox_commune_lon || null,
@@ -99,7 +99,7 @@ export async function GET(
             // Legacy / Helper fields
             uai: user.establishment_uai || establishmentUai,
             schoolId: user.establishment_uai || establishmentUai,
-            schoolName: establishmentData ? establishmentData.name : undefined, // Fix: Add schoolName
+            schoolName: establishmentData ? establishmentData.name : undefined,
             ecole_nom: establishmentData ? establishmentData.name : undefined,
             id_establishment: user.establishment_uai || establishmentUai,
 
@@ -109,22 +109,22 @@ export async function GET(
             profileData: {
                 firstName: user.first_name || '',
                 lastName: user.last_name || '',
-                email: user.email || '', // Fix: Add email to profileData
+                email: user.email || '',
                 function: user.job_function || (establishmentData ? 'Proviseur' : undefined),
                 phone: user.phone || undefined,
                 address: user.address || undefined,
-                schoolName: establishmentData ? establishmentData.name : undefined, // Fix: Add schoolName
+                schoolName: establishmentData ? establishmentData.name : undefined,
                 ecole_nom: establishmentData ? establishmentData.name : undefined,
                 id_establishment: user.establishment_uai || establishmentUai,
                 uai: user.establishment_uai || establishmentUai,
-                zipCode: user.zip_code || undefined, // Fix: Add zipCode
-                city: user.city || undefined,        // Fix: Add city
-                class: user.class_name || undefined, // Fix: Add Class to profileData
-                classId: user.class_id || undefined, // Fix: Add classId to profileData
-                birthDate: user.birth_date ? new Date(user.birth_date).toISOString() : undefined, // Fix: Add birthDate to profileData
-                diploma: user.diploma_prepared || undefined, // Fix: Add Diploma
-                legalRepresentatives: user.legal_representatives || [], // Fix: Add Legal Reps
-                proxCommune: user.prox_commune || undefined, // Add prox_commune to profileData
+                zipCode: user.zip_code || undefined,
+                city: user.city || undefined,
+                class: user.class_name || undefined,
+                classId: user.class_id || undefined,
+                birthDate: user.birth_date ? new Date(user.birth_date).toISOString() : undefined,
+                diploma: user.diploma_prepared || undefined,
+                legalRepresentatives: user.legal_representatives || [],
+                proxCommune: user.prox_commune || undefined,
                 proxCommuneZip: user.prox_commune_zip || undefined,
                 proxCommuneLat: user.prox_commune_lat || undefined,
                 proxCommuneLon: user.prox_commune_lon || undefined,
@@ -140,7 +140,7 @@ export async function GET(
         console.error('[API_USER_GET] Error:', error);
         return NextResponse.json({ error: 'Internal Server Error' }, { status: 500 });
     } finally {
-        client.release();
+        if (client) client.release();
     }
 }
 
@@ -193,15 +193,9 @@ export async function PUT(
         const diploma = profileData.diploma || body.diploma;
         const legalRepresentatives = profileData.legalRepresentatives || body.legalRepresentatives; // Expected to be Array
 
-        console.log('[API_USER_UPDATE] Extracted Fields:', {
-            firstName: firstName,
-            lastName: lastName,
-            targetUai: targetUai,
-            schoolName: schoolName
-        });
-
-        const client = await pool.connect();
+        let client;
         try {
+            client = await pool.connect();
             await client.query('BEGIN');
 
             // 1. Fetch User First (Need email/role for Admin Association)
@@ -260,12 +254,6 @@ export async function PUT(
             }
 
             // Address Handling
-            // We now support zip_code and city columns.
-            // Address column should primarily store the Street part now, OR the full string if legacy.
-            // But to avoid duplication issues, if we have zip/city, 'address' usually acts as 'Street Address'.
-
-
-
             let addressStr = profileData.address;
 
             // Fix: Ensure addressStr is a clean string (Street only)
@@ -284,18 +272,9 @@ export async function PUT(
                 }
             }
 
-            // If still object (rare), coerce to string but warn? 
-            // Should be string by now.
-
             let zipStr = profileData.zipCode || (typeof profileData.address === 'object' ? profileData.address.postalCode : null);
             let cityStr = profileData.city || (typeof profileData.address === 'object' ? profileData.address.city : null);
 
-            // Fallback: If only full address string provided but no zip/city in payload (rare for new UI), try to parse? 
-            // No, trust payload. If user sends empty zip, it's empty.
-
-            // Fix 3: Use COALESCE in SQL to prevent overwriting existing data with NULLs from a partial update
-            // We pass parameters. If a parameter is undefined in JS (which becomes null in SQL param), 
-            // COALESCE($n, column) will keep the existing column value.
             const updateQuery = `
                 UPDATE users 
                 SET first_name = COALESCE($1, first_name), 
@@ -348,7 +327,7 @@ export async function PUT(
             return NextResponse.json({ success: true, user: res.rows[0] });
 
         } catch (error: any) {
-            await client.query('ROLLBACK');
+            if (client) await client.query('ROLLBACK');
 
             const errorDetails = {
                 message: error.message,
@@ -367,7 +346,7 @@ export async function PUT(
                 details: errorDetails
             }, { status: 500 }); // Keep 500 but with details
         } finally {
-            client.release();
+            if (client) client.release();
         }
 
     } catch (error: any) {

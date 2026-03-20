@@ -2,18 +2,20 @@
 
 import { useUserStore } from '@/store/user';
 import { useSession } from 'next-auth/react';
-import SchoolAdminDashboard from '@/components/admin/SchoolAdminDashboard';
+import { SchoolAdminPanelSection } from '@/components/admin/sections/SchoolAdminPanelSection';
+import InternshipProgressChart from '@/components/dashboard/analytics/InternshipProgressChart';
 import { useRouter } from 'next/navigation';
 import { useEffect } from 'react';
 import { Loader2 } from 'lucide-react';
 
 export default function DashboardPage() {
     const { data: session, status } = useSession();
-    const { role } = useUserStore();
+    const { role, uai, schoolId } = useUserStore();
     const router = useRouter();
 
     const loading = status === "loading";
     const user = session?.user;
+    const effectiveUai = uai || schoolId;
 
     useEffect(() => {
         if (!loading && !user) {
@@ -54,8 +56,13 @@ export default function DashboardPage() {
 
     return (
         <main className="min-h-screen bg-gray-50 py-8 px-4 sm:px-6 lg:px-8">
-            <div className="max-w-7xl mx-auto">
-                <SchoolAdminDashboard />
+            <div className="max-w-7xl mx-auto space-y-8">
+                <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-6">
+                    <h2 className="text-lg font-bold text-gray-900 mb-4">Suivi de l'avancement</h2>
+                    <InternshipProgressChart uai={effectiveUai || ''} />
+                </div>
+                
+                <SchoolAdminPanelSection />
             </div>
         </main>
     );

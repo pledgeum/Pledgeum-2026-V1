@@ -101,7 +101,14 @@ export const useUserStore = create<UserState>((set, get) => ({
         try {
             // Add a timeout to fetch to prevent hanging forever
             const controller = new AbortController();
-            const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+            const timeoutId = setTimeout(() => {
+                try {
+                    // Try to provide a reason for the abort (supported in newer environments)
+                    controller.abort("timeout");
+                } catch (e) {
+                    controller.abort();
+                }
+            }, 10000); // 10s timeout
 
             const res = await fetch(`/api/users/${uid}`, {
                 signal: controller.signal
@@ -140,7 +147,11 @@ export const useUserStore = create<UserState>((set, get) => ({
             }
 
         } catch (error: any) {
-            console.error("UserStore: Profile Fetch Error", error);
+            if (error.name === 'AbortError') {
+                console.warn("[UserStore] Profile fetch attempt timed out after 10s.");
+            } else {
+                console.error("UserStore: Profile Fetch Error", error);
+            }
             set({ isLoadingProfile: false });
             return false;
         }

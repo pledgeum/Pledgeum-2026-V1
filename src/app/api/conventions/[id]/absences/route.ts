@@ -128,11 +128,14 @@ Le service scolarité et stages.
                     // Insert In-App Notification (Cloche) for this user
                     try {
                         let notifClient = await pool.connect();
-                        await notifClient.query(`
-                            INSERT INTO notifications (recipient_email, title, message)
-                            VALUES ($1, $2, $3)
-                        `, [email, subject, message]);
-                        notifClient.release();
+                        try {
+                            await notifClient.query(`
+                                INSERT INTO notifications (recipient_email, title, message)
+                                VALUES ($1, $2, $3)
+                            `, [email, subject, message]);
+                        } finally {
+                            notifClient.release();
+                        }
                     } catch (dbErr) {
                         console.error(`[DB-NOTIF FAIL] for ${email}`, dbErr);
                     }

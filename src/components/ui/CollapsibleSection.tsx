@@ -1,7 +1,7 @@
 'use client';
 
 import React, { useState, useEffect, ReactNode } from 'react';
-import { ChevronDown } from 'lucide-react';
+import { ChevronDown, ArrowUp, ArrowDown } from 'lucide-react';
 
 interface CollapsibleSectionProps {
   title: string;
@@ -9,6 +9,8 @@ interface CollapsibleSectionProps {
   storageKey: string;
   defaultOpen?: boolean;
   children: ReactNode;
+  onMoveUp?: () => void;
+  onMoveDown?: () => void;
 }
 
 export function CollapsibleSection({
@@ -16,7 +18,9 @@ export function CollapsibleSection({
   icon,
   storageKey,
   defaultOpen = true,
-  children
+  children,
+  onMoveUp,
+  onMoveDown
 }: CollapsibleSectionProps) {
   // 🛡️ SSR Safe initialization: Only use props during first render
   const [isOpen, setIsOpen] = useState<boolean>(defaultOpen);
@@ -67,11 +71,43 @@ export function CollapsibleSection({
             {title}
           </span>
         </div>
-        <ChevronDown 
-          className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${
-            isOpen ? 'rotate-180 text-blue-600' : ''
-          }`} 
-        />
+        <div className="flex items-center gap-2">
+          {onMoveUp && (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onMoveUp();
+              }}
+              className="p-1 text-gray-300 hover:text-blue-600 transition-colors cursor-pointer"
+              title="Monter"
+            >
+              <ArrowUp className="w-4 h-4" />
+            </div>
+          )}
+          {onMoveDown && (
+            <div
+              role="button"
+              tabIndex={0}
+              onClick={(e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                onMoveDown();
+              }}
+              className="p-1 text-gray-300 hover:text-blue-600 transition-colors cursor-pointer"
+              title="Descendre"
+            >
+              <ArrowDown className="w-4 h-4" />
+            </div>
+          )}
+          <ChevronDown 
+            className={`w-5 h-5 text-gray-400 transition-transform duration-300 ${
+              isOpen ? 'rotate-180 text-blue-600' : ''
+            }`} 
+          />
+        </div>
       </button>
 
       {/* 

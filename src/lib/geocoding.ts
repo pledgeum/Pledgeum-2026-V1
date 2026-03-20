@@ -6,7 +6,13 @@ interface Coordinates {
 
 export async function getCoordinates(address: string): Promise<Coordinates | null> {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 3000); // 3 seconds timeout
+    const timeoutId = setTimeout(() => {
+        try {
+            controller.abort("timeout");
+        } catch (e) {
+            controller.abort();
+        }
+    }, 3000); // 3 seconds timeout
 
     try {
         const encoded = encodeURIComponent(address.substring(0, 100)); // Limit length to avoid API 504

@@ -55,11 +55,14 @@ export async function POST(request: Request) {
         // --- POSTGRES LOGGING ---
         try {
             const client = await pool.connect();
-            await client.query(
-                `INSERT INTO notification_logs (recipient_email, subject, status, meta_data) VALUES ($1, $2, $3, $4)`,
-                [to, subject, result.success ? 'SENT' : 'FAILED', JSON.stringify({ sender: user.id, hasAttachments: attachments.length > 0, error: result.error })]
-            );
-            client.release();
+            try {
+                await client.query(
+                    `INSERT INTO notification_logs (recipient_email, subject, status, meta_data) VALUES ($1, $2, $3, $4)`,
+                    [to, subject, result.success ? 'SENT' : 'FAILED', JSON.stringify({ sender: user.id, hasAttachments: attachments.length > 0, error: result.error })]
+                );
+            } finally {
+                client.release();
+            }
         } catch (logErr) {
             console.error('Failed to log email to Postgres:', logErr);
             // Don't fail the request just because logging failed

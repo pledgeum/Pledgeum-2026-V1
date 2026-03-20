@@ -22,7 +22,7 @@ import {
   FileText, LogOut, Plus, Trash2, Loader2, AlertCircle, CheckCircle,
   Menu, X, Calendar, MapPin, Building, User, Mail, Phone, ExternalLink,
   ShieldCheck, MessageSquare, Settings, UserCircle, AlertTriangle, Search,
-  Briefcase, Send, Eye, PenTool, UserPlus, Users, Bell, Shield, Building2, Clock, ClipboardList, FileSpreadsheet
+  Briefcase, Send, Eye, PenTool, UserPlus, Users, Bell, Shield, Building2, Clock, ClipboardList, FileSpreadsheet, BarChart3
 } from 'lucide-react';
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from 'next/navigation';
@@ -49,7 +49,8 @@ import { MissionOrderPdf } from '@/components/pdf/MissionOrderPdf';
 const PdfRenderer = dynamic(() => import('@/components/ui/PdfRenderer').then(m => m.PdfRenderer), { ssr: false });
 
 const SchoolAdminModal = dynamic(() => import('@/components/admin/SchoolAdminModal').then(m => m.SchoolAdminModal), { ssr: false });
-const SchoolAdminDashboard = dynamic(() => import('@/components/admin/SchoolAdminDashboard'), { ssr: false });
+const SchoolAdminPanelSection = dynamic(() => import('@/components/admin/sections/SchoolAdminPanelSection').then(m => m.SchoolAdminPanelSection), { ssr: false });
+const InternshipProgressChart = dynamic(() => import('@/components/dashboard/analytics/InternshipProgressChart'), { ssr: false });
 const SuperAdminModal = dynamic(() => import('@/components/admin/SuperAdminModal').then(m => m.SuperAdminModal), { ssr: false });
 const FeedbackModal = dynamic(() => import('@/components/ui/FeedbackModal').then(m => m.FeedbackModal), { ssr: false });
 const TosModal = dynamic(() => import('@/components/ui/TosModal').then(m => m.TosModal), { ssr: false });
@@ -122,6 +123,45 @@ export default function Home() {
   const [isVerificationAttestationOpen, setIsVerificationAttestationOpen] = useState(false);
   const [allConventions, setAllConventions] = useState<Convention[]>([]); // For search functionality
   const { fetchAllConventions } = useConventionStore();
+
+  // --- REORDERABLE SECTIONS LOGIC (SSR-Safe) ---
+  const DEFAULT_ORDER = ['admin', 'progress', 'conventions'];
+  const [sectionsOrder, setSectionsOrder] = useState<string[]>(DEFAULT_ORDER);
+
+  // Hydration effect for LocalStorage
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem('dashboard_sections_order');
+      if (saved) {
+        const parsed = JSON.parse(saved);
+        if (Array.isArray(parsed) && parsed.length > 0) {
+          setSectionsOrder(parsed);
+        }
+      }
+    } catch (e) {
+      console.error("Failed to load sections order", e);
+    }
+  }, []);
+
+  const moveSection = (id: string, direction: 'up' | 'down') => {
+    const currentIndex = sectionsOrder.indexOf(id);
+    if (currentIndex === -1) return;
+    
+    const newOrder = [...sectionsOrder];
+    const newIndex = direction === 'up' ? currentIndex - 1 : currentIndex + 1;
+    
+    if (newIndex < 0 || newIndex >= newOrder.length) return;
+    
+    // Swap
+    [newOrder[currentIndex], newOrder[newIndex]] = [newOrder[newIndex], newOrder[currentIndex]];
+    
+    setSectionsOrder(newOrder);
+    try {
+      localStorage.setItem('dashboard_sections_order', JSON.stringify(newOrder));
+    } catch (e) {
+      console.error("Failed to save sections order", e);
+    }
+  };
 
   // DEBUG: Track Mount/Unmount
   useEffect(() => {
@@ -906,51 +946,116 @@ export default function Home() {
         ) : (
           // VALIDATOR DASHBOARD (Teacher, Heads, Tutor)
           <div className="space-y-8">
-            {isHighLevelAdmin(role) && (
-              <SchoolAdminDashboard />
-            )}
-
-            {(role === 'teacher' || role === 'at_ddfpt' || role === 'ddfpt') && (
-              <div className="flex justify-end space-x-4">
-                {/* Class Document Management Button for Main Teachers and Admin Roles */}
-                {(role === 'teacher' || role === 'ddfpt' || role === 'at_ddfpt') && (
-                  <button
-                    onClick={() => setIsClassDocModalOpen(true)}
-                    className="flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
-                  >
-                    <FileText className="w-4 h-4 mr-2" />
-                    Ajouter des documents
-                  </button>
-                )}
-
-                <button
-                  onClick={() => router.push('/dashboard/evaluations')}
-                  className="flex items-center px-4 py-2 bg-white border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 transition-colors shadow-sm"
-                >
-                  <ClipboardList className="w-4 h-4 mr-2" />
-                  Créer une Évaluation
-                </button>
-
+            {/* --- RESPONSIVE QUICK ACTIONS GRID --- */}
+            {(role === 'teacher' || isHighLevelAdmin(role) || role === 'at_ddfpt') && (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 w-full">
+                {/* Gérer les visites (Matrice) */}
                 {['teacher', 'admin', 'school_admin', 'ddfpt', 'at_ddfpt', 'business_manager'].includes(effectiveRole) && (
                   <button
                     onClick={() => setIsTrackingMatrixOpen(true)}
-                    className="flex items-center px-4 py-2 bg-indigo-600 text-white rounded-lg hover:bg-indigo-700 transition-colors shadow-sm"
+                    className="flex flex-col items-center justify-center p-6 bg-indigo-600 border border-indigo-700 rounded-2xl shadow-lg hover:bg-indigo-700 hover:shadow-indigo-200 transition-all group h-full transition-all"
                   >
-                    <MapPin className="w-4 h-4 mr-2" />
-                    Gérer les visites de suivi (Matrice)
+                    <div className="p-3 bg-white/20 rounded-full text-white mb-3 shadow-sm">
+                      <MapPin className="w-6 h-6" />
+                    </div>
+                    <span className="text-sm font-bold text-white text-center leading-tight">Gérer les visites</span>
                   </button>
                 )}
+
+                {/* Créer une Évaluation */}
+                <button
+                  onClick={() => router.push('/dashboard/evaluations')}
+                  className="flex flex-col items-center justify-center p-6 bg-white border border-gray-100 rounded-2xl shadow-sm hover:border-orange-200 hover:shadow-orange-50 transition-all group h-full"
+                >
+                  <div className="p-3 bg-orange-50 rounded-full text-orange-600 group-hover:bg-orange-100 mb-3 transition-colors">
+                    <ClipboardList className="w-6 h-6" />
+                  </div>
+                  <span className="text-sm font-bold text-gray-800 text-center leading-tight">Créer une Évaluation</span>
+                </button>
+
+                {/* Ajouter des documents */}
+                <button
+                  onClick={() => setIsClassDocModalOpen(true)}
+                  className="flex flex-col items-center justify-center p-6 bg-white border border-gray-100 rounded-2xl shadow-sm hover:border-blue-200 hover:shadow-blue-50 transition-all group h-full"
+                >
+                  <div className="p-3 bg-blue-50 rounded-full text-blue-600 group-hover:bg-blue-100 mb-3 transition-colors">
+                    <FileText className="w-6 h-6" />
+                  </div>
+                  <span className="text-sm font-bold text-gray-800 text-center leading-tight">Ajouter des documents</span>
+                </button>
+
+                {/* Trouver une entreprise */}
+                <button
+                  onClick={() => setIsSearchModalOpen(true)}
+                  className="flex flex-col items-center justify-center p-6 bg-white border border-gray-100 rounded-2xl shadow-sm hover:border-purple-200 hover:shadow-purple-50 transition-all group h-full"
+                >
+                  <div className="p-3 bg-purple-50 rounded-full text-purple-600 group-hover:bg-purple-100 mb-3 transition-colors">
+                    <Building2 className="w-6 h-6" />
+                  </div>
+                  <span className="text-sm font-bold text-gray-800 text-center leading-tight">Trouver une entreprise</span>
+                </button>
               </div>
             )}
-            <CollapsibleSection
-              title="Liste des Conventions"
-              storageKey="dashboard_pref_conventions_list"
-              icon={<FilesIcon className="w-5 h-5" />}
-            >
-              <div className="bg-white rounded-xl shadow-sm border border-gray-200">
-                <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={(user.id || '')} isRgpdModalOpen={isRgpdModalOpen} setIsRgpdModalOpen={setIsRgpdModalOpen} onModalChange={setIsChildModalOpen} />
-              </div>
-            </CollapsibleSection>
+
+            {/* --- DYNAMIC REORDERABLE SECTIONS --- */}
+            <div className="space-y-6">
+              {sectionsOrder.map((sectionId) => {
+                if (sectionId === 'admin' && isHighLevelAdmin(role)) {
+                  return (
+                    <CollapsibleSection
+                      key="admin"
+                      title="Administrer l'établissement"
+                      storageKey="dashboard_pref_admin_panel"
+                      icon={<Shield className="w-5 h-5" />}
+                      onMoveUp={() => moveSection('admin', 'up')}
+                      onMoveDown={() => moveSection('admin', 'down')}
+                    >
+                      <SchoolAdminPanelSection />
+                    </CollapsibleSection>
+                  );
+                }
+
+                if (sectionId === 'progress' && isHighLevelAdmin(role)) {
+                  return (
+                    <CollapsibleSection
+                      key="progress"
+                      title="Suivi de l'avancement"
+                      storageKey="dashboard_pref_progress_chart"
+                      icon={<BarChart3 className="w-5 h-5" />}
+                      onMoveUp={() => moveSection('progress', 'up')}
+                      onMoveDown={() => moveSection('progress', 'down')}
+                    >
+                      <InternshipProgressChart uai={uai || ''} />
+                    </CollapsibleSection>
+                  );
+                }
+
+                if (sectionId === 'conventions') {
+                  return (
+                    <CollapsibleSection
+                      key="conventions"
+                      title="Liste des Conventions"
+                      storageKey="dashboard_pref_conventions_list"
+                      icon={<FilesIcon className="w-5 h-5" />}
+                      onMoveUp={() => moveSection('conventions', 'up')}
+                      onMoveDown={() => moveSection('conventions', 'down')}
+                    >
+                      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+                        <ConventionList
+                          role={effectiveRole}
+                          userEmail={user.email || ''}
+                          userId={(user.id || '')}
+                          isRgpdModalOpen={isRgpdModalOpen}
+                          setIsRgpdModalOpen={setIsRgpdModalOpen}
+                          onModalChange={setIsChildModalOpen}
+                        />
+                      </div>
+                    </CollapsibleSection>
+                  );
+                }
+                return null;
+              })}
+            </div>
           </div>
         )}
         {isProfileModalOpen && (
