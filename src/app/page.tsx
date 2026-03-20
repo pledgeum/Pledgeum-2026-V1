@@ -172,6 +172,22 @@ export default function Home() {
 
 
   const { classes } = useSchoolStore();
+  
+  // Calculate Classes for Teacher View Filtering
+  const displayClassIds = useMemo(() => {
+    if (isHighLevelAdmin(role)) return null; // Admin sees all
+    if (role === 'teacher' || role === 'teacher_tracker') {
+      return classes
+        .filter(c => 
+          c.mainTeacher?.email === user?.email || 
+          c.teachersList?.some(t => t.email === user?.email)
+        )
+        .map(c => c.id);
+    }
+    return [];
+  }, [role, classes, user?.email]);
+
+  const showProgressChart = isHighLevelAdmin(role) || (displayClassIds && displayClassIds.length > 0);
 
   const [isTrackingMatrixOpen, setIsTrackingMatrixOpen] = useState(false);
   const [isClassDocModalOpen, setIsClassDocModalOpen] = useState(false);
@@ -1015,7 +1031,7 @@ export default function Home() {
                   );
                 }
 
-                if (sectionId === 'progress' && isHighLevelAdmin(role)) {
+                if (sectionId === 'progress' && showProgressChart) {
                   return (
                     <CollapsibleSection
                       key="progress"
@@ -1025,7 +1041,7 @@ export default function Home() {
                       onMoveUp={() => moveSection('progress', 'up')}
                       onMoveDown={() => moveSection('progress', 'down')}
                     >
-                      <InternshipProgressChart uai={uai || ''} />
+                      <InternshipProgressChart uai={uai || ''} filterClassIds={displayClassIds || undefined} />
                     </CollapsibleSection>
                   );
                 }

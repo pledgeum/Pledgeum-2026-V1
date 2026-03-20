@@ -15,9 +15,10 @@ interface ClassProgress {
 
 interface InternshipProgressChartProps {
     uai: string;
+    filterClassIds?: string[];
 }
 
-export default function InternshipProgressChart({ uai }: InternshipProgressChartProps) {
+export default function InternshipProgressChart({ uai, filterClassIds }: InternshipProgressChartProps) {
     const [data, setData] = useState<ClassProgress[]>([]);
     const [isLoading, setIsLoading] = useState(true);
     const [error, setError] = useState<string | null>(null);
@@ -31,7 +32,16 @@ export default function InternshipProgressChart({ uai }: InternshipProgressChart
                 const response = await fetch(`/api/school/analytics/internship-progress?uai=${uai}`);
                 if (!response.ok) throw new Error('Erreur lors de la récupération des données');
                 const result = await response.json();
-                setData(result.data || []);
+                let tableData = result.data || [];
+                
+                if (filterClassIds && filterClassIds.length > 0) {
+                    tableData = tableData.filter((item: ClassProgress) => {
+                        const classId = item.id.split('_')[0];
+                        return filterClassIds.includes(classId);
+                    });
+                }
+                
+                setData(tableData);
             } catch (err: any) {
                 console.error(err);
                 setError(err.message);

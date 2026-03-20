@@ -23,11 +23,11 @@ export async function GET(req: Request) {
         const userUai = session.user.establishment_uai || (session.user as any).uai;
         const isAdmin = userRole === 'admin' || userRole === 'SUPER_ADMIN';
 
-        // Authorized roles for school direction
-        const directionRoles = ['school_head', 'ddfpt', 'at_ddfpt', 'business_manager', 'assistant_manager', 'stewardship_secretary', 'ESTABLISHMENT_ADMIN'];
+        // Authorized roles for school direction + Teachers (for their own classes filtering)
+        const authorizedRoles = ['school_head', 'ddfpt', 'at_ddfpt', 'business_manager', 'assistant_manager', 'stewardship_secretary', 'ESTABLISHMENT_ADMIN', 'teacher', 'teacher_tracker'];
         
-        if (!isAdmin && (userUai !== uai || !directionRoles.includes(userRole))) {
-            return NextResponse.json({ error: "Forbidden: Access restricted to direction roles" }, { status: 403 });
+        if (!isAdmin && (userUai !== uai || !authorizedRoles.includes(userRole))) {
+            return NextResponse.json({ error: "Forbidden: Access restricted to authorized roles" }, { status: 403 });
         }
 
         client = await pool.connect();
