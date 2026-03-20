@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useMemo } from 'react';
 
 import { StudentDocumentButton } from '@/components/ui/StudentDocumentButton';
 import { WizardForm } from '@/components/wizard/WizardForm';
@@ -175,19 +175,23 @@ export default function Home() {
   
   // Calculate Classes for Teacher View Filtering
   const displayClassIds = useMemo(() => {
+    const currentRole = role?.toLowerCase();
     if (isHighLevelAdmin(role)) return null; // Admin sees all
-    if (role === 'teacher' || role === 'teacher_tracker') {
+    if (['teacher', 'teacher_tracker', 'main_teacher'].includes(currentRole)) {
+      const userEmail = user?.email?.toLowerCase();
       return classes
-        .filter(c => 
-          c.mainTeacher?.email === user?.email || 
-          c.teachersList?.some(t => t.email === user?.email)
-        )
+        .filter(c => {
+          const mainTeacherEmail = c.mainTeacher?.email?.toLowerCase();
+          return mainTeacherEmail === userEmail || 
+                 c.teachersList?.some(t => t.email?.toLowerCase() === userEmail);
+        })
         .map(c => c.id);
     }
     return [];
   }, [role, classes, user?.email]);
 
-  const showProgressChart = isHighLevelAdmin(role) || (displayClassIds && displayClassIds.length > 0);
+  const showProgressChart = isHighLevelAdmin(role) || 
+                           ['teacher', 'teacher_tracker', 'main_teacher'].includes(role?.toLowerCase());
 
   const [isTrackingMatrixOpen, setIsTrackingMatrixOpen] = useState(false);
   const [isClassDocModalOpen, setIsClassDocModalOpen] = useState(false);
@@ -1041,7 +1045,16 @@ export default function Home() {
                       onMoveUp={() => moveSection('progress', 'up')}
                       onMoveDown={() => moveSection('progress', 'down')}
                     >
-                      <InternshipProgressChart uai={uai || ''} filterClassIds={displayClassIds || undefined} />
+                      {displayClassIds?.length === 0 ? (
+                        <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8 text-center flex flex-col items-center justify-center">
+                          <Loader2 className="w-8 h-8 animate-spin text-blue-500 mb-3" />
+                          <p className="text-gray-500 text-sm font-medium">
+                            Chargement de vos classes ou aucune classe assignée...
+                          </p>
+                        </div>
+                      ) : (
+                        <InternshipProgressChart uai={uai || ''} filterClassIds={displayClassIds || undefined} />
+                      )}
                     </CollapsibleSection>
                   );
                 }
