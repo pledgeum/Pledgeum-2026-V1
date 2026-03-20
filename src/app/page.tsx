@@ -917,45 +917,41 @@ export default function Home() {
         {effectiveRole === 'student' ? (
           // STUDENT DASHBOARD
           <>
-            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 items-start">
-
-
+            <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 w-full items-start">
+              {/* Nouvelle Convention */}
               <div
                 onClick={handleNewConvention}
-                className={`group bg-white rounded-xl border-2 border-dashed p-8 flex flex-col items-center justify-center cursor-pointer transition-colors h-full relative ${!isProfileComplete()
-                  ? 'border-orange-300 hover:border-orange-500 bg-orange-50/50'
-                  : 'border-gray-300 hover:border-blue-500'
+                className={`group bg-white rounded-2xl border transition-all p-6 flex flex-col items-center justify-center cursor-pointer h-full relative ${!isProfileComplete()
+                  ? 'border-orange-200 shadow-sm hover:shadow-orange-50 bg-orange-50/30'
+                  : 'border-gray-100 shadow-sm hover:border-blue-200 hover:shadow-blue-50'
                   }`}
               >
                 {!isProfileComplete() && (
                   <div className="absolute top-4 right-4 text-orange-500">
-                    <AlertCircle className="w-5 h-5" />
+                    <AlertCircle className="w-4 h-4" />
                   </div>
                 )}
-                <div className={`p-4 rounded-full transition-colors ${!isProfileComplete() ? 'bg-orange-100 text-orange-600' : 'bg-blue-50 group-hover:bg-blue-100 text-blue-600'
+                <div className={`p-3 rounded-full transition-colors ${!isProfileComplete() ? 'bg-orange-100 text-orange-600' : 'bg-blue-50 group-hover:bg-blue-100 text-blue-600'
                   }`}>
-                  {!isProfileComplete() ? <UserCircle className="w-8 h-8" /> : <FileText className="w-8 h-8" />}
+                  {!isProfileComplete() ? <UserCircle className="w-6 h-6" /> : <Plus className="w-6 h-6" />}
                 </div>
-                <h3 className="mt-4 text-lg font-medium text-gray-900">Nouvelle Convention</h3>
-                <p className="text-center text-sm text-gray-500 mt-2">
-                  {!isProfileComplete()
-                    ? "Veuillez compléter votre profil pour commencer."
-                    : "Remplir une demande de convention PFMP pour un nouveau stage."}
-                </p>
+                <span className="mt-1 text-sm font-bold text-gray-800 text-center leading-tight">
+                  {!isProfileComplete() ? "Compléter le Profil" : "Nouvelle Convention"}
+                </span>
               </div>
 
-
-
+              {/* Trouver une entreprise */}
               <div
                 onClick={() => setIsSearchModalOpen(true)}
-                className="group bg-white rounded-xl border-2 border-dashed border-gray-300 hover:border-purple-500 p-8 flex flex-col items-center justify-center cursor-pointer transition-colors h-full"
+                className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:border-purple-200 hover:shadow-purple-50 transition-all p-6 flex flex-col items-center justify-center cursor-pointer h-full"
                 title="Trouver une entreprise ou un organisme d'accueil pour votre stage"
               >
-                <div className="bg-purple-50 p-4 rounded-full group-hover:bg-purple-100 transition-colors">
-                  <Building2 className="w-8 h-8 text-purple-600" />
+                <div className="bg-purple-50 p-3 rounded-full group-hover:bg-purple-100 transition-colors text-purple-600">
+                  <Building2 className="w-6 h-6" />
                 </div>
-                <h3 className="mt-4 text-lg font-medium text-gray-900 text-center">Trouver une Entreprise<br />ou un Organisme</h3>
-                <p className="text-center text-sm text-gray-500 mt-2">Rechercher parmi les entreprises partenaires pour votre stage.</p>
+                <span className="mt-1 text-sm font-bold text-gray-800 text-center leading-tight">
+                  Trouver une Entreprise
+                </span>
               </div>
             </div>
 
