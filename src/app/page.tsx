@@ -1335,7 +1335,7 @@ export default function Home() {
       {(effectiveRole === 'teacher' || effectiveRole === 'teacher_tracker') && (
         <button
           onClick={() => setIsContactCompanyModalOpen(true)}
-          className={`md:hidden fixed bottom-24 right-6 z-50 flex items-center justify-center w-14 h-14 bg-emerald-600 text-white rounded-full shadow-lg shadow-emerald-600/30 hover:bg-emerald-700 active:scale-95 transition-all ${isAnyModalOpen ? 'hidden' : ''}`}
+          className={`md:hidden fixed bottom-24 right-6 z-50 flex items-center justify-center w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-600/30 hover:bg-blue-700 active:scale-95 transition-all ${isAnyModalOpen ? 'hidden' : ''}`}
           title="Contacter l'entreprise"
         >
           <Building className="w-6 h-6" />
