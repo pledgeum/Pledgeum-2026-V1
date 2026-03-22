@@ -45,10 +45,10 @@ export function TosModal({ isOpen = false, onClose }: TosModalProps) {
     };
 
     return (
-        <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm p-4">
-            <div className="bg-white rounded-2xl shadow-2xl w-[95vw] max-w-lg md:w-full overflow-hidden border border-gray-200 max-h-[90vh] md:max-h-[85vh] flex flex-col">
+        <div className="fixed inset-0 min-h-[100dvh] z-[100] flex items-center justify-center bg-black/95 backdrop-blur-sm p-4">
+            <div className="bg-white rounded-2xl shadow-2xl w-[95vw] max-w-lg md:w-full overflow-hidden border border-gray-200 max-h-[85dvh] md:max-h-[85vh] flex flex-col">
                 {/* Header */}
-                <div className="bg-blue-600 px-8 py-6 flex justify-between items-start">
+                <div className="bg-blue-600 px-8 py-4 md:py-6 flex justify-between items-start">
                     <div className="flex items-center space-x-4">
                         <div className="bg-white/20 p-3 rounded-full">
                             <ShieldCheck className="w-8 h-8 text-white" />
@@ -57,9 +57,11 @@ export function TosModal({ isOpen = false, onClose }: TosModalProps) {
                             <h2 className="text-2xl font-bold text-white">
                                 {isBlocking ? "Bienvenue sur PLEDGEUM" : "Respect RGPD"}
                             </h2>
-                            <p className="text-blue-100">
-                                {isBlocking ? "Avant de commencer, veuillez accepter nos conditions." : "Engagements de protection des données."}
-                            </p>
+                            {!isBlocking && (
+                                <p className="text-blue-100 italic text-sm">
+                                    Engagements de protection des données.
+                                </p>
+                            )}
                         </div>
                     </div>
                     {!isBlocking && onClose && (
@@ -98,7 +100,7 @@ export function TosModal({ isOpen = false, onClose }: TosModalProps) {
                 </div>
 
                 {/* Footer - Fixed Actions */}
-                <div className="mt-auto border-t p-6 bg-white flex flex-col items-center space-y-3">
+                <div className="mt-auto border-t p-6 pb-8 md:pb-6 bg-white flex flex-col items-center space-y-3">
                     {isBlocking ? (
                         <button
                             onClick={handleAccept}
