@@ -104,6 +104,7 @@ const localStyles = StyleSheet.create({
         borderColor: '#0284c7',
         borderRadius: 2,
         alignSelf: 'flex-start',
+        flexDirection: 'column',
     },
     authCodeText: {
         fontSize: 5,
@@ -184,19 +185,29 @@ const QrCodeFooter = ({ url, code }: { url: string, code?: string }) => (
 // --- STANDARD PDF TEMPLATE (Existing CERFA-like) ---
 function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
     const formatDate = (d?: string) => d ? new Date(d).toLocaleDateString('fr-FR') : '...';
-    // Helper to render signature content
-    const SignatureContent = ({ img, hash, date, code, signatureId }: { img?: string, hash?: string, date?: string, code?: string, signatureId?: string }) => {
-        if (!img) return null;
+    const SignatureContent = ({ img, hash, date, code, signatureId, signerName, auditTrail }: { img?: string, hash?: string, date?: string, code?: string, signatureId?: string, signerName?: string, auditTrail?: any }) => {
+        const isOtp = img === "OTP_VALIDATED" || code?.startsWith('OTP') || auditTrail;
+        if (!img && !isOtp) return null;
+
         return (
             <View>
-                <Image src={img} style={{ width: 100, height: 35, objectFit: 'contain' }} />
+                {img && img !== "OTP_VALIDATED" ? (
+                    <Image src={img} style={{ width: 100, height: 35, objectFit: 'contain' }} />
+                ) : (
+                    <View style={[localStyles.authCodeBox, { marginTop: 1, paddingVertical: 1 }]}>
+                        <Text style={[localStyles.authCodeText, { fontSize: 7, marginBottom: 2 }]}>Signature Numérique Certifiée</Text>
+                        <Text style={localStyles.authCodeText}>Signé par OTP : {signerName || auditTrail?.actorEmail || 'Signataire'}</Text>
+                        <Text style={localStyles.authCodeText}>Date : {date ? new Date(date).toLocaleDateString('fr-FR') : '...'}</Text>
+                        <Text style={[localStyles.authCodeText, { color: '#3b82f6', marginTop: 1 }]}>Réf: {signatureId || code || "N/A"}</Text>
+                    </View>
+                )}
                 {hash && (
                     <View style={localStyles.validBadge}>
                         <Text>✅ SIGNÉ</Text>
                     </View>
                 )}
-                {date && <Text style={{ fontSize: 5, color: '#059669', marginTop: 1 }}>Le {new Date(date).toLocaleString('fr-FR')}</Text>}
-                {(code || signatureId) && (
+                {date && !isOtp && <Text style={{ fontSize: 5, color: '#059669', marginTop: 1 }}>Le {new Date(date).toLocaleString('fr-FR')}</Text>}
+                {(code || signatureId) && !isOtp && (
                     <View style={[localStyles.authCodeBox, { marginTop: 1, paddingVertical: 1 }]}>
                         <Text style={localStyles.authCodeText}>Certificat: {signatureId || code}</Text>
                     </View>
@@ -522,6 +533,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                                     date={data.signatures?.head?.signedAt}
                                     code={data.signatures?.head?.code}
                                     signatureId={data.signatures?.head?.signatureId}
+                                    signerName={data.ecole_chef_nom}
                                 />
                             )}
                         </View>
@@ -546,6 +558,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                                     date={data.signatures?.company_head?.signedAt || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.signedAt : undefined)}
                                     code={data.signatures?.company_head?.code || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.code : undefined)}
                                     signatureId={data.signatures?.company_head?.signatureId || (data.ent_rep_email === data.tuteur_email ? data.signatures?.tutor?.signatureId : undefined)}
+                                    signerName={data.ent_rep_nom}
                                 />
                             )}
                         </View>
@@ -557,6 +570,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                                 date={data.signatures?.student?.signedAt}
                                 code={data.signatures?.student?.code}
                                 signatureId={data.signatures?.student?.signatureId}
+                                signerName={`${data.eleve_prenom} ${data.eleve_nom}`}
                             />
                         </View>
                         {/* Legal Rep Box - Always Visible */}
@@ -584,6 +598,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                                             date={data.signatures?.parent?.signedAt}
                                             code={data.signatures?.parent?.code}
                                             signatureId={data.signatures?.parent?.signatureId}
+                                            signerName={data.rep_legal_nom || `${data.eleve_prenom} ${data.eleve_nom}`}
                                         />
                                     )}
                                     {/* If Major: Show Student Signature (Self-Representation) */}
@@ -594,6 +609,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                                             date={data.signatures?.student?.signedAt}
                                             code={data.signatures?.student?.code}
                                             signatureId={data.signatures?.student?.signatureId}
+                                            signerName={`${data.eleve_prenom} ${data.eleve_nom}`}
                                         />
                                     )}
                                 </>
@@ -620,6 +636,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                                     date={data.signatures?.tutor?.signedAt || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.signedAt : undefined)}
                                     code={data.signatures?.tutor?.code || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.code : undefined)}
                                     signatureId={data.signatures?.tutor?.signatureId || (data.ent_rep_email === data.tuteur_email ? data.signatures?.company_head?.signatureId : undefined)}
+                                    signerName={data.tuteur_nom}
                                 />
                             )}
                         </View>
@@ -638,6 +655,7 @@ function StandardConventionPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                                     date={data.signatures?.teacher?.signedAt}
                                     code={data.signatures?.teacher?.code}
                                     signatureId={data.signatures?.teacher?.signatureId}
+                                    signerName={data.prof_nom || 'Enseignant'}
                                 />
                             )}
                         </View>
@@ -804,18 +822,29 @@ function ErasmusPlaceholderPdf({ data, qrCodeUrl, hashCode }: PdfProps) {
 function StageSecondePdf({ data, qrCodeUrl, hashCode }: PdfProps) {
     const formatDate = (d?: string) => d ? new Date(d).toLocaleDateString('fr-FR') : '...';
     
-    const SignatureContent = ({ img, hash, date, code, signatureId }: { img?: string, hash?: string, date?: string, code?: string, signatureId?: string }) => {
-        if (!img) return null;
+    const SignatureContent = ({ img, hash, date, code, signatureId, signerName, auditTrail }: { img?: string, hash?: string, date?: string, code?: string, signatureId?: string, signerName?: string, auditTrail?: any }) => {
+        const isOtp = img === "OTP_VALIDATED" || code?.startsWith('OTP') || auditTrail;
+        if (!img && !isOtp) return null;
+
         return (
             <View>
-                <Image src={img} style={{ width: 100, height: 35, objectFit: 'contain' }} />
+                {img && img !== "OTP_VALIDATED" ? (
+                    <Image src={img} style={{ width: 100, height: 35, objectFit: 'contain' }} />
+                ) : (
+                    <View style={[localStyles.authCodeBox, { marginTop: 1, paddingVertical: 1 }]}>
+                        <Text style={[localStyles.authCodeText, { fontSize: 7, marginBottom: 2 }]}>Signature Numérique Certifiée</Text>
+                        <Text style={localStyles.authCodeText}>Signé par OTP : {signerName || auditTrail?.actorEmail || 'Signataire'}</Text>
+                        <Text style={localStyles.authCodeText}>Date : {date ? new Date(date).toLocaleDateString('fr-FR') : '...'}</Text>
+                        <Text style={[localStyles.authCodeText, { color: '#3b82f6', marginTop: 1 }]}>Réf: {signatureId || code || "N/A"}</Text>
+                    </View>
+                )}
                 {hash && (
                     <View style={localStyles.validBadge}>
                         <Text>✅ SIGNÉ</Text>
                     </View>
                 )}
-                {date && <Text style={{ fontSize: 5, color: '#059669', marginTop: 1 }}>Le {new Date(date).toLocaleString('fr-FR')}</Text>}
-                {(code || signatureId) && (
+                {date && !isOtp && <Text style={{ fontSize: 5, color: '#059669', marginTop: 1 }}>Le {new Date(date).toLocaleString('fr-FR')}</Text>}
+                {(code || signatureId) && !isOtp && (
                     <View style={[localStyles.authCodeBox, { marginTop: 1, paddingVertical: 1 }]}>
                         <Text style={localStyles.authCodeText}>Certificat: {signatureId || code}</Text>
                     </View>
@@ -1002,19 +1031,19 @@ function StageSecondePdf({ data, qrCodeUrl, hashCode }: PdfProps) {
                     <View style={localStyles.signatureRow}>
                         <View style={[localStyles.signatureBox, data.signatures?.head?.hash ? localStyles.signatureBoxValid : {}]}>
                             <Text style={localStyles.signatureLabel}>Le/la chef d'établissement</Text>
-                            <SignatureContent {...data.signatures?.head} />
+                            <SignatureContent {...data.signatures?.head} signerName={data.ecole_chef_nom} />
                         </View>
                         <View style={[localStyles.signatureBox, data.signatures?.company_head?.hash ? localStyles.signatureBoxValid : {}]}>
                             <Text style={localStyles.signatureLabel}>Le/la responsable d'accueil</Text>
-                            <SignatureContent {...data.signatures?.company_head} />
+                            <SignatureContent {...data.signatures?.company_head} signerName={data.ent_rep_nom} />
                         </View>
                         <View style={[localStyles.signatureBox, data.signatures?.student?.hash ? localStyles.signatureBoxValid : {}]}>
                             <Text style={localStyles.signatureLabel}>L’élève</Text>
-                            <SignatureContent {...data.signatures?.student} />
+                            <SignatureContent {...data.signatures?.student} signerName={`${data.eleve_prenom} ${data.eleve_nom}`} />
                         </View>
                         <View style={[localStyles.signatureBox, data.signatures?.parent?.hash ? localStyles.signatureBoxValid : {}]}>
                             <Text style={localStyles.signatureLabel}>Le/les responsable(s) légaux</Text>
-                            <SignatureContent {...data.signatures?.parent} />
+                            <SignatureContent {...data.signatures?.parent} signerName={data.rep_legal_nom || `${data.eleve_prenom} ${data.eleve_nom}`} />
                         </View>
                     </View>
                 </View>

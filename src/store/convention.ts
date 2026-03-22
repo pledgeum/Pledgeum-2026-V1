@@ -450,6 +450,7 @@ export const useConventionStore = create<ConventionState>((set, get) => ({
                     role,
                     signatureImage,
                     code,
+                    extraAuditLog,
                     dualSign,
                     newCompanyHeadEmail
                 })

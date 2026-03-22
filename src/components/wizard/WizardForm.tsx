@@ -96,9 +96,26 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
         setSignature(null);
     };
 
-    const handleSign = (method: 'canvas' | 'otp', signatureImage?: string) => {
+    const handleSign = (method: 'canvas' | 'otp', signatureImage?: string, extraAuditLog?: any) => {
         if (signatureImage) {
             setSignature(signatureImage);
+            
+            // Push signature data to global store immediately
+            if (extraAuditLog?.signatureId || extraAuditLog?.code) {
+                setData({
+                    signatures: {
+                        ...data.signatures || {},
+                        student: {
+                            signedAt: new Date().toISOString(),
+                            img: signatureImage,
+                            code: extraAuditLog.signatureId || extraAuditLog.code,
+                            signatureId: extraAuditLog.signatureId,
+                            method: method === 'otp' ? 'OTP' : 'CANVAS' as const
+                        }
+                    }
+                });
+            }
+            
             setIsSigModalOpen(false);
         }
     };
@@ -162,11 +179,11 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
             ...dataToUse,
             signatures: {
                 ...dataToUse.signatures || {},
-                student: signature ? {
+                student: signature ? (dataToUse.signatures?.student || {
                     signedAt: new Date().toISOString(),
                     img: signature,
                     code: 'PREVIEW'
-                } : undefined
+                }) : undefined
             }
         };
     }, [data, signature, isSuccess]);
@@ -247,14 +264,26 @@ export function WizardForm({ onSuccess }: WizardFormProps) {
                                 <p className="text-gray-600">Veuillez vérifier le document ci-dessous avant de l'envoyer.</p>
                             </div>
 
-                            <PdfPreview key={`wizard-pdf-${signature ? 'signed' : 'unsigned'}`} data={previewData} />
+                            <PdfPreview key={`wizard-pdf-${previewData.signatures?.student?.code || 'draft'}`} data={previewData as any} />
 
                             <div className="border-t border-gray-200 pt-6">
                                 <h3 className="text-lg font-bold text-gray-900 mb-4 text-center">Signature de l'élève</h3>
                                 <div className="flex flex-col items-center space-y-3">
                                     {signature ? (
                                         <div className="flex flex-col items-center">
-                                            <img src={signature} alt="Signature" className="max-h-24 border rounded shadow-sm" />
+                                            {signature === "OTP_VALIDATED" ? (
+                                                <div className="flex flex-col items-center justify-center p-2 bg-blue-50 border border-blue-200 border-dashed rounded-md h-auto min-h-[50px] w-full max-w-[220px] shadow-sm overflow-hidden">
+                                                    <span className="text-[10px] font-bold uppercase tracking-tight text-blue-800 mb-1">Signature Numérique Certifiée</span>
+                                                    <span className="text-[8px] text-blue-700 leading-tight">Signé par OTP : {data.eleve_prenom} {data.eleve_nom}</span>
+                                                    <span className="text-[8px] text-blue-700 leading-tight">Date : {new Date().toLocaleDateString('fr-FR')}</span>
+                                                    {previewData.signatures?.student?.code && previewData.signatures.student.code !== 'PREVIEW' && (
+                                                        <span className="text-[8px] font-mono text-blue-600 font-bold mt-1">Réf : {previewData.signatures.student.code}</span>
+                                                    )}
+                                                    <span className="text-[6px] text-blue-400 mt-1 italic">Authentifié par Pledgeum Trust</span>
+                                                </div>
+                                            ) : (
+                                                <img src={signature} alt="Signature" className="max-h-24 border rounded shadow-sm" />
+                                            )}
                                             <button
                                                 type="button"
                                                 onClick={clearSignature}

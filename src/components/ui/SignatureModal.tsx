@@ -406,8 +406,12 @@ export function SignatureModal({
                 throw new Error(data.error || "Code invalide");
             }
 
-            const { dataUrl, auditLog } = await res.json();
-            const result = await handleOtpOnSign(dataUrl, auditLog, newCompanyHeadEmail);
+            // Step 4: Finalize Signature with Audit Log
+            // THEME: We use a constant string "OTP_VALIDATED" to signal the PDF generator 
+            // that it should render a native digital stamp instead of a raw image.
+            const { auditLog } = await res.json();
+            const otpDataUrl = "OTP_VALIDATED";
+            const result = await handleOtpOnSign(otpDataUrl, auditLog, newCompanyHeadEmail);
             console.log('[MODAL_OTP] Transitioning to Success Step', result); // [DEBUG]
 
             // Check for Warnings (Email Failures) from API

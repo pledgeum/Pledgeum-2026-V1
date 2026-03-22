@@ -85,7 +85,7 @@ export const conventionSchema = z.object({
         code: z.string().optional(),
         signatureId: z.string().optional(),
         img: z.string().optional(),
-        method: z.string().optional(),
+        method: z.enum(['OTP', 'CANVAS']).optional(),
     })).optional(),
 
     // Sécurité / Cloisonnement

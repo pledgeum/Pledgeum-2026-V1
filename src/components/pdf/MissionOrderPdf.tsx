@@ -59,6 +59,7 @@ const styles = StyleSheet.create({
         borderColor: '#0284c7',
         borderRadius: 2,
         alignSelf: 'flex-start',
+        flexDirection: 'column',
     },
     authCodeText: {
         fontSize: 5,
@@ -108,15 +109,18 @@ interface MissionOrderPdfProps {
 
 export function MissionOrderPdf({ missionOrder, convention, qrCodeUrl, hashCode }: MissionOrderPdfProps) {
     const SignatureContent = ({ img, hash, date, code, signatureId, method, signerName, defaultLabel }: { img?: string, hash?: string, date?: string, code?: string, signatureId?: string, method?: string, signerName?: string, defaultLabel: string }) => {
-        if (!img && method !== 'OTP') return null;
+        const isOtp = img === "OTP_VALIDATED" || method === 'OTP';
+        if (!img && !isOtp) return null;
         return (
             <View>
-                {img ? (
+                {img && img !== "OTP_VALIDATED" ? (
                     <Image src={img} style={{ width: 100, height: 35, objectFit: 'contain' }} />
                 ) : (
-                    <View style={{ padding: 2, borderLeftWidth: 1, borderLeftColor: '#0284c7', marginLeft: 2 }}>
-                        <Text style={{ fontSize: 6, fontFamily: pdfTheme.fonts.bold, color: '#0369a1' }}>Signé numériquement par OTP</Text>
-                        <Text style={{ fontSize: 6, color: '#334155', marginTop: 1 }}>{signerName || defaultLabel}</Text>
+                    <View style={[styles.authCodeBox, { marginTop: 1, paddingVertical: 1 }]}>
+                        <Text style={[styles.authCodeText, { fontSize: 7, marginBottom: 2 }]}>Signature Numérique Certifiée</Text>
+                        <Text style={styles.authCodeText}>Signé par OTP : {signerName || defaultLabel}</Text>
+                        <Text style={styles.authCodeText}>Date : {date ? new Date(date).toLocaleDateString('fr-FR') : '...'}</Text>
+                        <Text style={[styles.authCodeText, { color: '#3b82f6', marginTop: 1 }]}>Réf: {signatureId || code || "N/A"}</Text>
                     </View>
                 )}
                 {hash && (
@@ -124,7 +128,7 @@ export function MissionOrderPdf({ missionOrder, convention, qrCodeUrl, hashCode 
                         <Text>✅ SIGNÉ</Text>
                     </View>
                 )}
-                {date && <Text style={{ fontSize: 5, color: '#059669', marginTop: 1 }}>Le {new Date(date).toLocaleString('fr-FR')}</Text>}
+                {date && !isOtp && <Text style={{ fontSize: 5, color: '#059669', marginTop: 1 }}>Le {new Date(date).toLocaleString('fr-FR')}</Text>}
                 {(code || signatureId) && (
                     <View style={[styles.authCodeBox, { marginTop: 1, paddingVertical: 1 }]}>
                         <Text style={styles.authCodeText}>Certificat: {signatureId || code}</Text>
