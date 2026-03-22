@@ -59,6 +59,7 @@ const AbsenceReportModal = dynamic(() => import('@/components/ui/AbsenceReportMo
 const AttestationModal = dynamic(() => import('@/components/ui/AttestationModal').then(m => m.AttestationModal), { ssr: false });
 const MissionOrderModal = dynamic(() => import('@/components/admin/MissionOrderModal').then(m => m.MissionOrderModal), { ssr: false });
 const ContactSchoolModal = dynamic(() => import('@/components/ui/ContactSchoolModal').then(m => m.ContactSchoolModal), { ssr: false });
+const ContactCompanyModal = dynamic(() => import('@/components/ui/ContactCompanyModal').then(m => m.ContactCompanyModal), { ssr: false });
 const AlumniModal = dynamic(() => import('@/components/ui/AlumniModal').then(m => m.AlumniModal), { ssr: false });
 const TrackingMatrixModal = dynamic(() => import('@/components/ui/TrackingMatrixModal').then(m => m.TrackingMatrixModal), { ssr: false });
 const ClassDocumentModal = dynamic(() => import('@/components/ui/ClassDocumentModal').then(m => m.ClassDocumentModal), { ssr: false });
@@ -200,7 +201,26 @@ export default function Home() {
   const [isChildModalOpen, setIsChildModalOpen] = useState(false);
   const [isAbsenceModalOpen, setIsAbsenceModalOpen] = useState(false);
   const [isContactModalOpen, setIsContactModalOpen] = useState(false);
+  const [isContactCompanyModalOpen, setIsContactCompanyModalOpen] = useState(false);
   const [selectedConventionId, setSelectedConventionId] = useState<string | null>(null);
+
+  const isAnyModalOpen = useMemo(() => {
+    return (
+      isProfileModalOpen || isSearchModalOpen || isSchoolAdminModalOpen || 
+      isMissionOrderModalOpen || isAlumniModalOpen || isSuperAdminModalOpen || 
+      isFeedbackModalOpen || isDeleteModalOpen || isVerificationModalOpen || 
+      isClassDocModalOpen || isTrackingMatrixOpen || isRgpdModalOpen || 
+      isChildModalOpen || isAbsenceModalOpen || isContactModalOpen || 
+      isContactCompanyModalOpen
+    );
+  }, [
+    isProfileModalOpen, isSearchModalOpen, isSchoolAdminModalOpen, 
+    isMissionOrderModalOpen, isAlumniModalOpen, isSuperAdminModalOpen, 
+    isFeedbackModalOpen, isDeleteModalOpen, isVerificationModalOpen, 
+    isClassDocModalOpen, isTrackingMatrixOpen, isRgpdModalOpen, 
+    isChildModalOpen, isAbsenceModalOpen, isContactModalOpen, 
+    isContactCompanyModalOpen
+  ]);
 
 
 
@@ -1003,6 +1023,17 @@ export default function Home() {
                   </div>
                   <span className="text-sm font-bold text-gray-800 text-center leading-tight">Créer une Évaluation</span>
                 </button>
+                
+                {/* Contacter l'entreprise */}
+                <button
+                  onClick={() => setIsContactCompanyModalOpen(true)}
+                  className="flex flex-col items-center justify-center p-6 bg-white border border-gray-100 rounded-2xl shadow-sm hover:border-emerald-200 hover:shadow-emerald-50 transition-all group h-full"
+                >
+                  <div className="p-3 bg-emerald-50 rounded-full text-emerald-600 group-hover:bg-emerald-100 mb-3 transition-colors">
+                    <Building className="w-6 h-6" />
+                  </div>
+                  <span className="text-sm font-bold text-gray-800 text-center leading-tight">Contacter l'entreprise</span>
+                </button>
 
                 {/* Ajouter des documents */}
                 <button
@@ -1267,10 +1298,7 @@ export default function Home() {
         {role === 'student' && (
           <button
             onClick={handleNewConvention}
-            className={`md:hidden fixed bottom-6 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg flex items-center justify-center transition-transform active:scale-95 ${(isProfileModalOpen || isSearchModalOpen || isSchoolAdminModalOpen || isMissionOrderModalOpen || isAlumniModalOpen || isSuperAdminModalOpen || isFeedbackModalOpen || isDeleteModalOpen || isVerificationModalOpen || isClassDocModalOpen || isTrackingMatrixOpen || isRgpdModalOpen || isChildModalOpen)
-              ? 'hidden'
-              : ''
-              }`}
+            className={`md:hidden fixed bottom-6 right-6 z-50 bg-blue-600 hover:bg-blue-700 text-white rounded-full p-4 shadow-lg flex items-center justify-center transition-transform active:scale-95 ${isAnyModalOpen ? 'hidden' : ''}`}
             title="Nouvelle Convention"
           >
             <Plus className="w-6 h-6" />
@@ -1284,11 +1312,7 @@ export default function Home() {
             setSelectedConventionId(null);
             setIsAbsenceModalOpen(true);
           }}
-          className={`md:hidden fixed bottom-6 right-6 z-50 flex items-center justify-center w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-600/30 hover:bg-blue-700 active:scale-95 transition-all ${
-            (isProfileModalOpen || isSearchModalOpen || isSchoolAdminModalOpen || isMissionOrderModalOpen || isAlumniModalOpen || isSuperAdminModalOpen || isFeedbackModalOpen || isDeleteModalOpen || isVerificationModalOpen || isClassDocModalOpen || isTrackingMatrixOpen || isRgpdModalOpen || isChildModalOpen || isAbsenceModalOpen)
-              ? 'hidden'
-              : ''
-          }`}
+          className={`md:hidden fixed bottom-6 right-6 z-50 flex items-center justify-center w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-600/30 hover:bg-blue-700 active:scale-95 transition-all ${isAnyModalOpen ? 'hidden' : ''}`}
           title="Signaler une absence"
         >
           <CalendarX className="w-6 h-6" />
@@ -1307,15 +1331,31 @@ export default function Home() {
         />
       )}
 
+      {/* MOBILE FAB for Teachers - Contact Company */}
+      {(effectiveRole === 'teacher' || effectiveRole === 'main_teacher' || effectiveRole === 'teacher_tracker') && (
+        <button
+          onClick={() => setIsContactCompanyModalOpen(true)}
+          className={`md:hidden fixed bottom-24 right-6 z-50 flex items-center justify-center w-14 h-14 bg-emerald-600 text-white rounded-full shadow-lg shadow-emerald-600/30 hover:bg-emerald-700 active:scale-95 transition-all ${isAnyModalOpen ? 'hidden' : ''}`}
+          title="Contacter l'entreprise"
+        >
+          <Building className="w-6 h-6" />
+        </button>
+      )}
+
+      {/* Global Contact Company Modal */}
+      {isContactCompanyModalOpen && (
+        <ContactCompanyModal
+          isOpen={isContactCompanyModalOpen}
+          onClose={() => setIsContactCompanyModalOpen(false)}
+          conventions={getConventionsByRole(effectiveRole, user?.email || '', user?.id || '')}
+        />
+      )}
+
       {/* MOBILE FAB for Tutors - Contact School */}
       {effectiveRole === 'tutor' && (
         <button
           onClick={() => setIsContactModalOpen(true)}
-          className={`md:hidden fixed bottom-24 right-6 z-50 flex items-center justify-center w-14 h-14 bg-indigo-600 text-white rounded-full shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 active:scale-95 transition-all ${
-            (isProfileModalOpen || isSearchModalOpen || isSchoolAdminModalOpen || isMissionOrderModalOpen || isAlumniModalOpen || isSuperAdminModalOpen || isFeedbackModalOpen || isDeleteModalOpen || isVerificationModalOpen || isClassDocModalOpen || isTrackingMatrixOpen || isRgpdModalOpen || isChildModalOpen || isAbsenceModalOpen || isContactModalOpen)
-              ? 'hidden'
-              : ''
-          }`}
+          className={`md:hidden fixed bottom-24 right-6 z-50 flex items-center justify-center w-14 h-14 bg-indigo-600 text-white rounded-full shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 active:scale-95 transition-all ${isAnyModalOpen ? 'hidden' : ''}`}
           title="Contacter l'établissement"
         >
           <Phone className="w-6 h-6" />
