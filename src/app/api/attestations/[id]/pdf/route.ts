@@ -52,7 +52,6 @@ export async function GET(
                 est.address as school_address,
                 est.postal_code as school_zip,
                 est.city as school_city,
-                est.admin_name as school_head_name,
                 att.total_days_paid,
                 att.total_weeks_diploma,
                 att.absences_hours as attestation_absences_hours,
@@ -98,7 +97,7 @@ export async function GET(
                     'SELECT 1 FROM teacher_assignments WHERE teacher_uid = $1 AND class_id = $2',
                     [userId, row.class_id]
                 );
-                hasAccess = assignRes.rowCount > 0;
+                hasAccess = (assignRes.rowCount ?? 0) > 0;
             }
         } else if (userRole === 'student') {
             hasAccess = row.student_uid === userId;
@@ -126,7 +125,7 @@ export async function GET(
             eleve_date_naissance: row.eleve_date_naissance,
             ecole_nom: row.school_name || row.ecole_nom,
             ecole_adresse: row.school_address || row.ecole_adresse,
-            ecole_chef_nom: row.school_head_name || row.ecole_chef_nom,
+            ecole_chef_nom: row.ecole_chef_nom,
             ent_nom: row.ent_nom,
             ent_siret: row.ent_siret,
             ent_adresse: row.ent_adresse,
