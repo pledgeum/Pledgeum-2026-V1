@@ -22,7 +22,7 @@ import {
   FileText, LogOut, Plus, Trash2, Loader2, AlertCircle, CheckCircle,
   Menu, X, Calendar, MapPin, Building, User, Mail, Phone, ExternalLink,
   ShieldCheck, MessageSquare, Settings, UserCircle, AlertTriangle, Search,
-  Briefcase, Send, Eye, PenTool, UserPlus, Users, Bell, Shield, Building2, Clock, ClipboardList, FileSpreadsheet, BarChart3
+  Briefcase, Send, Eye, PenTool, UserPlus, Users, Bell, Shield, Building2, Clock, ClipboardList, FileSpreadsheet, BarChart3, CalendarX
 } from 'lucide-react';
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from 'next/navigation';
@@ -2244,16 +2244,35 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
       }
 
       {
-        isAbsenceModalOpen && selectedConventionId && (
+        isAbsenceModalOpen && (
           <AbsenceReportModal
             isOpen={isAbsenceModalOpen}
             onClose={() => setIsAbsenceModalOpen(false)}
-            convention={conventions.find(c => c.id === selectedConventionId) as Convention}
+            convention={conventions.find(c => c.id === selectedConventionId)}
+            conventions={conventions}
             currentUserEmail={userEmail}
             userRole={role}
           />
         )
       }
+
+      {/* MOBILE FAB for Tutors - Global Absence Reporting */}
+      {(role === 'tutor' || role === 'company_head_tutor') && (
+        <button
+          onClick={() => {
+            setSelectedConventionId(null);
+            setIsAbsenceModalOpen(true);
+          }}
+          className={`md:hidden fixed bottom-6 right-6 z-50 flex items-center justify-center w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-600/30 hover:bg-blue-700 active:scale-95 transition-all ${
+            (isPdfModalOpen || isAbsenceModalOpen || isAttestationModalOpen || isTrackingModalOpen || isEmailModalOpen)
+              ? 'hidden'
+              : ''
+          }`}
+          title="Signaler une absence"
+        >
+          <CalendarX className="w-6 h-6" />
+        </button>
+      )}
 
       {
         isAttestationModalOpen && selectedConventionId && (

@@ -8,15 +8,24 @@ import { CustomCalendar } from './CustomCalendar';
 interface AbsenceReportModalProps {
     isOpen: boolean;
     onClose: () => void;
-    convention: Convention;
+    convention?: Convention; // Optional for FAB mode
+    conventions?: Convention[]; // Required for FAB mode
     currentUserEmail: string;
     userRole: string; // Passed from parent
 }
 
-export function AbsenceReportModal({ isOpen, onClose, convention, currentUserEmail, userRole = '' }: AbsenceReportModalProps) {
+export function AbsenceReportModal({ isOpen, onClose, convention, conventions = [], currentUserEmail, userRole = '' }: AbsenceReportModalProps) {
     const { reportAbsence, updateAbsence } = useConventionStore();
     const [loading, setLoading] = useState(false);
-    const [view, setView] = useState<'LIST' | 'CREATE' | 'JUSTIFY'>('LIST');
+    
+    // Default to CREATE view if no specific convention is provided (FAB mode)
+    const [view, setView] = useState<'LIST' | 'CREATE' | 'JUSTIFY'>(convention ? 'LIST' : 'CREATE');
+    
+    // For FAB mode: allow selecting a convention
+    const [selectedConvId, setSelectedConvId] = useState<string | null>(null);
+
+    // Contextual convention or selected one
+    const targetConvention = convention || conventions.find(c => c.id === selectedConvId);
 
     // For Justify Mode
     const [selectedAbsenceId, setSelectedAbsenceId] = useState<string | null>(null);
@@ -30,19 +39,18 @@ export function AbsenceReportModal({ isOpen, onClose, convention, currentUserEma
     });
 
     if (!isOpen) return null;
-    if (!convention) return null;
 
     const canCreate = !['student', 'parent'].includes(userRole);
     // Students/Parents (and everyone else) can justify
     const canJustify = true;
 
     const getDayDuration = (dateStr: string): number => {
-        if (!convention.stage_horaires || !dateStr) return 7;
+        if (!targetConvention?.stage_horaires || !dateStr) return 7;
         try {
             const d = new Date(dateStr);
             const days = ['Dimanche', 'Lundi', 'Mardi', 'Mercredi', 'Jeudi', 'Vendredi', 'Samedi'];
             const dayName = days[d.getDay()];
-            const schedule = (convention.stage_horaires as any)[dayName];
+            const schedule = (targetConvention.stage_horaires as any)[dayName];
 
             if (!schedule) return 7; // Default 7h if no specific schedule found
 
@@ -63,10 +71,11 @@ export function AbsenceReportModal({ isOpen, onClose, convention, currentUserEma
 
     const handleCreate = async (e: React.FormEvent) => {
         e.preventDefault();
+        if (!targetConvention) return;
         setLoading(true);
         try {
             const finalDuration = formData.type === 'absence' ? getDayDuration(formData.date) : Number(formData.duration);
-            await reportAbsence(convention.id, {
+            await reportAbsence(targetConvention.id, {
                 date: formData.date,
                 type: formData.type,
                 duration: finalDuration,
@@ -74,9 +83,13 @@ export function AbsenceReportModal({ isOpen, onClose, convention, currentUserEma
                 reportedBy: currentUserEmail
             });
             alert("L'absence a été signalée.");
-            setView('LIST'); // Return to list
-            // Reset form
-            setFormData({ ...formData, reason: '', duration: 7 });
+            
+            // If we are in global mode, we might want to reset or stay in CREATE
+            if (!convention) {
+                setFormData({ ...formData, reason: '', duration: 7 });
+            } else {
+                setView('LIST'); // Return to list in contextual mode
+            }
         } catch (error) {
             console.error("Failed to report:", error);
             alert(`Erreur lors du signalement: ${error instanceof Error ? error.message : "Erreur inconnue"}`);
@@ -87,10 +100,10 @@ export function AbsenceReportModal({ isOpen, onClose, convention, currentUserEma
 
     const handleJustifySubmmit = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (!selectedAbsenceId) return;
+        if (!selectedAbsenceId || !targetConvention) return;
         setLoading(true);
         try {
-            await updateAbsence(convention.id, selectedAbsenceId, justification);
+            await updateAbsence(targetConvention.id, selectedAbsenceId, justification);
             alert("Justification enregistrée.");
             setView('LIST');
             setSelectedAbsenceId(null);
@@ -104,8 +117,8 @@ export function AbsenceReportModal({ isOpen, onClose, convention, currentUserEma
     };
 
     // RENDER LIST VIEW
-    if (view === 'LIST') {
-        const absences = convention.absences || [];
+    if (view === 'LIST' && targetConvention) {
+        const absences = targetConvention.absences || [];
         return (
             <div className="fixed inset-0 z-[100] flex items-center justify-center bg-black/50 p-4">
                 <div className="bg-white rounded-xl shadow-xl w-full max-w-lg overflow-hidden animate-in zoom-in-95">
@@ -117,6 +130,9 @@ export function AbsenceReportModal({ isOpen, onClose, convention, currentUserEma
                         <button onClick={onClose}><X className="w-5 h-5 text-gray-500" /></button>
                     </div>
                     <div className="p-4">
+                        <div className="mb-4 bg-blue-50 p-3 rounded text-sm text-blue-900 font-medium">
+                            Élève : {targetConvention.eleve_prenom} {targetConvention.eleve_nom} ({targetConvention.eleve_classe})
+                        </div>
                         {absences.length === 0 ? (
                             <p className="text-center text-gray-500 py-4">Aucune absence signalée.</p>
                         ) : (
@@ -214,14 +230,47 @@ export function AbsenceReportModal({ isOpen, onClose, convention, currentUserEma
                         <TriangleAlert className="text-orange-500 w-5 h-5" />
                         Signaler une Absence / Retard
                     </h3>
-                    <button onClick={() => setView('LIST')}><X className="w-5 h-5 text-gray-500" /></button>
+                    <button onClick={convention ? () => setView('LIST') : onClose}><X className="w-5 h-5 text-gray-500" /></button>
                 </div>
 
                 <form onSubmit={handleCreate} className="p-6 space-y-4">
-                    <div className="bg-blue-50 p-3 rounded text-sm text-blue-800">
-                        Élève : <strong>{convention.eleve_prenom} {convention.eleve_nom}</strong><br />
-                        Une notification sera envoyée aux CPE, Parents (si mineur) et Enseignant Référent/Professeur Principal.
-                    </div>
+                    {/* Convention selector (Only in FAB mode) */}
+                    {!convention ? (
+                        <div>
+                            <label className="block text-sm font-bold text-gray-700 mb-1">
+                                Sélectionner l'élève concerné
+                            </label>
+                            <select
+                                value={selectedConvId || ''}
+                                onChange={(e) => setSelectedConvId(e.target.value)}
+                                required
+                                className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-3 bg-white text-sm"
+                            >
+                                <option value="">-- Choisir un élève --</option>
+                                {conventions
+                                    .filter(c => c.status === 'VALIDATED_HEAD')
+                                    .map(c => (
+                                        <option key={c.id} value={c.id}>
+                                            {c.eleve_nom} {c.eleve_prenom} ({c.eleve_classe})
+                                        </option>
+                                    ))
+                                }
+                            </select>
+                            {conventions.filter(c => c.status === 'VALIDATED_HEAD').length === 0 && (
+                                <p className="mt-1 text-xs text-red-500 italic">Aucun élève en stage actif trouvé.</p>
+                            )}
+                        </div>
+                    ) : (
+                        <div className="bg-blue-50 p-3 rounded text-sm text-blue-800 font-medium">
+                            Élève : <strong>{convention.eleve_prenom} {convention.eleve_nom}</strong> ({convention.eleve_classe})
+                        </div>
+                    )}
+
+                    {targetConvention && (
+                        <div className="bg-orange-50 p-3 rounded text-xs text-orange-800 border border-orange-100">
+                             Une notification sera envoyée aux CPE, Parents (si mineur) et Enseignant Référent.
+                        </div>
+                    )}
 
                     <div className="grid grid-cols-2 gap-4">
                         <div>
@@ -230,6 +279,7 @@ export function AbsenceReportModal({ isOpen, onClose, convention, currentUserEma
                                 value={formData.type}
                                 onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
                                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2"
+                                disabled={!targetConvention}
                             >
                                 <option value="absence">Absence</option>
                                 <option value="retard">Retard</option>
@@ -237,13 +287,19 @@ export function AbsenceReportModal({ isOpen, onClose, convention, currentUserEma
                         </div>
                         <div>
                             <label className="block text-sm font-medium text-gray-700">Date</label>
-                            <CustomCalendar
-                                selectedDate={formData.date}
-                                onSelectDate={(date) => setFormData({ ...formData, date })}
-                                minDate={convention.stage_date_debut}
-                                maxDate={convention.stage_date_fin}
-                                schedule={convention.stage_horaires}
-                            />
+                            {targetConvention ? (
+                                <CustomCalendar
+                                    selectedDate={formData.date}
+                                    onSelectDate={(date) => setFormData({ ...formData, date })}
+                                    minDate={targetConvention.stage_date_debut}
+                                    maxDate={targetConvention.stage_date_fin}
+                                    schedule={targetConvention.stage_horaires}
+                                />
+                            ) : (
+                                <div className="mt-1 p-2 border rounded bg-gray-50 text-gray-400 text-sm h-10 flex items-center">
+                                    En attente de sélection...
+                                </div>
+                            )}
                         </div>
                     </div>
 
@@ -254,6 +310,7 @@ export function AbsenceReportModal({ isOpen, onClose, convention, currentUserEma
                                 value={formData.duration}
                                 onChange={(e) => setFormData({ ...formData, duration: Number(e.target.value) })}
                                 required
+                                disabled={!targetConvention}
                                 className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2"
                             >
                                 <option value="">Sélectionner la durée...</option>
@@ -278,17 +335,28 @@ export function AbsenceReportModal({ isOpen, onClose, convention, currentUserEma
                             value={formData.reason}
                             onChange={(e) => setFormData({ ...formData, reason: e.target.value })}
                             rows={3}
-                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2"
+                            disabled={!targetConvention}
+                            className="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500 border p-2 h-20"
                             placeholder="Maladie, transports, etc..."
                         />
                     </div>
 
                     <div className="flex justify-end gap-3 pt-4">
-                        <button type="button" onClick={() => setView('LIST')} className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded">Annuler</button>
+                        <button 
+                            type="button" 
+                            onClick={convention ? () => setView('LIST') : onClose} 
+                            className="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded"
+                        >
+                            Annuler
+                        </button>
                         <button
                             type="submit"
-                            disabled={loading}
-                            className="px-4 py-2 bg-orange-600 text-white rounded hover:bg-orange-700 font-medium"
+                            disabled={loading || !targetConvention}
+                            className={`px-4 py-2 text-white rounded font-medium shadow-sm transition-colors ${
+                                loading || !targetConvention 
+                                ? 'bg-gray-400 cursor-not-allowed' 
+                                : 'bg-orange-600 hover:bg-orange-700'
+                            }`}
                         >
                             {loading ? 'Envoi...' : 'Signaler'}
                         </button>
