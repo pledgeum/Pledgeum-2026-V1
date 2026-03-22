@@ -262,7 +262,7 @@ export default function AttestationsHubPage() {
                 <div className="px-4 py-3 bg-gray-50/80 border-t border-gray-100 flex items-center justify-between backdrop-blur-sm group-hover:bg-blue-50/30 transition-colors">
                   <button 
                     disabled={!isSigned(a)}
-                    onClick={() => console.log('Download triggered for:', a.id)}
+                    onClick={() => window.open(`/api/attestations/${a.id}/pdf`, '_blank')}
                     className={`flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 ${
                       isSigned(a) 
                       ? 'text-blue-600 hover:text-blue-800' 
