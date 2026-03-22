@@ -119,9 +119,9 @@ export default function AttestationsHubPage() {
               <div>
                 <h1 className="text-xl font-bold text-gray-900 flex items-center gap-2">
                   <FileBadge className="w-6 h-6 text-blue-600" />
-                  Hub des Attestations
+                  Gestion des attestations de stage
                 </h1>
-                <p className="text-sm text-gray-500">Suivi des signatures officielles</p>
+                <p className="text-sm text-gray-500">Suivi des signatures</p>
               </div>
             </div>
             {isStaff && (
