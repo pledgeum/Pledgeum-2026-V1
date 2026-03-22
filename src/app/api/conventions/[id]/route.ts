@@ -108,7 +108,8 @@ export async function GET(
                     ev.final_grade AS "evaluationFinalGrade",
                     ev.teacher_signed_at AS "evaluationDate",
                     -- TUTOR PERSONAL DATA
-                    tuteur.phone AS "tuteur_telephone"
+                    tuteur.phone AS "tuteur_telephone",
+                    signataire.phone AS "signataire_telephone"
                 FROM conventions c
                 LEFT JOIN classes cls ON c.class_id = cls.id
                 LEFT JOIN establishments est ON c.establishment_uai = est.uai
@@ -117,7 +118,8 @@ export async function GET(
                 LEFT JOIN users tu ON v.tracking_teacher_email = tu.email
                 LEFT JOIN attestations att ON c.id = att.convention_id
                 LEFT JOIN evaluations ev ON c.id = ev.convention_id AND ev.status = 'FINALIZED'
-                LEFT JOIN users tuteur ON LOWER(c.tutor_email) = LOWER(tuteur.email)
+                LEFT JOIN users tuteur ON LOWER(COALESCE(c.tutor_email, c.metadata->>'tuteur_email')) = LOWER(tuteur.email)
+                LEFT JOIN users signataire ON LOWER(c.metadata->>'ent_rep_email') = LOWER(signataire.email)
                 WHERE c.id = $1
             `;
 

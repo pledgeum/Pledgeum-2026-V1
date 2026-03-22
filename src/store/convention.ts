@@ -83,6 +83,7 @@ export interface Convention extends Omit<ConventionData, 'signatures'> {
     cpe_email?: string;
     derogationJustification?: string;
     tuteur_telephone?: string;
+    signataire_telephone?: string;
 
     visit?: {
         tracking_teacher_email?: string; // Optional for drafts
