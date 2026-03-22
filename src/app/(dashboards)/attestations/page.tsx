@@ -215,44 +215,44 @@ export default function AttestationsHubPage() {
                 key={a.id}
                 className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg hover:border-blue-200 transition-all duration-300 overflow-hidden flex flex-col"
               >
-                <div className="p-4 flex-1">
-                  <div className="flex justify-between items-start mb-3">
-                    <div className="bg-indigo-50 text-indigo-700 text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border border-indigo-100">
+                <div className="p-3 sm:p-4 flex-1">
+                  <div className="flex justify-between items-start mb-2">
+                    <div className="bg-indigo-50 text-indigo-700 text-[9px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md border border-indigo-100">
                       {a.class_name}
                     </div>
                     {isSigned(a) ? (
-                      <div className="flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded-md text-[10px] font-bold border border-green-100">
+                      <div className="flex items-center gap-1 bg-green-50 text-green-700 px-2 py-0.5 rounded-md text-[10px] font-bold border border-green-100">
                         <CheckCircle className="w-3 h-3" />
                         Signée
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1 bg-orange-50 text-orange-700 px-2 py-1 rounded-md text-[10px] font-bold border border-orange-100">
+                      <div className="flex items-center gap-1 bg-orange-50 text-orange-700 px-2 py-0.5 rounded-md text-[10px] font-bold border border-orange-100">
                         <Clock className="w-3 h-3" />
                         En attente
                       </div>
                     )}
                   </div>
 
-                  <h3 className="text-base font-bold text-gray-900 mb-0.5 group-hover:text-blue-700 transition-colors truncate">
-                    <span className="text-gray-500 font-normal">Élève: </span>
-                    {a.student_first_name} {a.student_last_name}
+                  <h3 className="text-sm sm:text-base font-bold text-gray-900 mb-2 group-hover:text-blue-700 transition-colors flex flex-col sm:flex-row sm:items-baseline gap-0.5 sm:gap-1.5">
+                    <span className="text-gray-500 font-normal text-xs sm:text-sm">Elève:</span>
+                    <span className="truncate">{a.student_first_name} {a.student_last_name}</span>
                   </h3>
                   
-                  <div className="space-y-1.5 mt-3">
-                    <div className="flex items-center gap-3 text-sm text-gray-600 p-1.5 rounded-lg hover:bg-gray-50 transition-colors">
-                      <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-600 transition-all shrink-0">
+                  <div className="space-y-1.5">
+                    <div className="flex items-start gap-3 text-sm text-gray-600 p-1.5 rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-600 transition-all shrink-0 mt-0.5">
                         <Building className="w-3.5 h-3.5" />
                       </div>
-                      <div className="truncate">
-                        <span className="text-gray-500 font-normal">Entreprise ou organismes: </span>
-                        <span className="text-gray-900 font-semibold">{a.company_name || 'Inconnue'}</span>
+                      <div className="flex flex-col min-w-0">
+                        <span className="text-gray-500 font-normal text-xs">Entreprise ou organismes:</span>
+                        <span className="text-gray-900 font-semibold break-words leading-tight">{a.company_name || 'Inconnue'}</span>
                       </div>
                     </div>
-                    <div className="flex items-center gap-3 text-sm text-gray-600 p-1.5 rounded-lg hover:bg-gray-50 transition-colors underline-offset-4">
+                    <div className="flex items-center gap-3 text-sm text-gray-600 p-1.5 rounded-lg hover:bg-gray-50 transition-colors">
                       <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-600 transition-all shrink-0">
                         <Calendar className="w-3.5 h-3.5" />
                       </div>
-                      <span className="font-medium">
+                      <span className="font-medium text-xs sm:text-sm">
                         {new Date(a.date_start).toLocaleDateString('fr-FR')} - {new Date(a.date_end).toLocaleDateString('fr-FR')}
                       </span>
                     </div>
