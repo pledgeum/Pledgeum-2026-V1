@@ -179,7 +179,7 @@ export default function Home() {
   const displayClassIds = useMemo(() => {
     const currentRole = role?.toLowerCase();
     if (isHighLevelAdmin(role)) return null; // Admin sees all
-    if (['teacher', 'teacher_tracker', 'main_teacher'].includes(currentRole)) {
+    if (['teacher', 'teacher_tracker'].includes(currentRole)) {
       const userEmail = user?.email?.toLowerCase();
       return classes
         .filter(c => {
@@ -193,7 +193,7 @@ export default function Home() {
   }, [role, classes, user?.email]);
 
   const showProgressChart = isHighLevelAdmin(role) || 
-                           ['teacher', 'teacher_tracker', 'main_teacher'].includes(role?.toLowerCase());
+                           ['teacher', 'teacher_tracker'].includes(role?.toLowerCase());
 
   const [isTrackingMatrixOpen, setIsTrackingMatrixOpen] = useState(false);
   const [isClassDocModalOpen, setIsClassDocModalOpen] = useState(false);
@@ -1332,7 +1332,7 @@ export default function Home() {
       )}
 
       {/* MOBILE FAB for Teachers - Contact Company */}
-      {(effectiveRole === 'teacher' || effectiveRole === 'main_teacher' || effectiveRole === 'teacher_tracker') && (
+      {(effectiveRole === 'teacher' || effectiveRole === 'teacher_tracker') && (
         <button
           onClick={() => setIsContactCompanyModalOpen(true)}
           className={`md:hidden fixed bottom-24 right-6 z-50 flex items-center justify-center w-14 h-14 bg-emerald-600 text-white rounded-full shadow-lg shadow-emerald-600/30 hover:bg-emerald-700 active:scale-95 transition-all ${isAnyModalOpen ? 'hidden' : ''}`}
@@ -2135,7 +2135,7 @@ function ConventionList({
                 const cls = classes.find(c => c.name === conv.eleve_classe);
                 if (!cls) return null;
 
-                const allowedRoles = ['admin', 'teacher', 'main_teacher', 'school_head', 'ddfpt', 'at_ddfpt', 'business_manager', 'student'];
+                const allowedRoles = ['admin', 'teacher', 'school_head', 'ddfpt', 'at_ddfpt', 'business_manager', 'student'];
                 if (!allowedRoles.includes(role)) return null;
 
                 return (
