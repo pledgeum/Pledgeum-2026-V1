@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Phone, Mail, Building, User, MapPin, ExternalLink, Contact, Briefcase } from 'lucide-react';
+import { X, Phone, Mail, Building, User, MapPin, ExternalLink, Contact, Briefcase, Smartphone } from 'lucide-react';
 import { Convention } from '@/store/convention';
 
 interface ContactCompanyModalProps {
@@ -83,7 +83,20 @@ export function ContactCompanyModal({ isOpen, onClose, conventions }: ContactCom
                                         <span className="text-sm font-medium text-gray-700 truncate">{targetConvention.tuteur_email}</span>
                                         <ExternalLink className="w-3 h-3 text-gray-400 ml-auto" />
                                     </a>
-                                    {targetConvention.tuteur_tel && (
+                                    {targetConvention.tuteur_telephone && (
+                                        <a 
+                                            href={`tel:${targetConvention.tuteur_telephone}`}
+                                            className="flex items-center gap-3 p-3 bg-white hover:bg-emerald-50 rounded-xl border border-emerald-100 transition-colors group"
+                                        >
+                                            <Smartphone className="w-5 h-5 text-emerald-500 group-hover:scale-110 transition-transform" />
+                                            <div className="flex flex-col">
+                                                <span className="text-xs text-gray-400 font-medium leading-none mb-1">Portable / Personnel</span>
+                                                <span className="text-sm font-bold text-gray-700">{targetConvention.tuteur_telephone}</span>
+                                            </div>
+                                            <ExternalLink className="w-3 h-3 text-gray-400 ml-auto" />
+                                        </a>
+                                    )}
+                                    {targetConvention.tuteur_tel && targetConvention.tuteur_tel !== targetConvention.tuteur_telephone && (
                                         <a 
                                             href={`tel:${targetConvention.tuteur_tel}`}
                                             className="flex items-center gap-3 p-3 bg-white hover:bg-emerald-50 rounded-xl border border-emerald-100 transition-colors group"

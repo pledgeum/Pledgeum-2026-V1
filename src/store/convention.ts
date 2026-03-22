@@ -82,6 +82,7 @@ export interface Convention extends Omit<ConventionData, 'signatures'> {
     competences?: string; // For attestation override
     cpe_email?: string;
     derogationJustification?: string;
+    tuteur_telephone?: string;
 
     visit?: {
         tracking_teacher_email?: string; // Optional for drafts

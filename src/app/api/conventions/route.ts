@@ -118,7 +118,9 @@ export async function GET(request: Request) {
                 TO_CHAR(att.signature_date, 'YYYY-MM-DD"T"HH24:MI:SS.MS"Z"') AS "attestationDate",
                 att.signature_img AS attestation_signature_img,
                 att.signature_code AS attestation_signature_code,
-                att.pdf_hash AS "attestationHash"
+                att.pdf_hash AS "attestationHash",
+                -- TUTOR PERSONAL DATA
+                tuteur.phone AS "tuteur_telephone"
             FROM conventions c
             LEFT JOIN classes cls ON c.class_id = cls.id
             LEFT JOIN establishments est ON c.establishment_uai = est.uai
@@ -126,6 +128,7 @@ export async function GET(request: Request) {
             LEFT JOIN visits v ON c.id = v.convention_id
             LEFT JOIN users tu ON v.tracking_teacher_email = tu.email
             LEFT JOIN attestations att ON c.id = att.convention_id
+            LEFT JOIN users tuteur ON LOWER(c.tutor_email) = LOWER(tuteur.email)
             WHERE 1=1
         `;
 
