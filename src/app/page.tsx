@@ -22,7 +22,7 @@ import {
   FileText, LogOut, Plus, Trash2, Loader2, AlertCircle, CheckCircle,
   Menu, X, Calendar, MapPin, Building, User, Mail, Phone, ExternalLink,
   ShieldCheck, MessageSquare, Settings, UserCircle, AlertTriangle, Search,
-  Briefcase, Send, Eye, PenTool, UserPlus, Users, Bell, Shield, Building2, Clock, ClipboardList, FileSpreadsheet, BarChart3, CalendarX, BookOpen, PhoneCall
+  Briefcase, Send, Eye, PenTool, UserPlus, Users, Bell, Shield, Building2, Clock, ClipboardList, FileSpreadsheet, BarChart3, CalendarX, BookOpen, PhoneCall, FileBadge, ScrollText
 } from 'lucide-react';
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from 'next/navigation';
@@ -977,6 +977,20 @@ export default function Home() {
                   Trouver une Entreprise
                 </span>
               </div>
+
+              {/* Hub des Attestations */}
+              <div
+                onClick={() => router.push('/attestations')}
+                className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:border-blue-200 hover:shadow-blue-50 transition-all p-6 flex flex-col items-center justify-center cursor-pointer h-full"
+                title="Suivre et télécharger vos attestations de stage"
+              >
+                <div className="bg-blue-50 p-3 rounded-full group-hover:bg-blue-100 transition-colors text-blue-600">
+                  <FileBadge className="w-6 h-6" />
+                </div>
+                <span className="mt-1 text-sm font-bold text-gray-800 text-center leading-tight">
+                  Mes Attestations
+                </span>
+              </div>
             </div>
 
             <div className="mt-8">
@@ -1056,6 +1070,17 @@ export default function Home() {
                   </div>
                   <span className="text-sm font-bold text-gray-800 text-center leading-tight">Trouver une entreprise</span>
                 </button>
+
+                {/* Hub des Attestations */}
+                <button
+                  onClick={() => router.push('/attestations')}
+                  className="flex flex-col items-center justify-center p-6 bg-white border border-gray-100 rounded-2xl shadow-sm hover:border-blue-200 hover:shadow-blue-50 transition-all group h-full"
+                >
+                  <div className="p-3 bg-blue-50 rounded-full text-blue-600 group-hover:bg-blue-100 mb-3 transition-colors">
+                    <FileBadge className="w-6 h-6" />
+                  </div>
+                  <span className="text-sm font-bold text-gray-800 text-center leading-tight">Suivi Attestations</span>
+                </button>
               </div>
             )}
 
@@ -1083,6 +1108,17 @@ export default function Home() {
                     <CalendarX className="w-6 h-6" />
                   </div>
                   <span className="text-sm font-bold text-gray-800 text-center leading-tight">Signaler une Absence</span>
+                </button>
+
+                {/* Hub des Attestations pour Tuteurs */}
+                <button
+                  onClick={() => router.push('/attestations')}
+                  className="flex flex-col items-center justify-center p-6 bg-white border border-gray-100 rounded-2xl shadow-sm hover:border-blue-200 hover:shadow-blue-50 transition-all group h-full"
+                >
+                  <div className="p-3 bg-blue-50 rounded-full text-blue-600 group-hover:bg-blue-100 mb-3 transition-colors">
+                    <FileBadge className="w-6 h-6" />
+                  </div>
+                  <span className="text-sm font-bold text-gray-800 text-center leading-tight">Mes Attestations</span>
                 </button>
               </div>
             )}
@@ -1369,6 +1405,17 @@ export default function Home() {
           onClose={() => setIsContactModalOpen(false)}
           conventions={getConventionsByRole(effectiveRole, user?.email || '', user?.id || '')}
         />
+      )}
+
+      {/* MOBILE FAB for Attestations Hub - Accessible for all managed roles */}
+      {['teacher', 'teacher_tracker', 'school_head', 'ddfpt', 'at_ddfpt', 'business_manager', 'admin', 'SUPER_ADMIN', 'student', 'tutor', 'company_head', 'company_head_tutor'].includes(effectiveRole) && (
+        <button
+          onClick={() => router.push('/attestations')}
+          className={`md:hidden fixed bottom-[10.5rem] right-6 z-50 flex items-center justify-center w-14 h-14 bg-white text-blue-600 border-2 border-blue-600 rounded-full shadow-lg shadow-blue-600/20 hover:bg-blue-50 active:scale-95 transition-all ${isAnyModalOpen ? 'hidden' : ''}`}
+          title="Hub des Attestations"
+        >
+          <FileBadge className="w-6 h-6" />
+        </button>
       )}
       </div>
     </main>
