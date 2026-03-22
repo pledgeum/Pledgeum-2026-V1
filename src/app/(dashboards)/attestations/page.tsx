@@ -213,40 +213,44 @@ export default function AttestationsHubPage() {
             {filteredAttestations.map((a) => (
               <div 
                 key={a.id}
-                className="group bg-white rounded-3xl border border-gray-100 shadow-sm hover:shadow-xl hover:border-blue-200 transition-all duration-300 overflow-hidden flex flex-col"
+                className="group bg-white rounded-2xl border border-gray-100 shadow-sm hover:shadow-lg hover:border-blue-200 transition-all duration-300 overflow-hidden flex flex-col"
               >
-                <div className="p-6 flex-1">
-                  <div className="flex justify-between items-start mb-4">
-                    <div className="bg-indigo-50 text-indigo-700 text-[10px] font-bold uppercase tracking-wider px-3 py-1.5 rounded-lg border border-indigo-100">
+                <div className="p-4 flex-1">
+                  <div className="flex justify-between items-start mb-3">
+                    <div className="bg-indigo-50 text-indigo-700 text-[9px] font-bold uppercase tracking-wider px-2 py-1 rounded-md border border-indigo-100">
                       {a.class_name}
                     </div>
                     {isSigned(a) ? (
-                      <div className="flex items-center gap-1.5 bg-green-50 text-green-700 px-3 py-1.5 rounded-lg text-xs font-bold border border-green-100">
-                        <CheckCircle className="w-4 h-4" />
+                      <div className="flex items-center gap-1 bg-green-50 text-green-700 px-2 py-1 rounded-md text-[10px] font-bold border border-green-100">
+                        <CheckCircle className="w-3 h-3" />
                         Signée
                       </div>
                     ) : (
-                      <div className="flex items-center gap-1.5 bg-orange-50 text-orange-700 px-3 py-1.5 rounded-lg text-xs font-bold border border-orange-100">
-                        <Clock className="w-4 h-4" />
+                      <div className="flex items-center gap-1 bg-orange-50 text-orange-700 px-2 py-1 rounded-md text-[10px] font-bold border border-orange-100">
+                        <Clock className="w-3 h-3" />
                         En attente
                       </div>
                     )}
                   </div>
 
-                  <h3 className="text-xl font-extrabold text-gray-900 mb-1 group-hover:text-blue-700 transition-colors">
+                  <h3 className="text-base font-bold text-gray-900 mb-0.5 group-hover:text-blue-700 transition-colors truncate">
+                    <span className="text-gray-500 font-normal">Élève: </span>
                     {a.student_first_name} {a.student_last_name}
                   </h3>
                   
-                  <div className="space-y-3 mt-5">
-                    <div className="flex items-center gap-4 text-sm text-gray-600 p-2 rounded-xl hover:bg-gray-50 transition-colors">
-                      <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-600 transition-all">
-                        <Building className="w-4.5 h-4.5" />
+                  <div className="space-y-1.5 mt-3">
+                    <div className="flex items-center gap-3 text-sm text-gray-600 p-1.5 rounded-lg hover:bg-gray-50 transition-colors">
+                      <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-600 transition-all shrink-0">
+                        <Building className="w-3.5 h-3.5" />
                       </div>
-                      <span className="font-semibold">{a.company_name || 'Entreprise Inconnue'}</span>
+                      <div className="truncate">
+                        <span className="text-gray-500 font-normal">Entreprise ou organismes: </span>
+                        <span className="text-gray-900 font-semibold">{a.company_name || 'Inconnue'}</span>
+                      </div>
                     </div>
-                    <div className="flex items-center gap-4 text-sm text-gray-600 p-2 rounded-xl hover:bg-gray-50 transition-colors">
-                      <div className="w-9 h-9 rounded-xl bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-600 transition-all">
-                        <Calendar className="w-4.5 h-4.5" />
+                    <div className="flex items-center gap-3 text-sm text-gray-600 p-1.5 rounded-lg hover:bg-gray-50 transition-colors underline-offset-4">
+                      <div className="w-8 h-8 rounded-lg bg-gray-100 flex items-center justify-center text-gray-500 group-hover:bg-blue-100 group-hover:text-blue-600 transition-all shrink-0">
+                        <Calendar className="w-3.5 h-3.5" />
                       </div>
                       <span className="font-medium">
                         {new Date(a.date_start).toLocaleDateString('fr-FR')} - {new Date(a.date_end).toLocaleDateString('fr-FR')}
@@ -255,27 +259,27 @@ export default function AttestationsHubPage() {
                   </div>
                 </div>
 
-                <div className="px-6 py-5 bg-gray-50/80 border-t border-gray-100 flex items-center justify-between backdrop-blur-sm group-hover:bg-blue-50/30 transition-colors">
+                <div className="px-4 py-3 bg-gray-50/80 border-t border-gray-100 flex items-center justify-between backdrop-blur-sm group-hover:bg-blue-50/30 transition-colors">
                   <button 
                     disabled={!isSigned(a)}
                     onClick={() => console.log('Download triggered for:', a.id)}
-                    className={`flex items-center gap-2 text-sm font-extrabold transition-all active:scale-95 ${
+                    className={`flex items-center gap-1.5 text-xs font-bold transition-all active:scale-95 ${
                       isSigned(a) 
                       ? 'text-blue-600 hover:text-blue-800' 
                       : 'text-gray-400 cursor-not-allowed opacity-60'
                     }`}
                   >
-                    <Download className="w-4.5 h-4.5" />
+                    <Download className="w-3.5 h-3.5" />
                     Télécharger
                   </button>
                   
                   {!isSigned(a) && (
                     <button 
                       onClick={() => console.log('Reminder triggered for:', a.id)}
-                      className="text-orange-600 hover:text-orange-900 text-sm font-extrabold flex items-center gap-1 group/btn transition-colors active:scale-95"
+                      className="text-orange-600 hover:text-orange-900 text-xs font-bold flex items-center gap-1 group/btn transition-colors active:scale-95"
                     >
                       Relancer
-                      <ArrowRight className="w-4 h-4 group-hover/btn:translate-x-1 transition-transform" />
+                      <ArrowRight className="w-3.5 h-3.5 group-hover/btn:translate-x-0.5 transition-transform" />
                     </button>
                   )}
                 </div>
