@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { X, Phone, Mail, School, User, BookOpen, ExternalLink, ShieldCheck } from 'lucide-react';
+import { X, Phone, Mail, School, User, BookOpen, ExternalLink } from 'lucide-react';
 import { Convention } from '@/store/convention';
 
 interface ContactSchoolModalProps {
@@ -139,17 +139,6 @@ export function ContactSchoolModal({ isOpen, onClose, conventions }: ContactScho
                                         <div className="flex flex-col">
                                             <span className="text-xs text-gray-400 font-medium leading-none mb-1">Standard</span>
                                             <span className="text-sm font-bold text-gray-700">{targetConvention.ecole_tel}</span>
-                                        </div>
-                                        <ExternalLink className="w-3 h-3 text-gray-400 ml-auto" />
-                                    </a>
-                                    <a 
-                                        href={`mailto:${targetConvention.ecole_chef_email}`}
-                                        className="flex items-center gap-3 p-3 bg-white hover:bg-indigo-50 rounded-xl border border-gray-100 transition-colors group"
-                                    >
-                                        <ShieldCheck className="w-5 h-5 text-indigo-500 group-hover:scale-110 transition-transform" />
-                                        <div className="flex flex-col">
-                                            <span className="text-xs text-gray-400 font-medium leading-none mb-1">Chef d'établissement / Administration</span>
-                                            <span className="text-sm font-bold text-gray-700 truncate">{targetConvention.ecole_chef_email}</span>
                                         </div>
                                         <ExternalLink className="w-3 h-3 text-gray-400 ml-auto" />
                                     </a>
