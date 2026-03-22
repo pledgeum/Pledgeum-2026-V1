@@ -51,44 +51,50 @@ export function SignatureTimeline({ convention, onRemind, onEditEmail }: Signatu
         {
             id: 'student',
             label: 'Élève',
+            mobileLabel: 'Élève',
             status: getStepStatus('student', convention),
             visible: true
         },
         {
             id: 'parent',
             label: 'Rep. Légal',
+            mobileLabel: 'Fam.',
             status: getStepStatus('parent', convention),
             visible: true
         },
         {
             id: 'teacher',
             label: 'Enseignant',
+            mobileLabel: 'Ens.',
             status: getStepStatus('teacher', convention),
             visible: true
         },
         {
             id: 'company',
             label: 'Entreprise',
+            mobileLabel: 'Ent.',
             status: getStepStatus('company', convention),
             visible: true
         },
         {
             id: 'tutor',
             label: 'Tuteur',
+            mobileLabel: 'Tut.',
             status: getStepStatus('tutor', convention),
             visible: true
         },
         {
             id: 'head',
-            label: 'Chef Étab.',
+            label: 'Chef d\'Étab.',
+            mobileLabel: 'Dir.',
             status: getStepStatus('head', convention),
             visible: true
         }
     ].filter(step => step.visible);
 
     return (
-        <div className="w-full py-4">
-            <div className="relative flex items-start w-full">
+        <div className="w-full py-4 overflow-hidden">
+            <div className="relative flex items-start w-full justify-between sm:justify-start sm:gap-4 md:gap-8">
                 {/* Connecting Line background */}
                 <div className="absolute left-0 top-4 transform -translate-y-1/2 w-full h-1 bg-gray-200 -z-10" />
 
@@ -96,7 +102,7 @@ export function SignatureTimeline({ convention, onRemind, onEditEmail }: Signatu
                     const isInvalidEmail = convention.invalidEmails?.includes(step.id);
 
                     return (
-                        <div key={step.id} className="flex-1 flex flex-col items-center relative group-step">
+                        <div key={step.id} className="flex-1 sm:flex-initial flex flex-col items-center relative group-step">
                             <div className="flex flex-col items-center bg-white px-2 z-10">
                                 <div className={`
                                 w-8 h-8 rounded-full flex items-center justify-center border-2 transition-all relative
@@ -158,15 +164,26 @@ export function SignatureTimeline({ convention, onRemind, onEditEmail }: Signatu
 
                             </div>
 
-                            <span className={`
-                            text-xs mt-2 font-medium px-2 py-0.5 rounded text-center
-                            ${isInvalidEmail ? 'text-red-700 bg-red-50 font-bold' : ''}
-                            ${!isInvalidEmail && step.status === 'completed' ? 'text-green-700 bg-green-50' : ''}
-                            ${!isInvalidEmail && step.status === 'current' ? 'text-orange-700 bg-orange-50' : ''}
-                            ${!isInvalidEmail && step.status === 'pending' ? 'text-gray-400' : ''}
-                        `}>
-                                {step.label}
-                            </span>
+                            <div className="mt-2 flex flex-col items-center">
+                                <span className={`
+                                    block sm:hidden text-[9px] font-medium px-1 py-0.5 rounded text-center leading-tight
+                                    ${isInvalidEmail ? 'text-red-700 bg-red-50 font-bold' : ''}
+                                    ${!isInvalidEmail && step.status === 'completed' ? 'text-green-700 bg-green-50' : ''}
+                                    ${!isInvalidEmail && step.status === 'current' ? 'text-orange-700 bg-orange-50' : ''}
+                                    ${!isInvalidEmail && step.status === 'pending' ? 'text-gray-400' : ''}
+                                `}>
+                                    {step.mobileLabel}
+                                </span>
+                                <span className={`
+                                    hidden sm:block text-xs font-medium px-2 py-0.5 rounded text-center whitespace-nowrap
+                                    ${isInvalidEmail ? 'text-red-700 bg-red-50 font-bold' : ''}
+                                    ${!isInvalidEmail && step.status === 'completed' ? 'text-green-700 bg-green-50' : ''}
+                                    ${!isInvalidEmail && step.status === 'current' ? 'text-orange-700 bg-orange-50' : ''}
+                                    ${!isInvalidEmail && step.status === 'pending' ? 'text-gray-400' : ''}
+                                `}>
+                                    {step.label}
+                                </span>
+                            </div>
                         </div>
                     )
                 })}
