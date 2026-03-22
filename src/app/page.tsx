@@ -197,6 +197,8 @@ export default function Home() {
   const [isClassDocModalOpen, setIsClassDocModalOpen] = useState(false);
   const [studentDocModalClassId, setStudentDocModalClassId] = useState<string | null>(null); // New state
   const [isChildModalOpen, setIsChildModalOpen] = useState(false);
+  const [isAbsenceModalOpen, setIsAbsenceModalOpen] = useState(false);
+  const [selectedConventionId, setSelectedConventionId] = useState<string | null>(null);
 
 
 
@@ -956,7 +958,18 @@ export default function Home() {
             </div>
 
             <div className="mt-8">
-              <ConventionList role={effectiveRole} userEmail={user.email || ''} userId={(user.id || '')} isRgpdModalOpen={isRgpdModalOpen} setIsRgpdModalOpen={setIsRgpdModalOpen} onModalChange={setIsChildModalOpen} />
+              <ConventionList
+                role={effectiveRole}
+                userEmail={user.email || ''}
+                userId={(user.id || '')}
+                isRgpdModalOpen={isRgpdModalOpen}
+                setIsRgpdModalOpen={setIsRgpdModalOpen}
+                onModalChange={setIsChildModalOpen}
+                isAbsenceModalOpen={isAbsenceModalOpen}
+                setIsAbsenceModalOpen={setIsAbsenceModalOpen}
+                selectedConventionId={selectedConventionId}
+                setSelectedConventionId={setSelectedConventionId}
+              />
             </div>
           </>
         ) : (
@@ -1073,6 +1086,10 @@ export default function Home() {
                           isRgpdModalOpen={isRgpdModalOpen}
                           setIsRgpdModalOpen={setIsRgpdModalOpen}
                           onModalChange={setIsChildModalOpen}
+                          isAbsenceModalOpen={isAbsenceModalOpen}
+                          setIsAbsenceModalOpen={setIsAbsenceModalOpen}
+                          selectedConventionId={selectedConventionId}
+                          setSelectedConventionId={setSelectedConventionId}
                         />
                       </div>
                     </CollapsibleSection>
@@ -1229,26 +1246,78 @@ export default function Home() {
             <Plus className="w-6 h-6" />
           </button>
         )}
+
+      {/* MOBILE FAB for Tutors - Global Absence Reporting */}
+      {(effectiveRole === 'tutor') && (
+        <button
+          onClick={() => {
+            setSelectedConventionId(null);
+            setIsAbsenceModalOpen(true);
+          }}
+          className={`md:hidden fixed bottom-6 right-6 z-50 flex items-center justify-center w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-600/30 hover:bg-blue-700 active:scale-95 transition-all ${
+            (isProfileModalOpen || isSearchModalOpen || isSchoolAdminModalOpen || isMissionOrderModalOpen || isAlumniModalOpen || isSuperAdminModalOpen || isFeedbackModalOpen || isDeleteModalOpen || isVerificationModalOpen || isClassDocModalOpen || isTrackingMatrixOpen || isRgpdModalOpen || isChildModalOpen || isAbsenceModalOpen)
+              ? 'hidden'
+              : ''
+          }`}
+          title="Signaler une absence"
+        >
+          <CalendarX className="w-6 h-6" />
+        </button>
+      )}
+
+      {/* Global Absence Modal */}
+      {isAbsenceModalOpen && (
+        <AbsenceReportModal
+          isOpen={isAbsenceModalOpen}
+          onClose={() => setIsAbsenceModalOpen(false)}
+          convention={getConventionsByRole(effectiveRole, user?.email || '', user?.id || '').find(c => c.id === selectedConventionId)}
+          conventions={getConventionsByRole(effectiveRole, user?.email || '', user?.id || '')}
+          currentUserEmail={user?.email || ''}
+          userRole={effectiveRole}
+        />
+      )}
       </div>
     </main>
   );
 }
 
 // Sub-component for list rendering to keep Page clean
-function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdModalOpen, onModalChange }: { role: UserRole, userEmail: string, userId?: string, isRgpdModalOpen: boolean, setIsRgpdModalOpen: (v: boolean) => void, onModalChange?: (isOpen: boolean) => void }) {
+function ConventionList({
+  role,
+  userEmail,
+  userId,
+  isRgpdModalOpen,
+  setIsRgpdModalOpen,
+  onModalChange,
+  view = 'standard',
+  isAbsenceModalOpen,
+  setIsAbsenceModalOpen,
+  selectedConventionId,
+  setSelectedConventionId
+}: {
+  role: UserRole,
+  userEmail: string,
+  userId?: string,
+  isRgpdModalOpen: boolean,
+  setIsRgpdModalOpen: (v: boolean) => void,
+  onModalChange?: (isOpen: boolean) => void,
+  view?: 'standard' | 'tutor',
+  isAbsenceModalOpen: boolean,
+  setIsAbsenceModalOpen: (v: boolean) => void,
+  selectedConventionId: string | null,
+  setSelectedConventionId: (v: string | null) => void
+}) {
   const router = useRouter();
   const { getConventionsByRole, signConvention, sendReminder, bulkSignConventions, updateEmail, assignTrackingTeacher, fetchConventions } = useConventionStore();
   const { classes, fetchClassTeachers } = useSchoolStore();
   const { addNotification, name, schoolId } = useUserStore();
   const conventions = getConventionsByRole(role, userEmail, userId);
-  const [selectedConventionId, setSelectedConventionId] = useState<string | null>(null);
-  // Unified state: 'parent', 'tutor', 'establishment', 'head', 'signature', or null
-  const [activeModal, setActiveModal] = useState<string | null>(null);
 
   const [isPdfModalOpen, setIsPdfModalOpen] = useState(false);
-  const [isAbsenceModalOpen, setIsAbsenceModalOpen] = useState(false);
   const [isAttestationModalOpen, setIsAttestationModalOpen] = useState(false);
   const [isTrackingModalOpen, setIsTrackingModalOpen] = useState(false);
+  // Unified state: 'parent', 'tutor', 'establishment', 'head', 'signature', or null
+  const [activeModal, setActiveModal] = useState<string | null>(null);
 
   // Notify parent when any modal is open
   useEffect(() => {
@@ -2242,37 +2311,6 @@ function ConventionList({ role, userEmail, userId, isRgpdModalOpen, setIsRgpdMod
           />
         )
       }
-
-      {
-        isAbsenceModalOpen && (
-          <AbsenceReportModal
-            isOpen={isAbsenceModalOpen}
-            onClose={() => setIsAbsenceModalOpen(false)}
-            convention={conventions.find(c => c.id === selectedConventionId)}
-            conventions={conventions}
-            currentUserEmail={userEmail}
-            userRole={role}
-          />
-        )
-      }
-
-      {/* MOBILE FAB for Tutors - Global Absence Reporting */}
-      {(role === 'tutor' || role === 'company_head_tutor') && (
-        <button
-          onClick={() => {
-            setSelectedConventionId(null);
-            setIsAbsenceModalOpen(true);
-          }}
-          className={`md:hidden fixed bottom-6 right-6 z-50 flex items-center justify-center w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-600/30 hover:bg-blue-700 active:scale-95 transition-all ${
-            (isPdfModalOpen || isAbsenceModalOpen || isAttestationModalOpen || isTrackingModalOpen || isEmailModalOpen)
-              ? 'hidden'
-              : ''
-          }`}
-          title="Signaler une absence"
-        >
-          <CalendarX className="w-6 h-6" />
-        </button>
-      )}
 
       {
         isAttestationModalOpen && selectedConventionId && (
