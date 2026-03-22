@@ -62,11 +62,16 @@ export async function GET(req: Request) {
         const companyRoles = ['tutor', 'company_head', 'company_head_tutor'];
 
         if (staffRoles.includes(userRole)) {
-            // Staff can see all conventions of their school
-            if (!userUai && userRole !== 'SUPER_ADMIN') {
-                return NextResponse.json({ success: true, data: [] }); // No school assigned
-            }
-            if (userRole !== 'SUPER_ADMIN') {
+            if (userRole === 'teacher') {
+                // Teacher: Restricted to their assigned classes (Main Teacher OR in Assignments table)
+                query += ` AND (cl.main_teacher_id = $${paramIndex} OR cl.id IN (SELECT class_id FROM teacher_assignments WHERE teacher_uid = $${paramIndex}))`;
+                params.push(userId);
+                paramIndex++;
+            } else if (userRole !== 'SUPER_ADMIN') {
+                // Direction (school_head, ddfpt, etc.): Global UAI access
+                if (!userUai) {
+                    return NextResponse.json({ success: true, data: [] });
+                }
                 query += ` AND cl.establishment_uai = $${paramIndex}`;
                 params.push(userUai);
                 paramIndex++;
