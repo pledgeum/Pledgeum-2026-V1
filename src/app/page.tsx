@@ -22,7 +22,7 @@ import {
   FileText, LogOut, Plus, Trash2, Loader2, AlertCircle, CheckCircle,
   Menu, X, Calendar, MapPin, Building, User, Mail, Phone, ExternalLink,
   ShieldCheck, MessageSquare, Settings, UserCircle, AlertTriangle, Search,
-  Briefcase, Send, Eye, PenTool, UserPlus, Users, Bell, Shield, Building2, Clock, ClipboardList, FileSpreadsheet, BarChart3, CalendarX
+  Briefcase, Send, Eye, PenTool, UserPlus, Users, Bell, Shield, Building2, Clock, ClipboardList, FileSpreadsheet, BarChart3, CalendarX, BookOpen, PhoneCall
 } from 'lucide-react';
 import { useSession, signOut } from "next-auth/react";
 import { useRouter } from 'next/navigation';
@@ -58,6 +58,7 @@ const DeleteAccountModal = dynamic(() => import('@/components/ui/DeleteAccountMo
 const AbsenceReportModal = dynamic(() => import('@/components/ui/AbsenceReportModal').then(m => m.AbsenceReportModal), { ssr: false });
 const AttestationModal = dynamic(() => import('@/components/ui/AttestationModal').then(m => m.AttestationModal), { ssr: false });
 const MissionOrderModal = dynamic(() => import('@/components/admin/MissionOrderModal').then(m => m.MissionOrderModal), { ssr: false });
+const ContactSchoolModal = dynamic(() => import('@/components/ui/ContactSchoolModal').then(m => m.ContactSchoolModal), { ssr: false });
 const AlumniModal = dynamic(() => import('@/components/ui/AlumniModal').then(m => m.AlumniModal), { ssr: false });
 const TrackingMatrixModal = dynamic(() => import('@/components/ui/TrackingMatrixModal').then(m => m.TrackingMatrixModal), { ssr: false });
 const ClassDocumentModal = dynamic(() => import('@/components/ui/ClassDocumentModal').then(m => m.ClassDocumentModal), { ssr: false });
@@ -198,6 +199,7 @@ export default function Home() {
   const [studentDocModalClassId, setStudentDocModalClassId] = useState<string | null>(null); // New state
   const [isChildModalOpen, setIsChildModalOpen] = useState(false);
   const [isAbsenceModalOpen, setIsAbsenceModalOpen] = useState(false);
+  const [isContactModalOpen, setIsContactModalOpen] = useState(false);
   const [selectedConventionId, setSelectedConventionId] = useState<string | null>(null);
 
 
@@ -1026,6 +1028,34 @@ export default function Home() {
               </div>
             )}
 
+            {/* Tutor Specific Quick Actions */}
+            {['tutor', 'company_head_tutor'].includes(effectiveRole) && (
+              <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                <button
+                  onClick={() => setIsContactModalOpen(true)}
+                  className="flex flex-col items-center justify-center p-6 bg-white border border-gray-100 rounded-2xl shadow-sm hover:border-indigo-200 hover:shadow-indigo-50 transition-all group h-full"
+                >
+                  <div className="p-3 bg-indigo-50 rounded-full text-indigo-600 group-hover:bg-indigo-100 mb-3 transition-colors">
+                    <BookOpen className="w-6 h-6" />
+                  </div>
+                  <span className="text-sm font-bold text-gray-800 text-center leading-tight">Contacter l'établissement</span>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setSelectedConventionId(null);
+                    setIsAbsenceModalOpen(true);
+                  }}
+                  className="flex flex-col items-center justify-center p-6 bg-white border border-gray-100 rounded-2xl shadow-sm hover:border-red-200 hover:shadow-red-50 transition-all group h-full"
+                >
+                  <div className="p-3 bg-red-50 rounded-full text-red-600 group-hover:bg-red-100 mb-3 transition-colors">
+                    <CalendarX className="w-6 h-6" />
+                  </div>
+                  <span className="text-sm font-bold text-gray-800 text-center leading-tight">Signaler une Absence</span>
+                </button>
+              </div>
+            )}
+
             {/* --- DYNAMIC REORDERABLE SECTIONS --- */}
             <div className="space-y-6">
               {sectionsOrder.map((sectionId) => {
@@ -1274,6 +1304,30 @@ export default function Home() {
           conventions={getConventionsByRole(effectiveRole, user?.email || '', user?.id || '')}
           currentUserEmail={user?.email || ''}
           userRole={effectiveRole}
+        />
+      )}
+
+      {/* MOBILE FAB for Tutors - Contact School */}
+      {effectiveRole === 'tutor' && (
+        <button
+          onClick={() => setIsContactModalOpen(true)}
+          className={`md:hidden fixed bottom-24 right-6 z-50 flex items-center justify-center w-14 h-14 bg-indigo-600 text-white rounded-full shadow-lg shadow-indigo-600/30 hover:bg-indigo-700 active:scale-95 transition-all ${
+            (isProfileModalOpen || isSearchModalOpen || isSchoolAdminModalOpen || isMissionOrderModalOpen || isAlumniModalOpen || isSuperAdminModalOpen || isFeedbackModalOpen || isDeleteModalOpen || isVerificationModalOpen || isClassDocModalOpen || isTrackingMatrixOpen || isRgpdModalOpen || isChildModalOpen || isAbsenceModalOpen || isContactModalOpen)
+              ? 'hidden'
+              : ''
+          }`}
+          title="Contacter l'établissement"
+        >
+          <Phone className="w-6 h-6" />
+        </button>
+      )}
+
+      {/* Global Contact School Modal */}
+      {isContactModalOpen && (
+        <ContactSchoolModal
+          isOpen={isContactModalOpen}
+          onClose={() => setIsContactModalOpen(false)}
+          conventions={getConventionsByRole(effectiveRole, user?.email || '', user?.id || '')}
         />
       )}
       </div>
