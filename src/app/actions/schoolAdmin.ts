@@ -1,8 +1,10 @@
 'use server';
 
-import { adminAuth, adminFirestore } from '@/lib/firebase-admin';
+import { adminFirestore } from '@/lib/firebase-admin';
 import { sendEmail } from '@/lib/email';
 import pool from '@/lib/pg';
+import bcrypt from 'bcryptjs';
+import crypto from 'crypto';
 
 export async function initializeSchoolIdentity(schoolId: string, data: {
     name: string;
@@ -18,20 +20,21 @@ export async function initializeSchoolIdentity(schoolId: string, data: {
     try {
         console.log(`[Initialize School] Starting for ${data.name} (${schoolId}) - Status: ${data.status} - UAI: ${data.uai}`);
 
+        // Keep Firebase Mock for now to avoid breaking other calls, but it's mostly ghost code
         await adminFirestore.collection('schools').doc(schoolId).set({
             schoolName: data.name,
             schoolAddress: data.address,
-            schoolCity: data.city, // If address is full string, this might be redundant but keeping for schema consistency
+            schoolCity: data.city,
             schoolPostalCode: data.postalCode,
-            schoolHeadEmail: data.adminEmail || data.email, // Priority to explicit adminEmail
+            schoolHeadEmail: data.adminEmail || data.email,
             schoolPhone: data.phone || '',
             schoolUai: data.uai || schoolId,
             updatedAt: new Date().toISOString(),
             isAuthorized: true,
-            schoolStatus: data.status // 'validated' from prompt maps to 'ADHERENT' here
+            schoolStatus: data.status
         }, { merge: true });
 
-        // 2. Persist to PostgreSQL (NEW)
+        // 2. Persist to PostgreSQL (Source of Truth)
         try {
             const client = await pool.connect();
             try {
@@ -79,39 +82,37 @@ export async function sendWelcomeEmail(schoolId: string, email: string, schoolNa
         console.log(`[Welcome Email] Starting process for ${schoolName} (${email})`);
 
         // 1. Generate Temporary Password
-        const tempPassword = Math.random().toString(36).slice(-8) + Math.random().toString(36).slice(-8);
+        const tempPassword = Math.random().toString(36).slice(-10) + "1!Aa"; // Stronger temp password
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-        // 2. Create or Update User in Firebase Auth
-        let userRecord;
+        // 2. Postgres Upsert (Source of Truth for NextAuth)
+        const client = await pool.connect();
         try {
-            userRecord = await adminAuth.getUserByEmail(email);
-            // Update existing user
-            await adminAuth.updateUser(userRecord.uid, {
-                password: tempPassword,
-                displayName: schoolName,
-            });
-            console.log(`[Welcome Email] Updated existing user: ${userRecord.uid}`);
-        } catch (error: any) {
-            if (error.code === 'auth/user-not-found') {
-                // Create new user
-                userRecord = await adminAuth.createUser({
-                    email: email,
-                    password: tempPassword,
-                    displayName: schoolName,
-                    emailVerified: true // Assume verified since we are inviting them
-                });
-                console.log(`[Welcome Email] Created new user: ${userRecord.uid}`);
-            } else {
-                throw error;
-            }
+            const upsertQuery = `
+                INSERT INTO users (uid, email, role, password_hash, must_change_password, last_name, establishment_uai, updated_at, created_at)
+                VALUES ($1, $2, $3, $4, $5, $6, $7, NOW(), NOW())
+                ON CONFLICT (email) DO UPDATE SET
+                    password_hash = EXCLUDED.password_hash,
+                    must_change_password = EXCLUDED.must_change_password,
+                    role = EXCLUDED.role,
+                    establishment_uai = EXCLUDED.establishment_uai,
+                    updated_at = NOW()
+                RETURNING uid;
+            `;
+            const result = await client.query(upsertQuery, [
+                crypto.randomUUID(),
+                email.toLowerCase().trim(),
+                'school_head', // Or 'school_admin', standardizing on school_head for the main contact
+                hashedPassword,
+                true, // must_change_password exists as confirmed by audit
+                schoolName,
+                schoolId
+            ]);
+            
+            console.log(`[Welcome Email] User synced in Postgres: ${result.rows[0].uid}`);
+        } finally {
+            client.release();
         }
-
-        // 3. Set Custom Claims (School Admin Role)
-        await adminAuth.setCustomUserClaims(userRecord.uid, {
-            role: 'school_admin',
-            schoolId: schoolId,
-            schoolName: schoolName
-        });
 
         // 4. Send Email
         const subject = "Bienvenue sur Pledgeum - Vos identifiants de connexion";
@@ -147,56 +148,49 @@ export async function forceSandboxUserRole(email: string) {
     try {
         console.log(`[Sandbox Role] Forcing role for ${email}`);
 
-        let user;
-        try {
-            user = await adminAuth.getUserByEmail(email);
-        } catch (e: any) {
-            if (e.code === 'auth/user-not-found') {
-                user = await adminAuth.createUser({
-                    email,
-                    emailVerified: true,
-                    displayName: "Admin Sandbox"
-                });
-            } else throw e;
-        }
-
         const schoolId = "9999999Z";
         const schoolName = "Lycée de Démonstration (Sandbox)";
+        
+        // 1. Generate Sandbox Access
+        const tempPassword = "Sandbox-Password-2025!"; // Known for test but can be random
+        const hashedPassword = await bcrypt.hash(tempPassword, 10);
 
-        // 1. Set Auth Claims - Explicitly School Admin for this school only
-        await adminAuth.setCustomUserClaims(user.uid, {
-            role: 'school_admin',
-            schoolId: schoolId,
-            schoolName: schoolName
-            // No 'super_admin' claim
-        });
+        // 2. Overwrite Postgres Profile (Source of Truth for NextAuth)
+        const client = await pool.connect();
+        try {
+            const upsertQuery = `
+                INSERT INTO users (
+                    uid, email, role, password_hash, must_change_password, 
+                    first_name, last_name, phone, address, 
+                    establishment_uai, updated_at, created_at
+                )
+                VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+                ON CONFLICT (email) DO UPDATE SET
+                    role = EXCLUDED.role,
+                    password_hash = EXCLUDED.password_hash,
+                    must_change_password = EXCLUDED.must_change_password,
+                    first_name = EXCLUDED.first_name,
+                    last_name = EXCLUDED.last_name,
+                    establishment_uai = EXCLUDED.establishment_uai,
+                    updated_at = NOW();
+            `;
+            await client.query(upsertQuery, [
+                crypto.randomUUID(),
+                email.toLowerCase().trim(),
+                'school_head',
+                hashedPassword,
+                false, // Sandbox might not need forced re-change if we repair it
+                "Fabrice",
+                "Dumasdelage",
+                "0102030405",
+                "12 Rue Ampère, 76500 Elbeuf",
+                schoolId
+            ]);
+        } finally {
+            client.release();
+        }
 
-        // 2. Overwrite Firestore Profile (The Source of Truth for App Logic)
-        // We use merge: true to keep system fields, but we overwrite all app logic fields
-        // 2. Overwrite Firestore Profile (The Source of Truth for App Logic)
-        // We use merge: true to keep system fields, but we overwrite all app logic fields
-        await adminFirestore.collection('users').doc(user.uid).set({
-            name: "Fabrice Dumasdelage",
-            email: email,
-            role: 'school_head',
-            schoolId: '9999999Z', // Strict casing matching establishment ID
-            status: 'active', // Explicit active status
-            profileData: {
-                firstName: "Fabrice",
-                lastName: "Dumasdelage",
-                email: email,
-                phone: "0102030405",
-                address: "12 Rue Ampère, 76500 Elbeuf", // As requested
-                ecole_nom: schoolName,
-                ecole_ville: "Elbeuf",
-                role: "Proviseur",
-                function: "Proviseur"
-            },
-            hasAcceptedTos: true,
-            updatedAt: new Date().toISOString()
-        }, { merge: true });
-
-        console.log(`[Sandbox Role] Success for ${user.uid} - Appointed Head of ${schoolName}`);
+        console.log(`[Sandbox Role] Success for ${email} - Appointed Head of ${schoolName}`);
         return { success: true };
     } catch (error: any) {
         console.error("[Sandbox Role] Error:", error);

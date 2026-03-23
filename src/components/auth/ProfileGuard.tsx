@@ -45,6 +45,12 @@ export function ProfileGuard({ children }: { children: React.ReactNode }) {
                 return;
             }
 
+            // BYPASS FOR SUPER ADMIN / TEST ACCOUNT
+            if (user.email === 'pledgeum@gmail.com') {
+                setIsChecking(false);
+                return;
+            }
+
             // Check for password change requirement immediately
             if ((user as any).must_change_password) {
                 if (pathname === '/auth/update-password') {

@@ -67,7 +67,7 @@ export default function OnboardingPage() {
             if (user?.email === 'pledgeum@gmail.com' && currentRole === 'student') {
                 createUserProfile(user.id || 'test-admin-id', {
                     email: user.email,
-                    role: 'school_head',
+                    role: 'SUPER_ADMIN',
                     name: user.name || 'Compte Test Admin'
                 }).then(() => {
                     window.location.href = '/'; // Hard redirect to force refresh
