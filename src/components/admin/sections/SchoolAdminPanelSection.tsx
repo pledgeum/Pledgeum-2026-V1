@@ -719,7 +719,7 @@ export function SchoolAdminPanelSection() {
                                 {collaborators.map(c => (
                                     <div key={c.id} className="p-4 flex items-center justify-between border-b">
                                         <div className="flex items-center">
-                                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-4 text-blue-700 font-bold">{c.name.charAt(0)}</div>
+                                            <div className="w-10 h-10 bg-blue-100 rounded-full flex items-center justify-center mr-4 text-blue-700 font-bold">{(c.name || '?').charAt(0)}</div>
                                             <div>
                                                 <p className="text-sm font-bold text-gray-900">{c.name}</p>
                                                 <p className="text-xs text-gray-500">{c.email}</p>

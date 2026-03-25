@@ -18,7 +18,8 @@ export async function POST(req: Request) {
     try {
         const session = await auth();
         // Strict Authorization: Only School Heads or Admin can add collaborators
-        if (!session?.user || (session.user.role !== 'school_head' && session.user.role !== 'ESTABLISHMENT_ADMIN')) {
+        const allowedRoles = ['school_head', 'ESTABLISHMENT_ADMIN', 'ddfpt', 'at_ddfpt', 'business_manager'];
+        if (!session?.user || !allowedRoles.includes(session.user.role)) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
@@ -36,7 +37,7 @@ export async function POST(req: Request) {
         }
 
         // Ensure session UAI matches request (unless SuperAdmin)
-        if (session.user.establishment_uai && session.user.establishment_uai !== uai) {
+        if (session.user.establishment_uai && session.user.establishment_uai.toUpperCase() !== uai.toUpperCase()) {
             console.error(`❌ Context Mismatch: Session UAI (${session.user.establishment_uai}) !== Payload UAI (${uai})`);
             return NextResponse.json({ error: "Context Mismatch" }, { status: 403 });
         }
@@ -130,7 +131,7 @@ export async function GET(req: Request) {
 
         client = await pool.connect();
         const res = await client.query(`
-            SELECT uid as id, first_name || ' ' || last_name as name, email, role
+            SELECT uid as id, TRIM(COALESCE(first_name, '') || ' ' || COALESCE(last_name, '')) as name, email, role
             FROM users
             WHERE establishment_uai = $1 AND role NOT IN ('student', 'teacher')
         `, [uai]);
@@ -147,7 +148,8 @@ export async function DELETE(req: Request) {
     try {
         const session = await auth();
         // Strict Authorization
-        if (!session?.user || (session.user.role !== 'school_head' && session.user.role !== 'ESTABLISHMENT_ADMIN')) {
+        const allowedRoles = ['school_head', 'ESTABLISHMENT_ADMIN', 'ddfpt', 'at_ddfpt', 'business_manager'];
+        if (!session?.user || !allowedRoles.includes(session.user.role)) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
@@ -159,7 +161,7 @@ export async function DELETE(req: Request) {
         }
 
         // Context Check
-        if (session.user.establishment_uai && session.user.establishment_uai !== uai) {
+        if (session.user.establishment_uai && session.user.establishment_uai.toUpperCase() !== uai.toUpperCase()) {
             return NextResponse.json({ error: "Context Mismatch" }, { status: 403 });
         }
 
