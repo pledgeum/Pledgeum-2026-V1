@@ -1012,7 +1012,7 @@ export default function Home() {
           // VALIDATOR DASHBOARD (Teacher, Heads, Tutor)
           <div className="space-y-8">
             {/* --- RESPONSIVE QUICK ACTIONS GRID --- */}
-            {(role === 'teacher' || isHighLevelAdmin(role) || role === 'at_ddfpt') && (
+            {(role === 'teacher' || isHighLevelAdmin(role) || role === 'at_ddfpt' || role === 'business_manager') && (
               <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8 w-full">
                 {/* Gérer les visites (Matrice) */}
                 {['teacher', 'admin', 'school_admin', 'ddfpt', 'at_ddfpt', 'business_manager'].includes(effectiveRole) && (
@@ -1126,7 +1126,7 @@ export default function Home() {
             {/* --- DYNAMIC REORDERABLE SECTIONS --- */}
             <div className="space-y-6">
               {sectionsOrder.map((sectionId) => {
-                if (sectionId === 'admin' && isHighLevelAdmin(role)) {
+                if (sectionId === 'admin' && (isHighLevelAdmin(role) || role === 'business_manager' || role === 'at_ddfpt')) {
                   return (
                     <CollapsibleSection
                       key="admin"
@@ -1141,7 +1141,7 @@ export default function Home() {
                   );
                 }
 
-                if (sectionId === 'progress' && showProgressChart) {
+                if (sectionId === 'progress' && (showProgressChart || role === 'business_manager' || role === 'at_ddfpt')) {
                   return (
                     <CollapsibleSection
                       key="progress"
