@@ -1,7 +1,9 @@
 export const dynamic = 'force-dynamic';
 
 import { NextResponse } from 'next/server';
+import { revalidatePath } from 'next/cache';
 import pool from '@/lib/pg';
+
 
 export async function GET(
     request: Request,
@@ -142,7 +144,11 @@ export async function PUT(
                 return NextResponse.json({ error: 'Establishment not found' }, { status: 404 });
             }
 
+            // Clear Next.js Cache for the entire dashboard layout
+            revalidatePath('/dashboard', 'layout');
+
             return NextResponse.json(result.rows[0]);
+
 
         } finally {
             client.release();
