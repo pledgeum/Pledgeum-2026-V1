@@ -27,8 +27,9 @@ export function ContactCompanyModal({ isOpen, onClose, conventions }: ContactCom
                             <Building className="w-6 h-6 text-emerald-600" />
                         </div>
                         <h3 className="font-bold text-xl text-gray-900 leading-tight">
-                            Contacter l'entreprise
+                            Contacter une entreprise
                         </h3>
+
                     </div>
                     <button 
                         onClick={onClose}

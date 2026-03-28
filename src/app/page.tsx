@@ -1046,7 +1046,7 @@ export default function Home() {
                   <div className="p-3 bg-emerald-50 rounded-full text-emerald-600 group-hover:bg-emerald-100 mb-3 transition-colors">
                     <Building className="w-6 h-6" />
                   </div>
-                  <span className="text-sm font-bold text-gray-800 text-center leading-tight">Contacter l'entreprise</span>
+                  <span className="text-sm font-bold text-gray-800 text-center leading-tight">Contacter une entreprise</span>
                 </button>
 
                 {/* Ajouter des documents */}
@@ -1079,7 +1079,7 @@ export default function Home() {
                   <div className="p-3 bg-blue-50 rounded-full text-blue-600 group-hover:bg-blue-100 mb-3 transition-colors">
                     <FileBadge className="w-6 h-6" />
                   </div>
-                  <span className="text-sm font-bold text-gray-800 text-center leading-tight">Suivi Attestations</span>
+                  <span className="text-sm font-bold text-gray-800 text-center leading-tight">Suivre les attestations</span>
                 </button>
               </div>
             )}
@@ -1372,7 +1372,7 @@ export default function Home() {
         <button
           onClick={() => setIsContactCompanyModalOpen(true)}
           className={`md:hidden fixed bottom-24 right-6 z-50 flex items-center justify-center w-14 h-14 bg-blue-600 text-white rounded-full shadow-lg shadow-blue-600/30 hover:bg-blue-700 active:scale-95 transition-all ${isAnyModalOpen ? 'hidden' : ''}`}
-          title="Contacter l'entreprise"
+          title="Contacter une entreprise"
         >
           <Building className="w-6 h-6" />
         </button>
