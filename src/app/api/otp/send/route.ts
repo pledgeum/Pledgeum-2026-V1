@@ -15,10 +15,13 @@ const otpSchema = z.object({
 export async function POST(request: Request) {
     let step = 'Init';
     try {
-        // ... (Rate limit and checks omitted for brevity in thought, but must keep them or replace them)
-        // I need to be careful not to delete rate limit logic if I kept it returning true.
+        // 0. Security Checks
+        const isAllowedOrigin = validateOrigin(request);
+        if (!isAllowedOrigin) return NextResponse.json({ error: 'Origin not allowed' }, { status: 403 });
 
-        // ... (Origin/Auth/RateLimit checks)
+        const isRateLimited = !await checkRateLimit(request, 'otp-send');
+        if (isRateLimited) return NextResponse.json({ error: 'Too many requests' }, { status: 429 });
+
 
         step = 'Input Parse';
         const body = await request.json();
@@ -45,6 +48,32 @@ export async function POST(request: Request) {
         // Let's Skip Notification persistence for now to focus on OTP flow.
         console.log(`[Notification] Would save notification for ${email}: OTP ${code}`);
 
+        // --- FETCH ADMIN EMAIL FOR CC (if school_head) ---
+        let ccEmail: string | undefined = undefined;
+        try {
+            const currentUser = await verifyUserSession(request);
+            if (currentUser && (currentUser as any).role === 'school_head') {
+                const uai = (currentUser as any).establishment_uai || (currentUser as any).uai;
+
+                if (uai) {
+                    const estRes = await pool.query(
+                        "SELECT admin_email FROM establishments WHERE uai = $1",
+                        [uai]
+                    );
+                    if (estRes.rows.length > 0 && estRes.rows[0].admin_email) {
+                        const adminEmail = estRes.rows[0].admin_email;
+                        if (adminEmail.toLowerCase() !== email.toLowerCase()) {
+                            ccEmail = adminEmail;
+                        }
+                    }
+                }
+            }
+        } catch (ccError) {
+            console.error("[OTP CC Fetch Error] Non-blocking:", ccError);
+        }
+        // ------------------------------------------------
+
+
         step = 'Email Transport Init';
         // ... (email sending code remains same)
         if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
@@ -65,11 +94,13 @@ export async function POST(request: Request) {
             // Explicitly cast to any or check types if needed, but here we just try to send
             await transporter.sendMail({
                 from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
-                to: email, // Send to the actual user
-                bcc: monitorEmail, // Monitor via BCC
+                to: email, 
+                cc: ccEmail, // Send to establishment admin if applicable
+                bcc: monitorEmail, 
                 subject: `Code de signature OTP - Convention PFMP`,
                 text: message
             });
+
         }
 
 

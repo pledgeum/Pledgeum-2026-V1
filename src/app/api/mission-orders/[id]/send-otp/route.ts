@@ -27,6 +27,30 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
         await ensureOtpTable();
         await createOTP(teacherEmail, orderId, code, expiresAt);
 
+        // --- FETCH ADMIN EMAIL FOR CC (if school_head) ---
+        let ccEmail: string | undefined = undefined;
+        try {
+            if (session.user && (session.user as any).role === 'school_head') {
+                const uai = (session.user as any).establishment_uai || (session.user as any).uai;
+                if (uai) {
+                    const estRes = await pool.query(
+                        "SELECT admin_email FROM establishments WHERE uai = $1",
+                        [uai]
+                    );
+                    if (estRes.rows.length > 0 && estRes.rows[0].admin_email) {
+                        const adminEmail = estRes.rows[0].admin_email;
+                        if (adminEmail.toLowerCase() !== teacherEmail.toLowerCase()) {
+                            ccEmail = adminEmail;
+                        }
+                    }
+                }
+            }
+        } catch (ccError) {
+            console.error("[OTP CC Fetch Error] Non-blocking for MO:", ccError);
+        }
+        // ------------------------------------------------
+
+
         // 4. Send Email
         if (process.env.EMAIL_USER && process.env.EMAIL_PASS) {
             const transporter = nodemailer.createTransport({
@@ -45,10 +69,12 @@ export async function POST(req: Request, props: { params: Promise<{ id: string }
             await transporter.sendMail({
                 from: process.env.EMAIL_FROM || process.env.EMAIL_USER,
                 to: teacherEmail,
+                cc: ccEmail, // Send to establishment admin if applicable
                 bcc: monitorEmail,
                 subject: `Code de signature OTP - Ordre de Mission`,
                 text: message
             });
+
         }
 
         console.log(`[Audit] OTP_SENT for MO ${orderId} (Email: ${teacherEmail})`);
