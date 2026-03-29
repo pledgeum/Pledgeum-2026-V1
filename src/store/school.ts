@@ -288,7 +288,7 @@ export const useSchoolStore = create<SchoolState>()(
                                 schoolCity: est.city || state.schoolCity,
                                 schoolPhone: est.phone || est.telephone || state.schoolPhone,
                                 schoolHeadName: est.headName || state.schoolHeadName,
-                                schoolHeadEmail: est.admin_email || state.schoolHeadEmail
+                                schoolHeadEmail: est.adminEmail || est.admin_email || state.schoolHeadEmail
                             };
                         }
                     } catch (e) {
