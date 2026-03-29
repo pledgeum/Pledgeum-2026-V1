@@ -236,6 +236,7 @@ export function SchoolAdminPanelSection() {
     const isDDFPT = role === 'ddfpt';
     const isDelegatedAdmin = email && collaborators.some(c => c.id === delegatedAdminId && (c.email || '').toLowerCase() === email.toLowerCase());
     const canEditIdentity = isSchoolHead || isDDFPT || isDelegatedAdmin || (schoolHeadEmail === "");
+    const canManageConventions = ['admin', 'SUPER_ADMIN', 'school_head', 'ESTABLISHMENT_ADMIN', 'ddfpt', 'business_manager', 'at_ddfpt'].includes(role || '');
 
     // Validation
     const missingIdentity = !schoolName || !schoolAddress || !schoolPhone || !schoolHeadName || !schoolHeadEmail;
@@ -705,13 +706,24 @@ export function SchoolAdminPanelSection() {
                                     return (
                                         <div key={type.id} className="p-4 border rounded-xl">
                                             <div className="flex items-center">
-                                                <input type="checkbox" checked={isEnabled} onChange={(e) => handleToggleConvention(type.id, e.target.checked)} className="w-5 h-5 rounded border-gray-300" />
-                                                <label className="ml-4 font-bold text-sm">{type.label}</label>
+                                                <input 
+                                                    type="checkbox" 
+                                                    checked={isEnabled} 
+                                                    onChange={(e) => handleToggleConvention(type.id, e.target.checked)} 
+                                                    disabled={!canManageConventions} 
+                                                    className={`w-5 h-5 rounded border-gray-300 ${!canManageConventions ? 'opacity-50 cursor-not-allowed' : ''}`} 
+                                                />
+                                                <label className={`ml-4 font-bold text-sm ${!canManageConventions ? 'text-gray-400' : ''}`}>{type.label}</label>
                                             </div>
                                             {isEnabled && (
                                                 <div className="mt-4 flex flex-wrap gap-2">
                                                     {classes.map(cls => (
-                                                        <button key={cls.id} onClick={() => handleToggleClassForConvention(type.id, cls.id)} className={`px-3 py-1.5 rounded-full text-xs font-bold border ${setting.class_ids.includes(cls.id) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-600'}`}>
+                                                        <button 
+                                                            key={cls.id} 
+                                                            onClick={() => handleToggleClassForConvention(type.id, cls.id)} 
+                                                            disabled={!canManageConventions} 
+                                                            className={`px-3 py-1.5 rounded-full text-xs font-bold border ${setting.class_ids.includes(cls.id) ? 'bg-blue-600 text-white border-blue-600' : 'bg-white border-gray-200 text-gray-600'} ${!canManageConventions ? 'opacity-50 cursor-not-allowed' : ''}`}
+                                                        >
                                                             {cls.name}
                                                         </button>
                                                     ))}
@@ -721,9 +733,18 @@ export function SchoolAdminPanelSection() {
                                     );
                                 })}
                             </div>
-                            <button onClick={handleSaveConventions} disabled={isSavingSettings} className="mt-8 px-6 py-2.5 bg-blue-600 text-white rounded-lg font-bold text-sm w-full">
+                            <button 
+                                onClick={handleSaveConventions} 
+                                disabled={isSavingSettings || !canManageConventions} 
+                                className={`mt-8 px-6 py-2.5 bg-blue-600 text-white rounded-lg font-bold text-sm w-full transition-all ${(!canManageConventions || isSavingSettings) ? 'opacity-50 cursor-not-allowed' : 'active:scale-95 hover:bg-blue-700'}`}
+                            >
                                 {isSavingSettings ? 'Enregistrement...' : 'Enregistrer'}
                             </button>
+                            {!canManageConventions && (
+                                <p className="text-[10px] text-red-500 mt-2 text-center flex items-center justify-center">
+                                    <Lock className="w-3 h-3 mr-1" /> Modification réservée aux administrateurs, DDFPT ou BDE.
+                                </p>
+                            )}
                         </div>
                     )}
 

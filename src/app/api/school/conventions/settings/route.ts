@@ -57,7 +57,7 @@ export async function POST(req: Request) {
     try {
         const session = await auth();
         // Only School Head or Establishment Admin can modify settings
-        const allowedRoles = ['school_head', 'ESTABLISHMENT_ADMIN', 'admin', 'SUPER_ADMIN'];
+        const allowedRoles = ['school_head', 'ESTABLISHMENT_ADMIN', 'admin', 'SUPER_ADMIN', 'ddfpt', 'business_manager', 'at_ddfpt'];
         if (!session?.user || !allowedRoles.includes(session.user.role)) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
