@@ -678,7 +678,7 @@ export function SchoolAdminPanelSection() {
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
-                                        <input type="text" value={schoolPhone || ''} onChange={(e) => updateSchoolIdentity({ schoolPhone: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Téléphone" />
+                                        <input type="text" value={schoolPhone || ''} onChange={(e) => updateSchoolIdentity({ schoolPhone: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Téléphone" autoComplete="new-password" data-1p-ignore />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Nom & Prénom du Chef d'établissement</label>
@@ -686,7 +686,7 @@ export function SchoolAdminPanelSection() {
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Email pour signature électronique du chef d'établissement :</label>
-                                        <input type="email" value={schoolHeadEmail || ''} onChange={(e) => updateSchoolIdentity({ schoolHeadEmail: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Email académique" />
+                                        <input type="email" value={schoolHeadEmail || ''} onChange={(e) => updateSchoolIdentity({ schoolHeadEmail: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Email académique" autoComplete="new-password" data-1p-ignore />
                                     </div>
                                 </div>
                             </div>

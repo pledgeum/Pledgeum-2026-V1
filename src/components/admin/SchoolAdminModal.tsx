@@ -2001,6 +2001,8 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                     value={displayData.phone || ''}
                                                     onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolPhone: e.target.value })}
                                                     className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
+                                                    autoComplete="new-password"
+                                                    data-1p-ignore
                                                 />
                                             </div>
                                             <div className="hidden md:block"></div>
@@ -2027,6 +2029,8 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                     value={displayData.headEmail || ''}
                                                     onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolHeadEmail: e.target.value })}
                                                     className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
+                                                    autoComplete="new-password"
+                                                    data-1p-ignore
                                                 />
                                             </div>
                                         </div>
