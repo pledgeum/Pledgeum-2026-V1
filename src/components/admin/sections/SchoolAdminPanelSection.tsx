@@ -658,11 +658,26 @@ export function SchoolAdminPanelSection() {
                             <div className="bg-white p-8 rounded-xl border border-gray-200 shadow-sm">
                                 <h4 className="text-lg font-bold text-gray-900 mb-6 flex items-center"><Building className="w-6 h-6 mr-3 text-orange-600" /> Identité</h4>
                                 <div className="space-y-4">
-                                    <input type="text" value={schoolName || ''} onChange={(e) => updateSchoolIdentity({ schoolName: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Nom de l'établissement" />
-                                    <textarea rows={3} value={schoolAddress || ''} onChange={(e) => updateSchoolIdentity({ schoolAddress: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Adresse" />
-                                    <input type="text" value={schoolPhone || ''} onChange={(e) => updateSchoolIdentity({ schoolPhone: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Téléphone" />
-                                    <input type="text" value={schoolHeadName || ''} onChange={(e) => updateSchoolIdentity({ schoolHeadName: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Nom du Chef d'établissement" />
-                                    <input type="email" value={schoolHeadEmail || ''} onChange={(e) => updateSchoolIdentity({ schoolHeadEmail: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Email académique" />
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Nom de l'établissement</label>
+                                        <input type="text" value={schoolName || ''} onChange={(e) => updateSchoolIdentity({ schoolName: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Nom de l'établissement" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
+                                        <textarea rows={3} value={schoolAddress || ''} onChange={(e) => updateSchoolIdentity({ schoolAddress: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Adresse" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
+                                        <input type="text" value={schoolPhone || ''} onChange={(e) => updateSchoolIdentity({ schoolPhone: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Téléphone" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Nom & Prénom du Chef d'établissement</label>
+                                        <input type="text" value={schoolHeadName || ''} onChange={(e) => updateSchoolIdentity({ schoolHeadName: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Nom du Chef d'établissement" />
+                                    </div>
+                                    <div>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Email pour signature électronique du chef d'établissement :</label>
+                                        <input type="email" value={schoolHeadEmail || ''} onChange={(e) => updateSchoolIdentity({ schoolHeadEmail: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Email académique" />
+                                    </div>
                                 </div>
                             </div>
                         </div>

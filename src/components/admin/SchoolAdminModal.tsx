@@ -1998,7 +1998,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                 />
                                             </div>
                                             <div>
-                                                <label className="block text-sm font-medium text-gray-700 mb-1">Email (Validation)</label>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Email pour signature électronique du chef d'établissement :</label>
                                                 <input
                                                     type="email"
                                                     disabled={!canEditIdentity}
