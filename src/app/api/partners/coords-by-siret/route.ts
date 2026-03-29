@@ -29,11 +29,12 @@ export async function GET(req: Request) {
 
         // Optimised query pulling only non-null coords
         const query = `
-            SELECT siret, latitude, longitude
+            SELECT DISTINCT ON (siret) siret, latitude, longitude
             FROM partners
             WHERE siret IN (${placeholders})
             AND latitude IS NOT NULL 
             AND longitude IS NOT NULL
+            ORDER BY siret
         `;
 
         const { rows } = await client.query(query, sirets);

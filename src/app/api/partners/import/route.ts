@@ -50,7 +50,7 @@ export async function POST(req: Request) {
                         school_id, siret, name, address, city, postal_code, latitude, longitude, activities, sectors
                     )
                     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
-                    ON CONFLICT (siret) DO UPDATE SET 
+                    ON CONFLICT (school_id, siret) DO UPDATE SET 
                         name = EXCLUDED.name,
                         address = EXCLUDED.address,
                         city = EXCLUDED.city,

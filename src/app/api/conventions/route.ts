@@ -480,7 +480,7 @@ export async function POST(req: Request) {
                             longitude,
                             classes
                         ) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9::jsonb)
-                        ON CONFLICT (siret) DO UPDATE SET
+                        ON CONFLICT (school_id, siret) DO UPDATE SET
                             name = EXCLUDED.name,
                             address = EXCLUDED.address,
                             city = COALESCE(EXCLUDED.city, partners.city),
