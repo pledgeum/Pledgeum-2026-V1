@@ -287,7 +287,7 @@ export const useSchoolStore = create<SchoolState>()(
                                 schoolPostalCode: est.postalCode || state.schoolPostalCode, // Added
                                 schoolCity: est.city || state.schoolCity,
                                 schoolPhone: est.phone || est.telephone || state.schoolPhone,
-                                schoolHeadName: est.headName || state.schoolHeadName,
+                                schoolHeadName: (est.headName === est.name || !est.headName) ? "" : est.headName,
                                 schoolHeadEmail: est.adminEmail || est.admin_email || state.schoolHeadEmail
                             };
                         }
@@ -499,7 +499,7 @@ export const useSchoolStore = create<SchoolState>()(
             schoolPostalCode: "76504",
             schoolCity: "Elbeuf",
             schoolPhone: "02 32 96 48 00",
-            schoolHeadName: "M. le Proviseur",
+            schoolHeadName: "",
             schoolHeadEmail: "pledgeum@gmail.com",
 
             delegatedAdminId: null,

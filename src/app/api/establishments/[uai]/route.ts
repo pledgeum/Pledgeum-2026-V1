@@ -96,11 +96,13 @@ export async function PUT(
 
     try {
         const body = await request.json();
-        const { schoolName, schoolAddress, schoolPostalCode, schoolCity, schoolPhone, schoolHeadEmail, subscriptionStatus } = body;
+        const { schoolName, schoolAddress, schoolPostalCode, schoolCity, schoolPhone, schoolHeadName, schoolHeadEmail, subscriptionStatus } = body;
 
         const client = await pool.connect();
         try {
-            // Build dynamic update query
+            await client.query('BEGIN');
+
+            // 1. Update Establishments Table
             const updates: string[] = [];
             const values: any[] = [uai];
             let paramIndex = 2; // $1 is uai
@@ -110,7 +112,6 @@ export async function PUT(
                 values.push(schoolName);
             }
             if (schoolAddress !== undefined) {
-                // simple mapping: schoolAddress -> address column
                 updates.push(`address = $${paramIndex++}`);
                 values.push(schoolAddress);
             }
@@ -135,29 +136,51 @@ export async function PUT(
                 values.push(subscriptionStatus);
             }
 
-            if (updates.length === 0) {
-                return NextResponse.json({ message: 'No changes detected' });
+            if (updates.length > 0) {
+                const query = `
+                    UPDATE establishments 
+                    SET ${updates.join(', ')} 
+                    WHERE uai = $1
+                `;
+                await client.query(query, values);
             }
 
-            const query = `
-                UPDATE establishments 
-                SET ${updates.join(', ')} 
-                WHERE uai = $1
-                RETURNING uai, name, address, telephone, admin_email, subscription_status
-            `;
+            // 2. Synchronize Headmaster Name in Users Table
+            if (schoolHeadName !== undefined) {
+                // Split name: First word as first_name, rest as last_name
+                // If empty, both become null to trigger placeholder on next load
+                const trimmed = (schoolHeadName || '').trim();
+                let firstName = null;
+                let lastName = null;
 
-            const result = await client.query(query, values);
+                if (trimmed) {
+                    const parts = trimmed.split(/\s+/);
+                    if (parts.length > 1) {
+                        firstName = parts[0];
+                        lastName = parts.slice(1).join(' ');
+                    } else {
+                        lastName = parts[0];
+                    }
+                }
 
-            if (result.rowCount === 0) {
-                return NextResponse.json({ error: 'Establishment not found' }, { status: 404 });
+                const userUpdateQuery = `
+                    UPDATE users 
+                    SET first_name = $1, last_name = $2 
+                    WHERE establishment_uai = $3 AND role = 'school_head'
+                `;
+                await client.query(userUpdateQuery, [firstName, lastName, uai]);
             }
+
+            await client.query('COMMIT');
 
             // Clear Next.js Cache for the entire dashboard layout
             revalidatePath('/dashboard', 'layout');
 
-            return NextResponse.json(result.rows[0]);
+            return NextResponse.json({ message: 'Success' });
 
-
+        } catch (err) {
+            await client.query('ROLLBACK');
+            throw err;
         } finally {
             client.release();
         }

@@ -683,7 +683,7 @@ export function SchoolAdminPanelSection() {
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Nom & Prénom du Chef d'établissement</label>
-                                        <input type="text" value={schoolHeadName || ''} onChange={(e) => updateSchoolIdentity({ schoolHeadName: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Nom du Chef d'établissement" />
+                                        <input type="text" value={schoolHeadName || ''} onChange={(e) => updateSchoolIdentity({ schoolHeadName: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Nom et prénom à compléter." />
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Email pour signature électronique du chef d'établissement :</label>

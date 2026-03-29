@@ -2015,7 +2015,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                 <input
                                                     type="text"
                                                     disabled={!canEditIdentity}
-                                                    placeholder="Ex: M. le Proviseur"
+                                                    placeholder="Nom et prénom à compléter."
                                                     value={displayData.headName || ''}
                                                     onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolHeadName: e.target.value })}
                                                     className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
