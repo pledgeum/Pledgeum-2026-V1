@@ -35,8 +35,10 @@ export async function POST(req: Request) {
         const uai = user?.establishment_uai;
         const role = user?.role;
 
-        // Security: Only Admins can import
-        if (role !== 'school_head' && role !== 'ESTABLISHMENT_ADMIN') {
+        // Security: Only authorized school management roles can import
+        const allowedRoles = ['school_head', 'ESTABLISHMENT_ADMIN', 'SUPER_ADMIN', 'ddfpt', 'business_manager', 'at_ddfpt'];
+
+        if (!allowedRoles.includes(role)) {
             return NextResponse.json({ error: "Forbidden: Insufficient permissions." }, { status: 403 });
         }
 
