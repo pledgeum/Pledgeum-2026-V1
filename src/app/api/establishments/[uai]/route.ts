@@ -96,7 +96,7 @@ export async function PUT(
 
     try {
         const body = await request.json();
-        const { schoolName, schoolAddress, schoolPhone, schoolHeadEmail, subscriptionStatus } = body;
+        const { schoolName, schoolAddress, schoolPostalCode, schoolCity, schoolPhone, schoolHeadEmail, subscriptionStatus } = body;
 
         const client = await pool.connect();
         try {
@@ -113,6 +113,14 @@ export async function PUT(
                 // simple mapping: schoolAddress -> address column
                 updates.push(`address = $${paramIndex++}`);
                 values.push(schoolAddress);
+            }
+            if (schoolPostalCode !== undefined) {
+                updates.push(`postal_code = $${paramIndex++}`);
+                values.push(schoolPostalCode);
+            }
+            if (schoolCity !== undefined) {
+                updates.push(`city = $${paramIndex++}`);
+                values.push(schoolCity);
             }
             if (schoolPhone !== undefined) {
                 updates.push(`telephone = $${paramIndex++}`);

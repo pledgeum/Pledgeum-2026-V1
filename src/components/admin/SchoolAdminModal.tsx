@@ -1936,6 +1936,8 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                 let displayData = {
                                     name: schoolStore.schoolName,
                                     address: schoolStore.schoolAddress,
+                                    postalCode: schoolStore.schoolPostalCode,
+                                    city: schoolStore.schoolCity,
                                     phone: schoolStore.schoolPhone,
                                     headName: schoolStore.schoolHeadName,
                                     headEmail: schoolStore.schoolHeadEmail,
@@ -1968,6 +1970,26 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                     disabled={!canEditIdentity}
                                                     value={displayData.address || ''}
                                                     onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolAddress: e.target.value })}
+                                                    className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Code Postal</label>
+                                                <input
+                                                    type="text"
+                                                    disabled={!canEditIdentity}
+                                                    value={displayData.postalCode || ''}
+                                                    onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolPostalCode: e.target.value })}
+                                                    className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
+                                                />
+                                            </div>
+                                            <div>
+                                                <label className="block text-sm font-medium text-gray-700 mb-1">Ville</label>
+                                                <input
+                                                    type="text"
+                                                    disabled={!canEditIdentity}
+                                                    value={displayData.city || ''}
+                                                    onChange={(e) => useSchoolStore.getState().updateSchoolIdentity({ schoolCity: e.target.value })}
                                                     className={`w-full rounded-md border-gray-300 shadow-sm sm:text-sm ${!canEditIdentity ? 'bg-gray-100 text-gray-500 cursor-not-allowed' : 'focus:border-blue-500 focus:ring-blue-500'}`}
                                                 />
                                             </div>

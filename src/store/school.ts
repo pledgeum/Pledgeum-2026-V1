@@ -142,6 +142,7 @@ interface SchoolState {
 
     schoolName: string;
     schoolAddress: string;
+    schoolPostalCode: string; // Added
     schoolCity: string;
     schoolPhone: string;
     schoolHeadName: string;
@@ -149,6 +150,7 @@ interface SchoolState {
     updateSchoolIdentity: (data: Partial<{
         schoolName: string;
         schoolAddress: string;
+        schoolPostalCode: string; // Added
         schoolCity: string;
         schoolPhone: string;
         schoolHeadName: string;
@@ -282,6 +284,7 @@ export const useSchoolStore = create<SchoolState>()(
                             identityUpdates = {
                                 schoolName: est.name || state.schoolName,
                                 schoolAddress: est.address || state.schoolAddress,
+                                schoolPostalCode: est.postalCode || state.schoolPostalCode, // Added
                                 schoolCity: est.city || state.schoolCity,
                                 schoolPhone: est.phone || est.telephone || state.schoolPhone,
                                 schoolHeadName: est.headName || state.schoolHeadName,
@@ -493,6 +496,7 @@ export const useSchoolStore = create<SchoolState>()(
             // Default: Lycée Ferdinand Buisson
             schoolName: "Lycée Polyvalent Ferdinand Buisson",
             schoolAddress: "6 rue Auguste Houzeau, 76504 Elbeuf",
+            schoolPostalCode: "76504",
             schoolCity: "Elbeuf",
             schoolPhone: "02 32 96 48 00",
             schoolHeadName: "M. le Proviseur",
@@ -1002,6 +1006,8 @@ export const useSchoolStore = create<SchoolState>()(
                 delegatedAdminId: null,
                 schoolName: '',
                 schoolAddress: '',
+                schoolPostalCode: '',
+                schoolCity: '',
                 schoolPhone: '',
                 schoolHeadName: '',
                 schoolHeadEmail: ''

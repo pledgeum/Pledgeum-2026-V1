@@ -94,7 +94,7 @@ export function SchoolAdminPanelSection() {
         importStudents, addStudentToClass, removeStudentFromClass, allowedConventionTypes,
         fetchClassStudents, fetchClassTeachers,
         toggleConventionType, schoolHeadEmail, delegatedAdminId, setDelegatedAdmin, schoolName,
-        schoolAddress, schoolPhone, schoolHeadName, generateStudentCredentials, regenerateStudentCredentials, markCredentialsPrinted, generateTeacherCredentials, markTeacherCredentialsPrinted, importGlobalStructure,
+        schoolAddress, schoolPostalCode, schoolCity, schoolPhone, schoolHeadName, generateStudentCredentials, regenerateStudentCredentials, markCredentialsPrinted, generateTeacherCredentials, markTeacherCredentialsPrinted, importGlobalStructure,
         partnerCompanies, importPartners, removePartner,
         // Visibility Store
         hiddenActivities, setHiddenActivities, hiddenJobs, setHiddenJobs, hiddenClasses, setHiddenClasses,
@@ -665,6 +665,16 @@ export function SchoolAdminPanelSection() {
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Adresse</label>
                                         <textarea rows={3} value={schoolAddress || ''} onChange={(e) => updateSchoolIdentity({ schoolAddress: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Adresse" />
+                                    </div>
+                                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Code Postal</label>
+                                            <input type="text" value={schoolPostalCode || ''} onChange={(e) => updateSchoolIdentity({ schoolPostalCode: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Code Postal" />
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm font-medium text-gray-700 mb-1">Ville</label>
+                                            <input type="text" value={schoolCity || ''} onChange={(e) => updateSchoolIdentity({ schoolCity: e.target.value })} className="w-full border-gray-300 rounded-lg text-sm" disabled={!canEditIdentity} placeholder="Ville" />
+                                        </div>
                                     </div>
                                     <div>
                                         <label className="block text-sm font-medium text-gray-700 mb-1">Téléphone</label>
