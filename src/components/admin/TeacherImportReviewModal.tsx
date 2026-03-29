@@ -1,5 +1,5 @@
 import React, { useState, useMemo } from 'react';
-import { X, Check, AlertTriangle, Users } from 'lucide-react';
+import { X, Check, AlertTriangle, Users, Loader2 } from 'lucide-react';
 import { Teacher } from '@/store/school';
 
 interface TeacherImportReviewModalProps {
@@ -11,6 +11,7 @@ interface TeacherImportReviewModalProps {
 
 export function TeacherImportReviewModal({ isOpen, onClose, data, onConfirm }: TeacherImportReviewModalProps) {
     const [selectedIndices, setSelectedIndices] = useState<Set<number>>(new Set(data.map((_, i) => i)));
+    const [isImporting, setIsImporting] = useState(false);
 
     const toggleSelection = (index: number) => {
         const newSet = new Set(selectedIndices);
@@ -30,10 +31,15 @@ export function TeacherImportReviewModal({ isOpen, onClose, data, onConfirm }: T
         }
     };
 
-    const handleConfirm = () => {
-        const selectedData = data.filter((_, i) => selectedIndices.has(i));
-        onConfirm(selectedData);
-        onClose();
+    const handleConfirm = async () => {
+        setIsImporting(true);
+        try {
+            const selectedData = data.filter((_, i) => selectedIndices.has(i));
+            await onConfirm(selectedData);
+            onClose();
+        } finally {
+            setIsImporting(false);
+        }
     };
 
     const stats = useMemo(() => {
@@ -154,11 +160,20 @@ export function TeacherImportReviewModal({ isOpen, onClose, data, onConfirm }: T
                         </button>
                         <button
                             onClick={handleConfirm}
-                            disabled={selectedIndices.size === 0}
+                            disabled={selectedIndices.size === 0 || isImporting}
                             className="px-6 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 font-medium shadow-md transition-all disabled:opacity-50 disabled:cursor-not-allowed flex items-center"
                         >
-                            <Check className="w-4 h-4 mr-2" />
-                            Confirmer l'import ({selectedIndices.size})
+                            {isImporting ? (
+                                <>
+                                    <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                    Importation de {stats.selectedTeachers} professeurs...
+                                </>
+                            ) : (
+                                <>
+                                    <Check className="w-4 h-4 mr-2" />
+                                    Confirmer l'import ({selectedIndices.size})
+                                </>
+                            )}
                         </button>
                     </div>
                 </div>

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useMemo } from 'react';
-import { X, Check, AlertTriangle, Users } from 'lucide-react';
+import { X, Check, AlertTriangle, Users, Loader2 } from 'lucide-react';
 import { Student } from '@/store/school';
 
 interface StructureImportReviewModalProps {
@@ -13,6 +13,7 @@ interface StructureImportReviewModalProps {
 
 export function StructureImportReviewModal({ isOpen, onClose, data, onConfirm }: StructureImportReviewModalProps) {
     const [selectedIndices, setSelectedIndices] = useState<number[]>(data.map((_, i) => i)); // Default select all
+    const [isImporting, setIsImporting] = useState(false);
 
     const totalStudents = useMemo(() => {
         return data.reduce((acc, curr, idx) => selectedIndices.includes(idx) ? acc + curr.students.length : acc, 0);
@@ -34,9 +35,14 @@ export function StructureImportReviewModal({ isOpen, onClose, data, onConfirm }:
         }
     };
 
-    const handleConfirm = () => {
-        const selectedData = data.filter((_, i) => selectedIndices.includes(i));
-        onConfirm(selectedData);
+    const handleConfirm = async () => {
+        setIsImporting(true);
+        try {
+            const selectedData = data.filter((_, i) => selectedIndices.includes(i));
+            await onConfirm(selectedData);
+        } finally {
+            setIsImporting(false);
+        }
     };
 
     if (!isOpen) return null;
@@ -109,10 +115,17 @@ export function StructureImportReviewModal({ isOpen, onClose, data, onConfirm }:
                     </button>
                     <button
                         onClick={handleConfirm}
-                        disabled={selectedIndices.length === 0}
-                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors"
+                        disabled={selectedIndices.length === 0 || isImporting}
+                        className="px-4 py-2 text-sm font-medium text-white bg-blue-600 hover:bg-blue-700 rounded-lg shadow-sm disabled:opacity-50 disabled:cursor-not-allowed transition-colors flex items-center"
                     >
-                        Confirmer l'importation ({selectedIndices.length} classes)
+                        {isImporting ? (
+                            <>
+                                <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                                Importation de {totalStudents} élèves...
+                            </>
+                        ) : (
+                            `Confirmer l'importation (${selectedIndices.length} classes)`
+                        )}
                     </button>
                 </div>
             </div>
