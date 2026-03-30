@@ -40,7 +40,9 @@ export async function POST(req: Request) {
         );
 
         // 4. Send Email
-        const resetLink = `${process.env.NEXT_PUBLIC_APP_URL}/auth/reset-password?token=${token}&email=${email}`;
+        const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.pledgeum.fr';
+        const normalizedBaseUrl = APP_URL.replace(/\/$/, '');
+        const resetLink = `${normalizedBaseUrl}/auth/reset-password?token=${token}&email=${email}`;
 
         const emailResult = await sendEmail({
             to: email,
