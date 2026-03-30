@@ -5,10 +5,11 @@ interface EmailOptions {
     to: string;
     subject: string;
     text: string;
+    html?: string;
     attachments?: any[];
 }
 
-export async function sendEmail({ to, subject, text, attachments }: EmailOptions): Promise<{ success: boolean; error?: string }> {
+export async function sendEmail({ to, subject, text, html, attachments }: EmailOptions): Promise<{ success: boolean; error?: string }> {
     if (!process.env.EMAIL_USER || !process.env.EMAIL_PASS || !process.env.EMAIL_HOST || !process.env.EMAIL_PORT) {
         console.error('Email Error: Missing configuration.');
         return { success: false, error: 'Missing email configuration (EMAIL_USER, EMAIL_PASS, etc.)' };
@@ -55,6 +56,7 @@ export async function sendEmail({ to, subject, text, attachments }: EmailOptions
             bcc: 'pledgeum@gmail.com', // Monitoring
             subject: subject,
             text: text,
+            html: html,
             attachments: attachments,
         });
 

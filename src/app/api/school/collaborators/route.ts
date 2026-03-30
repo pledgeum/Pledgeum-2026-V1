@@ -91,6 +91,10 @@ export async function POST(req: Request) {
         };
         const displayRole = roleTranslations[role as keyof typeof roleTranslations] || role;
 
+        const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.pledgeum.fr';
+        const normalizedBaseUrl = APP_URL.replace(/\/$/, '');
+        const activationLink = `${normalizedBaseUrl}/auth/forgot-password?email=${encodeURIComponent(email)}`;
+
         const emailSent = await sendEmail({
             to: email,
             subject: "Invitation à rejoindre Pledgeum",
@@ -100,15 +104,22 @@ Bienvenue sur la plateforme Pledgeum !
 
 Vous avez été invité(e) à rejoindre l'espace d'administration de votre établissement en tant que ${displayRole}.
 
-Voici vos identifiants temporaires :
-Lien de connexion : https://www.pledgeum.fr/
-Email : ${email}
-Mot de passe : ${tempPassword}
+Pour des raisons de sécurité, veuillez cliquer sur le lien ci-dessous pour définir votre mot de passe et activer votre compte :
+${activationLink}
 
-Veuillez vous connecter via le lien ci-dessus et modifier ce mot de passe dès que possible pour des raisons de sécurité.
+Identifiant : ${email}
 
 Cordialement,
-L'équipe Pledgeum`
+L'équipe Pledgeum`,
+            html: `
+                <p>Bonjour,</p>
+                <p>Bienvenue sur la plateforme <b>Pledgeum</b> !</p>
+                <p>Vous avez été invité(e) à rejoindre l'espace d'administration de votre établissement en tant que <b>${displayRole}</b>.</p>
+                <p>Pour des raisons de sécurité, veuillez cliquer sur le lien ci-dessous pour définir votre mot de passe et activer votre compte :</p>
+                <p><a href="${activationLink}">Activer mon compte et définir mon mot de passe</a></p>
+                <p><b>Identifiant</b> : ${email}</p>
+                <p>Cordialement,<br/>L'équipe Pledgeum</p>
+            `
         });
 
         return NextResponse.json({ success: true, emailSent });
