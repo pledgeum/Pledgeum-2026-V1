@@ -16,22 +16,23 @@ export async function POST(request: Request) {
         }
 
         const body = await request.json();
-        const { tempId, tempCode } = body;
+        const { tempId: identifier, tempCode } = body;
 
-        if (!tempId || !tempCode) {
+        if (!identifier || !tempCode) {
             return NextResponse.json({ error: "Identifiants manquants" }, { status: 400 });
         }
 
         // 2. Query Postgres for Invitation/User
         client = await pool.connect();
 
-        // We look for a user with this temp_id
+        // We look for a user with this email OR temp_id
+        // This resolves the ambiguity for staff (email) and students (temp_id)
         const res = await client.query(`
             SELECT email, first_name, last_name, role, establishment_uai, birth_date, class_id, temp_code
             FROM users
-            WHERE temp_id = $1
+            WHERE (lower(email) = lower($1) OR upper(temp_id) = upper($1))
             LIMIT 1
-        `, [tempId]);
+        `, [identifier]);
 
         if (res.rowCount === 0) {
             return NextResponse.json({ error: "Identifiant non reconnu" }, { status: 404 });

@@ -101,7 +101,7 @@ export default function LoginPage() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    tempId: tempId.trim().toUpperCase(),
+                    tempId: tempId.trim(), // API now handles both Email (lower) and ID (upper)
                     tempCode: tempCode.trim()
                 })
             });
@@ -400,14 +400,14 @@ export default function LoginPage() {
                             <form className="mt-8 space-y-6" onSubmit={handleVerifyCredentials}>
                                 <div className="rounded-md shadow-sm space-y-3">
                                     <div>
-                                        <label className="block text-sm font-medium text-gray-700 mb-1">Identifiant provisoire</label>
+                                        <label className="block text-sm font-medium text-gray-700 mb-1">Email académique ou Identifiant provisoire</label>
                                         <input
                                             type="text"
                                             required
-                                            className="appearance-none block w-full px-3 py-2 border border-gray-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm"
-                                            placeholder="Ex: DUPOJEAN123"
+                                            className="appearance-none block w-full px-3 py-2 border border-blue-300 rounded-md placeholder-gray-400 focus:outline-none focus:ring-blue-500 focus:border-blue-500 sm:text-sm"
+                                            placeholder="Ex: f.nom@ac-normandie.fr ou DUMAFABR123"
                                             value={tempId}
-                                            onChange={(e) => setTempId(e.target.value.toUpperCase())}
+                                            onChange={(e) => setTempId(e.target.value)}
                                         />
                                     </div>
                                     <div>
