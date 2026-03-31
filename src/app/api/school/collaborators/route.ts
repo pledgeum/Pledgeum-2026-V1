@@ -93,7 +93,7 @@ export async function POST(req: Request) {
 
         const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.pledgeum.fr';
         const normalizedBaseUrl = APP_URL.replace(/\/$/, '');
-        const activationLink = `${normalizedBaseUrl}/auth/forgot-password?email=${encodeURIComponent(email)}`;
+        const activationLink = `${normalizedBaseUrl}/forgot-password?email=${encodeURIComponent(email)}`;
 
         const emailSent = await sendEmail({
             to: email,
