@@ -11,6 +11,7 @@ import { useUserStore } from '@/store/user';
 import Papa from 'papaparse';
 import { useConventionStore } from '@/store/convention'; // Imported for class cross-referencing
 import { db, collection, query, where, getDocs, deleteDoc, doc, addDoc, writeBatch } from '@/lib/firebase';
+import { toast } from 'sonner';
 
 // --- Checkable Dropdown Component ---
 interface CheckableDropdownProps {
@@ -1669,43 +1670,68 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                             {/* Generate Credentials Button */}
                                                             <button
                                                                 onClick={async () => {
-                                                                    // We need schoolId. Try from store or fallback to default sandbox if fabrice (should allow admin)
-                                                                    let currentSchoolId = useUserStore.getState().schoolId;
-                                                                    if (!currentSchoolId) console.warn("Missing School ID for update");
-                                                                    if (!currentSchoolId && useUserStore.getState().role === 'school_head') {
-                                                                        // Try deduce from store if localized
-                                                                        // but usually schoolId is set. If not, alert.
-                                                                    }
+                                                                    try {
+                                                                        // We need schoolId. Try from store or fallback to default sandbox if fabrice (should allow admin)
+                                                                        let currentSchoolId = useUserStore.getState().schoolId;
+                                                                        if (!currentSchoolId) console.warn("Missing School ID for update");
+                                                                        
+                                                                        if (!currentSchoolId) {
+                                                                            alert("Impossible de générer les identifiants : ID établissement manquant.");
+                                                                            return;
+                                                                        }
 
-                                                                    if (!currentSchoolId) {
-                                                                        alert("Impossible de générer les identifiants : ID établissement manquant.");
-                                                                        return;
-                                                                    }
+                                                                        // Action A: Local generation (Non-standard NOM+PRENOM logic in store)
+                                                                        await generateTeacherCredentials(cls.id, currentSchoolId);
 
-                                                                    await generateTeacherCredentials(cls.id, currentSchoolId);
-
-                                                                    // Wait for state update (next tick) or assume updated
-                                                                    // Wait for state update (next tick) or assume updated
-                                                                    setTimeout(async () => {
-                                                                        // FIX: Fetch fresh state directly from store to avoid stale closure "classes"
+                                                                        // Action B: Retrieve updated data from store
                                                                         const freshClasses = useSchoolStore.getState().classes;
                                                                         const updatedClass = freshClasses.find(c => c.id === cls.id);
 
-                                                                        if (updatedClass && updatedClass.teachersList.length > 0) {
-                                                                            const { generateTeacherCredentialsBlob } = await import('@/components/pdf/CredentialPdfGenerator');
-                                                                            const blob = await generateTeacherCredentialsBlob(
-                                                                                updatedClass.teachersList,
-                                                                                updatedClass,
-                                                                                schoolName
-                                                                            );
-                                                                            const url = URL.createObjectURL(blob);
-                                                                            const a = document.createElement('a');
-                                                                            a.href = url;
-                                                                            a.download = `Identifiants_Profs_${updatedClass.name}.pdf`; // User requested "Même design" - assumed print functionality too
-                                                                            a.click();
-                                                                            URL.revokeObjectURL(url);
+                                                                        if (!updatedClass || updatedClass.teachersList.length === 0) {
+                                                                            toast.error("Aucun enseignant trouvé pour cette classe.");
+                                                                            return;
                                                                         }
-                                                                    }, 500);
+
+                                                                        // Action C: API SYNC (Batch Invitation)
+                                                                        // API expects: { invitations: [{ userId, tempId, tempCode }], uai }
+                                                                        const payload = {
+                                                                            uai: currentSchoolId,
+                                                                            invitations: updatedClass.teachersList.map(t => ({
+                                                                                userId: t.id,
+                                                                                tempId: t.tempId,
+                                                                                tempCode: t.tempCode
+                                                                            }))
+                                                                        };
+
+                                                                        const response = await fetch('/api/school/invitations/batch', {
+                                                                            method: 'POST',
+                                                                            headers: { 'Content-Type': 'application/json' },
+                                                                            body: JSON.stringify(payload)
+                                                                        });
+
+                                                                        if (!response.ok) {
+                                                                            throw new Error(`Erreur API: ${response.status}`);
+                                                                        }
+
+                                                                        // Action D: PDF Generation (Only if API Success)
+                                                                        const { generateTeacherCredentialsBlob } = await import('@/components/pdf/CredentialPdfGenerator');
+                                                                        const blob = await generateTeacherCredentialsBlob(
+                                                                            updatedClass.teachersList,
+                                                                            updatedClass,
+                                                                            schoolName
+                                                                        );
+                                                                        const url = URL.createObjectURL(blob);
+                                                                        const a = document.createElement('a');
+                                                                        a.href = url;
+                                                                        a.download = `Identifiants_Profs_${updatedClass.name}.pdf`;
+                                                                        a.click();
+                                                                        URL.revokeObjectURL(url);
+
+                                                                        toast.success("Identifiants enseignants synchronisés et PDF généré.");
+                                                                    } catch (error) {
+                                                                        console.error("Échec génération/synchro enseignants:", error);
+                                                                        toast.error("Échec de la sauvegarde en base. Le PDF n'a pas été généré.");
+                                                                    }
                                                                 }}
                                                                 className="text-xs bg-purple-100 hover:bg-purple-200 text-purple-700 px-2 py-1 rounded flex items-center border border-purple-200"
                                                                 title="Générer et imprimer les identifiants provisoires"
