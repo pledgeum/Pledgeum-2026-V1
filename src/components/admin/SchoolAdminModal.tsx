@@ -1694,13 +1694,16 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
 
                                                                         // Action C: API SYNC (Batch Invitation)
                                                                         // API expects: { invitations: [{ userId, tempId, tempCode }], uai }
+                                                                        // IMPORTANT: Filter out local random IDs (Math.random) that don't exist in DB
                                                                         const payload = {
                                                                             uai: currentSchoolId,
-                                                                            invitations: updatedClass.teachersList.map(t => ({
-                                                                                userId: t.id,
-                                                                                tempId: t.tempId,
-                                                                                tempCode: t.tempCode
-                                                                            }))
+                                                                            invitations: updatedClass.teachersList
+                                                                                .filter(t => t.id && t.id.includes('-')) // Real UUIDs/TeacherIDs contain hyphens
+                                                                                .map(t => ({
+                                                                                    userId: t.id,
+                                                                                    tempId: t.tempId,
+                                                                                    tempCode: t.tempCode
+                                                                                }))
                                                                         };
 
                                                                         const response = await fetch('/api/school/invitations/batch', {
