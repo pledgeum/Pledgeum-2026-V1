@@ -75,7 +75,16 @@ export async function POST(req: Request) {
             uai
         ]);
 
-        // 4. Send Email
+        // 4. Generate Activation Token
+        const activationToken = crypto.randomBytes(32).toString('hex');
+        const expires = new Date(Date.now() + 24 * 3600 * 1000); // 24 hours
+
+        await client.query(
+            'INSERT INTO verification_tokens (identifier, token, expires) VALUES ($1, $2, $3)',
+            [email.toLowerCase(), activationToken, expires]
+        );
+
+        // 5. Send Email (Anti-Cisco / Premium UX)
         const roleTranslations: Record<string, string> = {
             business_manager: "Responsable Bureau des Entreprises",
             ddfpt: "Directeur Délégué aux Formations (DDFPT)",
@@ -93,32 +102,38 @@ export async function POST(req: Request) {
 
         const APP_URL = process.env.NEXT_PUBLIC_APP_URL || 'https://www.pledgeum.fr';
         const normalizedBaseUrl = APP_URL.replace(/\/$/, '');
-        const activationLink = `${normalizedBaseUrl}/forgot-password?email=${encodeURIComponent(email)}`;
+        const activationLink = `${normalizedBaseUrl}/activate?token=${activationToken}&email=${encodeURIComponent(email)}`;
 
         const emailSent = await sendEmail({
             to: email,
-            subject: "Invitation à rejoindre Pledgeum",
+            subject: "Activation de votre accès Pledgeum",
             text: `Bonjour,
 
-Bienvenue sur la plateforme Pledgeum !
+Votre accès à la plateforme Pledgeum a été préparé par votre établissement en tant que ${displayRole}.
 
-Vous avez été invité(e) à rejoindre l'espace d'administration de votre établissement en tant que ${displayRole}.
-
-Pour des raisons de sécurité, veuillez cliquer sur le lien ci-dessous pour définir votre mot de passe et activer votre compte :
+Pour finaliser la configuration de votre compte et définir votre mot de passe, veuillez cliquer sur le lien sécurisé ci-dessous :
 ${activationLink}
 
 Identifiant : ${email}
 
+Ce lien est valable 24 heures.
+
 Cordialement,
 L'équipe Pledgeum`,
             html: `
-                <p>Bonjour,</p>
-                <p>Bienvenue sur la plateforme <b>Pledgeum</b> !</p>
-                <p>Vous avez été invité(e) à rejoindre l'espace d'administration de votre établissement en tant que <b>${displayRole}</b>.</p>
-                <p>Pour des raisons de sécurité, veuillez cliquer sur le lien ci-dessous pour définir votre mot de passe et activer votre compte :</p>
-                <p><a href="${activationLink}">Activer mon compte et définir mon mot de passe</a></p>
-                <p><b>Identifiant</b> : ${email}</p>
-                <p>Cordialement,<br/>L'équipe Pledgeum</p>
+                <div style="font-family: sans-serif; color: #333; max-width: 600px; margin: 0 auto; border: 1px solid #eee; padding: 20px; border-radius: 10px;">
+                    <h2 style="color: #2563eb;">Bienvenue sur Pledgeum</h2>
+                    <p>Bonjour,</p>
+                    <p>Votre accès à l'espace d'administration de votre établissement a été configuré en tant que <b>${displayRole}</b>.</p>
+                    <p>Pour finaliser l'activation de votre compte et choisir votre mot de passe, cliquez sur le bouton ci-dessous :</p>
+                    <div style="text-align: center; margin: 30px 0;">
+                        <a href="${activationLink}" style="background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 5px; font-weight: bold; display: inline-block;">Activer mon compte</a>
+                    </div>
+                    <p style="font-size: 0.9em; color: #666;"><b>Identifiant</b> : ${email}</p>
+                    <hr style="border: 0; border-top: 1px solid #eee; margin: 20px 0;" />
+                    <p style="font-size: 0.8em; color: #999;">Ce lien sécurisé est valable 24 heures. Si vous n'êtes pas à l'origine de cette demande, veuillez ignorer cet email.</p>
+                    <p style="font-size: 0.8em; color: #999;">Cordialement,<br/>L'équipe Pledgeum</p>
+                </div>
             `
         });
 
