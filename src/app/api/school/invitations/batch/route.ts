@@ -6,8 +6,9 @@ export async function POST(req: Request) {
     let client;
     try {
         const session = await auth();
-        // Strict Authorization: Only School Heads or Admin
-        if (!session?.user || (session.user.role !== 'school_head' && session.user.role !== 'ESTABLISHMENT_ADMIN')) {
+        // Strict Authorization: Only School Heads, Admin, DDFPT, AT-DDFPT, or RBDE
+        const authorizedRoles = ['school_head', 'ESTABLISHMENT_ADMIN', 'ddfpt', 'at_ddfpt', 'business_manager'];
+        if (!session?.user || !authorizedRoles.includes(session.user.role)) {
             return NextResponse.json({ error: "Forbidden" }, { status: 403 });
         }
 
