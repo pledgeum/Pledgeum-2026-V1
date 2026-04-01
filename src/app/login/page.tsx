@@ -9,6 +9,15 @@ import { validatePassword } from '@/lib/validation';
 import { useSchoolStore } from '@/store/school';
 // import { useDemoStore } from '@/store/demo'; // Commented out if it relies on Firebase, otherwise keep
 
+const isTechnicalEmail = (email: string) => {
+    if (!email) return false;
+    const lowerEmail = email.toLowerCase();
+    return lowerEmail.includes('@pledgeum.fr') ||
+        lowerEmail.includes('@sandbox') ||
+        lowerEmail.startsWith('teacher-') ||
+        lowerEmail.startsWith('student-');
+};
+
 export default function LoginPage() {
     const [mode, setMode] = useState<'login' | 'activation'>('login');
 
@@ -119,7 +128,7 @@ export default function LoginPage() {
                 });
                 setFoundClassId(data.schoolId);
 
-                if (data.user.role === 'student' || !data.user.role) {
+                if (data.user.role === 'student' || !data.user.role || isTechnicalEmail(data.user.email)) {
                     setNewEmail('');
                 } else {
                     setNewEmail(data.user.email || '');
@@ -391,7 +400,8 @@ export default function LoginPage() {
                             {activationStep === 2 && (
                                 <p className="mt-2 text-sm text-green-600 font-medium flex justify-center items-center">
                                     <CheckCircle className="w-4 h-4 mr-1" />
-                                    Élève identifié : {foundStudent?.firstName} {foundStudent?.lastName}
+                                    {foundStudent?.role === 'student' ? 'Élève identifié : ' : 'Utilisateur identifié : '}
+                                    {foundStudent?.firstName} {foundStudent?.lastName}
                                 </p>
                             )}
                         </div>
