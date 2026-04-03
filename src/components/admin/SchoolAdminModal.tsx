@@ -884,7 +884,10 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
 
     const handleAddCollaborator = async (e: React.FormEvent) => {
         e.preventDefault();
-        if (newCollab.name && newCollab.email) {
+        
+        if (!newCollab.name || !newCollab.email) return;
+
+        try {
             // 1. Generate Credentials
             const clean = (str: string) => str.toUpperCase()
                 .normalize("NFD").replace(/[\u0300-\u036f]/g, "")
@@ -900,65 +903,71 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
             const tempId = `${sLast}${sFirst}${random3}`;
             const tempCode = Math.floor(100000 + Math.random() * 900000).toString();
 
-            // 2. Add to Store (with credentials)
-            addCollaborator({ ...newCollab, tempId, tempCode });
+            // 2. PRIMARY PERSISTENCE: Save to PostgreSQL
+            const pgResponse = await fetch('/api/school/collaborators', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    name: newCollab.name,
+                    email: newCollab.email,
+                    role: newCollab.role,
+                    uai: schoolId // UAI from useUserStore
+                })
+            });
 
-            // 3. Send Email
-            try {
-                // Get Token logic removed (using session)
-
-                try {
-                    // const { collection, addDoc } = await import("@/lib/firebase");
-                    // const { db } = await import("@/lib/firebase");
-
-                    await addDoc(collection(db, "invitations"), {
-                        tempId,
-                        tempCode,
-                        email: newCollab.email,
-                        name: newCollab.name,
-                        role: newCollab.role,
-                        createdAt: new Date().toISOString(),
-                        createdBy: useUserStore.getState().id || "system",
-                        status: 'pending'
-                    });
-                    console.log("[ModalDebug] Invitation saved to Firestore.");
-                } catch (err) {
-                    console.error("[ModalDebug] Firestore save failed (non-blocking):", err);
-                }
-
-                console.log("[ModalDebug] Sending email to:", newCollab.email);
-
-                const response = await fetch('/api/send-email', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                    },
-                    body: JSON.stringify({
-                        to: newCollab.email,
-                        subject: "Invitation à rejoindre Pledgeum",
-                        text: `Bonjour ${newCollab.name},\n\n` +
-                            `Vous avez été invité à rejoindre l'espace d'administration de Pledgeum en tant que ${newCollab.role}.\n\n` +
-                            `Voici vos identifiants de connexion provisoires :\n` +
-                            `Identifiant : ${tempId}\n` +
-                            `Code d'accès : ${tempCode}\n\n` +
-                            `Connectez-vous sur : ${window.location.origin}\n\n` +
-                            `L'équipe Pledgeum`
-                    })
-                });
-
-                const data = await response.json();
-
-                if (!response.ok) {
-                    throw new Error(data.error || "Erreur inconnue lors de l'envoi");
-                }
-
-                alert(`Invitation envoyée à ${newCollab.email}`);
-            } catch (err: any) {
-                console.error("Erreur envoi email invitation:", err);
-                alert(`Collaborateur ajouté, mais l'email n'a pas pu être envoyé : ${err.message}`);
+            if (!pgResponse.ok) {
+                const errorData = await pgResponse.json();
+                throw new Error(errorData.error || "Échec de la sauvegarde en base de données.");
             }
 
+            // 3. SECONDARY PERSISTENCE: Save to Firestore (Invitation State)
+            try {
+                await addDoc(collection(db, "invitations"), {
+                    tempId,
+                    tempCode,
+                    email: newCollab.email,
+                    name: newCollab.name,
+                    role: newCollab.role,
+                    createdAt: new Date().toISOString(),
+                    createdBy: useUserStore.getState().id || "system",
+                    status: 'pending'
+                });
+                console.log("[ModalDebug] Invitation saved to Firestore.");
+            } catch (err) {
+                console.error("[ModalDebug] Firestore save failed (non-blocking):", err);
+            }
+
+            // 4. Send Invitation Email
+            const emailResponse = await fetch('/api/send-email', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    to: newCollab.email,
+                    subject: "Invitation à rejoindre Pledgeum",
+                    text: `Bonjour ${newCollab.name},\n\n` +
+                        `Vous avez été invité à rejoindre l'espace d'administration de Pledgeum en tant que ${newCollab.role}.\n\n` +
+                        `Voici vos identifiants de connexion provisoires :\n` +
+                        `Identifiant : ${tempId}\n` +
+                        `Code d'accès : ${tempCode}\n\n` +
+                        `Connectez-vous sur : ${window.location.origin}\n\n` +
+                        `L'équipe Pledgeum`
+                })
+            });
+
+            if (!emailResponse.ok) {
+                console.warn("[ModalDebug] Email sending failed, but collaborator was persisted to PG.");
+            }
+
+            // 5. UPDATE LOCAL STORE (Optimistic UI)
+            addCollaborator({ ...newCollab, tempId, tempCode });
+            
+            // 6. Reset Form
             setNewCollab({ name: '', email: '', role: 'ddfpt' });
+            alert(`Collaborateur ${newCollab.name} ajouté avec succès.`);
+
+        } catch (err: any) {
+            console.error("Erreur lors de l'ajout du collaborateur:", err);
+            alert(`Erreur: ${err.message || "Échec de l'ajout du collaborateur"}`);
         }
     };
 
