@@ -1596,6 +1596,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
                                                                             if (teacher) {
                                                                                 updateClass(cls.id, {
                                                                                     mainTeacher: {
+                                                                                        id: teacher.id,
                                                                                         firstName: teacher.firstName,
                                                                                         lastName: teacher.lastName,
                                                                                         email: teacher.email || ""
@@ -1641,6 +1642,7 @@ export function SchoolAdminModal({ isOpen, onClose }: SchoolAdminModalProps) {
 
                                                                                 updateClass(cls.id, {
                                                                                     cpe: {
+                                                                                        id: cpe.id,
                                                                                         firstName: firstName,
                                                                                         lastName: lastName === firstName ? "" : lastName,
                                                                                         email: cpe.email

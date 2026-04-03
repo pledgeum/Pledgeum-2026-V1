@@ -3,13 +3,33 @@ export const dynamic = 'force-dynamic';
 import { NextResponse } from 'next/server';
 import pool from '@/lib/pg';
 import { adminAuth, adminDb as db } from '@/lib/firebase-admin';
+import { auth } from '@/auth';
 
 // PUT: Update Class (Assign Main Teacher)
 export async function PUT(req: Request) {
     let client: any;
     try {
+        const session = await auth();
+
+        // 1. Auth Guard
+        if (!session?.user) {
+            return new Response("Unauthorized", { status: 401 });
+        }
+
+        // 2. RBAC Guard (Management Team & Collaborators)
+        const allowedRoles = ['school_head', 'ddfpt', 'at_ddfpt', 'business_manager', 'ESTABLISHMENT_ADMIN'];
+        if (!allowedRoles.includes(session.user.role)) {
+            return new Response("Forbidden: Insufficient permissions", { status: 403 });
+        }
+
         const body = await req.json();
-        const { classId, mainTeacherId, cpeId, pfmpPeriods, uai } = body; // classId is the Firestore ID (simple class ID)
+        const { classId, mainTeacherId, cpeId, pfmpPeriods, uai } = body;
+
+        // 3. Context Guard (Establishment UAI)
+        const userUai = session.user.establishment_uai;
+        if (userUai && userUai.toUpperCase() !== uai.toUpperCase()) {
+            return new Response("Forbidden: UAI mismatch", { status: 403 });
+        }
 
         if (!classId || !uai) {
             return NextResponse.json({ error: "Missing classId or uai" }, { status: 400 });
