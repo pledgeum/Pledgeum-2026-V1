@@ -596,6 +596,103 @@ export function SchoolAdminPanelSection() {
                                             )}
                                             {expandedClassId === cls.id && (
                                                 <div className="p-4 bg-white border-t border-blue-100">
+                                                    {/* Responsables de la classe (New) */}
+                                                    <div className="mb-6 p-4 bg-blue-50 rounded-lg border border-blue-100">
+                                                        <h6 className="text-xs font-bold text-blue-800 uppercase tracking-wider mb-3 flex items-center">
+                                                            <Briefcase className="w-3 h-3 mr-2" />
+                                                            Responsables de la classe
+                                                        </h6>
+                                                        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                                                            {/* Main Teacher Selector */}
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-gray-700 mb-1">Professeur Principal</label>
+                                                                <select
+                                                                    className="block w-full text-xs border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                                    value={
+                                                                        cls.mainTeacher?.id ||
+                                                                        cls.teachersList?.find(t =>
+                                                                            (cls.mainTeacher?.email && t.email === cls.mainTeacher.email) ||
+                                                                            (cls.mainTeacher && t.lastName === cls.mainTeacher.lastName && t.firstName === cls.mainTeacher.firstName)
+                                                                        )?.id || ""
+                                                                    }
+                                                                    onChange={(e) => {
+                                                                        const selectedId = e.target.value;
+                                                                        if (selectedId === "") {
+                                                                            updateClass(cls.id, { mainTeacher: undefined });
+                                                                        } else {
+                                                                            const teacher = cls.teachersList?.find(t => t.id === selectedId);
+                                                                            if (teacher) {
+                                                                                updateClass(cls.id, {
+                                                                                    mainTeacher: {
+                                                                                        id: teacher.id,
+                                                                                        firstName: teacher.firstName,
+                                                                                        lastName: teacher.lastName,
+                                                                                        email: teacher.email || ""
+                                                                                    }
+                                                                                });
+                                                                            }
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <option value="">-- Sélectionner --</option>
+                                                                    {cls.teachersList?.map((t) => (
+                                                                        <option key={t.id} value={t.id}>
+                                                                            {t.lastName.toUpperCase()} {t.firstName}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                                {(!cls.teachersList || cls.teachersList.length === 0) && (
+                                                                    <p className="text-[10px] text-orange-600 mt-1 italic">Ajoutez d'abord des enseignants ci-dessous.</p>
+                                                                )}
+                                                            </div>
+
+                                                            {/* CPE Selector */}
+                                                            <div>
+                                                                <label className="block text-xs font-medium text-gray-700 mb-1">Conseiller Principal d'Éducation (CPE)</label>
+                                                                <select
+                                                                    className="block w-full text-xs border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
+                                                                    value={
+                                                                        collaborators?.find(c =>
+                                                                            c.role === 'cpe' && c.email === cls.cpe?.email
+                                                                        )?.id || ""
+                                                                    }
+                                                                    onChange={(e) => {
+                                                                        const selectedId = e.target.value;
+                                                                        if (selectedId === "") {
+                                                                            updateClass(cls.id, { cpe: undefined });
+                                                                        } else {
+                                                                            const cpe = collaborators?.find(c => c.id === selectedId);
+                                                                            if (cpe) {
+                                                                                // Split name for SchoolStaff format
+                                                                                const nameParts = cpe.name.split(' ');
+                                                                                const firstName = nameParts[0];
+                                                                                const lastName = nameParts.slice(1).join(' ') || firstName;
+
+                                                                                updateClass(cls.id, {
+                                                                                    cpe: {
+                                                                                        id: cpe.id,
+                                                                                        firstName: firstName,
+                                                                                        lastName: lastName === firstName ? "" : lastName,
+                                                                                        email: cpe.email
+                                                                                    }
+                                                                                });
+                                                                            }
+                                                                        }
+                                                                    }}
+                                                                >
+                                                                    <option value="">-- Sélectionner --</option>
+                                                                    {collaborators?.filter(c => c.role === 'cpe').map((c) => (
+                                                                        <option key={c.id} value={c.id}>
+                                                                            {c.name}
+                                                                        </option>
+                                                                    ))}
+                                                                </select>
+                                                                {(!collaborators || collaborators.filter(c => c.role === 'cpe').length === 0) && (
+                                                                    <p className="text-[10px] text-orange-600 mt-1 italic">Aucun CPE dans "Collaborateurs".</p>
+                                                                )}
+                                                            </div>
+                                                        </div>
+                                                    </div>
                                                     <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-2">
                                                         {cls.teachersList?.map(t => <div key={t.id} className="p-2 bg-blue-50 rounded border border-blue-100 text-xs flex justify-between">{t.firstName} {t.lastName} <button onClick={() => removeTeacherFromClass(cls.id, t.id)} className="text-red-400 hover:text-red-600">×</button></div>)}
                                                     </div>
