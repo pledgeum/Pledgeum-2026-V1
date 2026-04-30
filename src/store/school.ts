@@ -251,6 +251,7 @@ export const useSchoolStore = create<SchoolState>()(
                             id: apiCls.id,
                             name: apiCls.name,
                             mainTeacher: apiCls.mainTeacher,
+                            cpe: apiCls.cpe,
                             teachersList: [],
                             studentsList: [],
                             studentCount: apiCls.studentCount || 0,
