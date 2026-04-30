@@ -6,6 +6,7 @@ import { useSchoolStore, COLLABORATOR_LABELS, CollaboratorRole, Teacher, Student
 import { StructureImportReviewModal } from '../StructureImportReviewModal';
 import { TeacherImportReviewModal } from '../TeacherImportReviewModal';
 import { ClassCalendarManager } from '../ClassCalendarManager';
+import { RGPDComplianceContent } from '../shared/RGPDComplianceContent';
 import { useUserStore } from '@/store/user';
 import Papa from 'papaparse';
 import { useConventionStore } from '@/store/convention';
@@ -880,18 +881,8 @@ export function SchoolAdminPanelSection() {
                     )}
 
                     {activeTab === 'rgpd' && (
-                        <div className="max-w-4xl mx-auto space-y-8">
-                            <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-start">
-                                <Info className="w-6 h-6 text-blue-600 mr-3 mt-0.5" />
-                                <div>
-                                    <h5 className="text-sm font-bold text-blue-900">Mise à jour du Registre des Traitements</h5>
-                                    <p className="text-sm text-blue-800 leading-relaxed">Conformité au RGPD pour la gestion des PFMP.</p>
-                                </div>
-                            </div>
-                            <div className="bg-white rounded-xl border border-gray-200 shadow-sm p-6">
-                                <h4 className="font-bold mb-4">Hébergement Souverain (Scaleway France)</h4>
-                                <p className="text-sm text-gray-600">Données régies par le droit français. Certifié ISO 27001.</p>
-                            </div>
+                        <div className="py-6">
+                            <RGPDComplianceContent />
                         </div>
                     )}
                 </div>
