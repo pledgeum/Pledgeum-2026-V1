@@ -578,6 +578,7 @@ export function SchoolAdminPanelSection() {
                                                     <p className="text-xs text-gray-500 flex items-center flex-wrap gap-2 mt-0.5">
                                                         <span>{cls.label || 'Formation non définie'} • {cls.studentCount || 0} élèves</span>
                                                         {cls.mainTeacher && <span className="flex items-center text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-100"><Star className="w-3 h-3 mr-1 fill-amber-500 text-amber-500" />PP: {cls.mainTeacher.firstName.charAt(0)}. {cls.mainTeacher.lastName}</span>}
+                                                        {cls.cpe && <span className="flex items-center text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded border border-emerald-100"><Shield className="w-3 h-3 mr-1 text-emerald-500" />CPE: {cls.cpe.firstName?.charAt(0).toUpperCase()}. {cls.cpe.lastName?.toUpperCase()}</span>}
                                                     </p>
                                                 </div>
                                                 <div className="flex gap-2">
