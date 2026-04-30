@@ -16,6 +16,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 token.role = (user as any).role;
                 token.establishment_uai = (user as any).establishment_uai;
                 token.must_change_password = (user as any).must_change_password;
+                token.phone = user.phone;
             }
             if (trigger === "update" && session?.must_change_password !== undefined) {
                 token.must_change_password = session.must_change_password;
@@ -28,6 +29,7 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                 (session.user as any).role = token.role as string;
                 (session.user as any).establishment_uai = token.establishment_uai as string;
                 (session.user as any).must_change_password = token.must_change_password as boolean;
+                session.user.phone = token.phone as string | null | undefined;
             }
             return session;
         },
@@ -87,7 +89,8 @@ export const { handlers, signIn, signOut, auth } = NextAuth({
                                 role: user.role, // Role comes directly from DB
                                 establishment_uai: establishmentUai,
                                 name: (user.first_name && user.last_name) ? `${user.first_name} ${user.last_name}` : user.email,
-                                must_change_password: user.must_change_password // Expose flag
+                                must_change_password: user.must_change_password, // Expose flag
+                                phone: user.phone
                             };
                         } else {
                             console.log(`[AUTH] Invalid password for: ${email}`);

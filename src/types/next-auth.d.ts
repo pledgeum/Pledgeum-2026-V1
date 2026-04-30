@@ -6,6 +6,7 @@ declare module "next-auth" {
         role?: string
         establishment_uai?: string
         must_change_password?: boolean
+        phone?: string | null
     }
     interface Session {
         user: {
@@ -13,6 +14,7 @@ declare module "next-auth" {
             role: string
             establishment_uai?: string
             must_change_password?: boolean
+            phone?: string | null
         } & DefaultSession["user"]
     }
 }
@@ -23,5 +25,6 @@ declare module "next-auth/jwt" {
         role: string
         establishment_uai?: string
         must_change_password?: boolean
+        phone?: string | null
     }
 }
